@@ -212,5 +212,38 @@ func contentID(text string) uint64 {
 	return h.Sum64()
 }
 
+// DeleteByWingRoom removes every point of one (wing, room) pair — i.e. all
+// chunks that came from a single source file. Used by import -sync.
+func (s *Store) DeleteByWingRoom(ctx context.Context, wing, room string) error {
+	_, err := s.qc.Delete(ctx, &qdrant.DeletePoints{
+		CollectionName: s.collection,
+		Points: qdrant.NewPointsSelectorFilter(&qdrant.Filter{Must: []*qdrant.Condition{
+			qdrant.NewMatch("wing", wing),
+			qdrant.NewMatch("room", room),
+		}}),
+	})
+	return err
+}
+
+// WingRoomPairs returns point counts per (wing, room) pair. One payload-only
+// scroll — fine at local scale (revisit past ~100k points); used by
+// import -sync to find orphaned chunks of deleted/renamed files.
+func (s *Store) WingRoomPairs(ctx context.Context) (map[[2]string]int, error) {
+	res, err := s.qc.Scroll(ctx, &qdrant.ScrollPoints{
+		CollectionName: s.collection,
+		Limit:          qdrant.PtrOf(uint32(200_000)),
+		WithPayload:    qdrant.NewWithPayloadInclude("wing", "room"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := map[[2]string]int{}
+	for _, p := range res {
+		pl := p.GetPayload()
+		out[[2]string{pl["wing"].GetStringValue(), pl["room"].GetStringValue()}]++
+	}
+	return out, nil
+}
+
 // SanitizeUTF8 replaces broken UTF-8 (source docs sometimes carry it).
 func SanitizeUTF8(s string) string { return strings.ToValidUTF8(s, "") }

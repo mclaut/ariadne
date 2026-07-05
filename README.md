@@ -148,7 +148,9 @@ Two distinct concepts:
 
 `import` also backfills from an archived chromadb sqlite
 (`-source chroma -db <file>`) or markdown memory files (`-source memfiles`).
-All imports are idempotent (content-hash ids).
+All imports are idempotent (content-hash ids). For memfiles, `-sync` keeps the
+collection true to disk: edited files replace their old chunks and chunks of
+deleted files are reaped — run it whenever your notes change.
 
 ## Status
 

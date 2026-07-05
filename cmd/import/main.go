@@ -6,7 +6,7 @@
 // Embedding is the bottleneck (~130 ms/doc), so documents are embedded by a
 // worker pool. Content-hash ids make the whole import idempotent/resumable.
 //
-//	import [-db PATH] [-n LIMIT] [-workers N] [-skip-sessions]
+//	import [-source chroma|memfiles|jsonl] [-db PATH] [-file PATH] [-n LIMIT] [-workers N] [-skip-sessions] [-sync]
 package main
 
 import (
@@ -40,6 +40,8 @@ func main() {
 	limit := flag.Int("n", 0, "max docs (0 = all)")
 	workers := flag.Int("workers", 8, "parallel embed workers")
 	skipSessions := flag.Bool("skip-sessions", false, "skip the raw-transcript 'sessions' wing")
+	syncMode := flag.Bool("sync", false,
+		"memfiles only: refresh edited files (delete old chunks first) and remove orphans of deleted files")
 	flag.Parse()
 
 	st, err := store.New(env("ARIADNE_QDRANT_HOST", "localhost"), atoiOr(env("ARIADNE_QDRANT_PORT", "6334"), 6334),
@@ -79,7 +81,7 @@ func main() {
 	var feed int
 	switch *source {
 	case "memfiles":
-		feed = feedMemFiles(jobs)
+		feed = feedMemFiles(ctx, st, jobs, *syncMode)
 	case "jsonl":
 		feed = feedJSONL(jobs, *file)
 	default:
@@ -167,9 +169,14 @@ func feedJSONL(jobs chan<- doc, path string) int {
 
 // feedMemFiles walks ~/.claude/projects/*/memory/*.md — the user's curated
 // per-project native memory — chunking each file on paragraph boundaries.
-func feedMemFiles(jobs chan<- doc) int {
+// With sync, each file's previous chunks are deleted before re-import (so
+// edited notes replace their stale copies), and afterwards chunks of files
+// that no longer exist are removed too.
+func feedMemFiles(ctx context.Context, st *store.Store, jobs chan<- doc, syncMode bool) int {
 	root := os.Getenv("HOME") + "/.claude/projects"
 	n := 0
+	seen := map[[2]string]bool{}
+	wings := map[string]bool{}
 	//nolint:gosec // walks the user's own $HOME/.claude tree
 	_ = filepath.WalkDir(root, func(path string, e fs.DirEntry, err error) error {
 		if err != nil || e.IsDir() || !strings.HasSuffix(path, ".md") {
@@ -183,14 +190,51 @@ func feedMemFiles(jobs chan<- doc) int {
 			return nil //nolint:nilerr // skip unreadable files, keep walking
 		}
 		wing := wingFromMemPath(path)
-		fname := filepath.Base(path)
+		room := "memory:" + filepath.Base(path)
+		if syncMode && !seen[[2]string{wing, room}] {
+			if err := st.DeleteByWingRoom(ctx, wing, room); err != nil {
+				fatal("sync delete", wing, room, ":", err)
+			}
+		}
+		seen[[2]string{wing, room}] = true
+		wings[wing] = true
 		for _, chunk := range chunkMarkdown(string(b), 1200) {
-			jobs <- doc{text: chunk, wing: wing, room: "memory:" + fname}
+			jobs <- doc{text: chunk, wing: wing, room: room}
 			n++
 		}
 		return nil
 	})
+	if syncMode {
+		reapOrphans(ctx, st, seen, wings)
+	}
 	return n
+}
+
+// reapOrphans deletes "memory:*" chunks whose source file vanished. Only wings
+// that still have a live memory dir are touched — a space deleted wholesale is
+// left alone (conservative).
+func reapOrphans(ctx context.Context, st *store.Store, seen map[[2]string]bool, wings map[string]bool) {
+	pairs, err := st.WingRoomPairs(ctx)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sync: orphan scan failed:", err)
+		return
+	}
+	removed := 0
+	for pair, cnt := range pairs {
+		wing, room := pair[0], pair[1]
+		if !strings.HasPrefix(room, "memory:") || !wings[wing] || seen[pair] {
+			continue
+		}
+		if err := st.DeleteByWingRoom(ctx, wing, room); err != nil {
+			fmt.Fprintln(os.Stderr, "sync: orphan delete", wing, room, ":", err)
+			continue
+		}
+		fmt.Printf("  orphan removed: %s/%s (%d chunks)\n", wing, room, cnt)
+		removed += cnt
+	}
+	if removed > 0 {
+		fmt.Printf("  orphans total: %d chunks\n", removed)
+	}
 }
 
 // wingFromMemPath turns …/projects/-Users-…-Projects-MyApp/memory/x.md → "MyApp".
