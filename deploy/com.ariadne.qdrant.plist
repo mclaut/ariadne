@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __HOME__ with your absolute home dir (launchd does not
+     expand ~ or env vars), then:
+       cp deploy/com.ariadne.qdrant.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ariadne.qdrant.plist
+     IMPORTANT (macOS TCC): the binary, data and logs must live OUTSIDE
+     ~/Desktop / ~/Documents / ~/Downloads — launchd cannot spawn from there
+     (agents die with EX_CONFIG and empty logs). ~/.ariadne is safe. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.ariadne.qdrant</string>
+  <key>ProgramArguments</key><array><string>__HOME__/.ariadne/bin/qdrant</string></array>
+  <key>WorkingDirectory</key><string>__HOME__/.ariadne</string>
+  <key>EnvironmentVariables</key><dict>
+    <!-- loopback-only: Qdrant has no auth by default; never expose it on the LAN -->
+    <key>QDRANT__SERVICE__HOST</key><string>127.0.0.1</string>
+    <key>QDRANT__STORAGE__STORAGE_PATH</key><string>__HOME__/.ariadne/qdrant-data</string>
+    <key>QDRANT__STORAGE__SNAPSHOTS_PATH</key><string>__HOME__/.ariadne/qdrant-data/snapshots</string>
+  </dict>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/qdrant.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/qdrant.err.log</string>
+</dict></plist>

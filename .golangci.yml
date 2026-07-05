@@ -1,0 +1,54 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - gosec
+    - bodyclose
+    - sqlclosecheck
+    - rowserrcheck
+    - contextcheck
+    - errorlint
+    - nilerr
+    - nilnil
+    - noctx
+    - exhaustive
+    - gocritic
+    - revive
+    - prealloc
+    - goconst
+    - lll
+
+  settings:
+    lll:
+      line-length: 140
+    goconst:
+      min-len: 3
+      min-occurrences: 4
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+        - singleCaseSwitch
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.Stmt).Close
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports

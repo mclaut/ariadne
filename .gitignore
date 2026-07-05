@@ -1,0 +1,18 @@
+# Runtime data — PRIVATE memories/embeddings. NEVER commit (public repo!).
+/qdrant-data/
+/qdrant-config/
+/backups/
+/snapshots/
+
+# Compiled binaries & build artifacts
+/bin/
+app/build/
+poc/bin/
+
+# Logs
+*.log
+*.err.log
+
+# macOS
+.DS_Store
+/.qdrant-initialized

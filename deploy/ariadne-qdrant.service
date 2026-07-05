@@ -1,0 +1,25 @@
+# Ariadne Qdrant — systemd USER unit (Linux).
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/ariadne-qdrant.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now ariadne-qdrant
+# Start on boot without an active login session:
+#   loginctl enable-linger $USER
+[Unit]
+Description=Ariadne Qdrant (vector memory)
+After=network.target
+
+[Service]
+ExecStart=%h/.ariadne/bin/qdrant
+WorkingDirectory=%h/.ariadne
+# loopback-only: Qdrant has no auth by default; never expose it on the LAN
+Environment=QDRANT__SERVICE__HOST=127.0.0.1
+Environment=QDRANT__STORAGE__STORAGE_PATH=%h/.ariadne/qdrant-data
+Environment=QDRANT__STORAGE__SNAPSHOTS_PATH=%h/.ariadne/qdrant-data/snapshots
+StandardOutput=append:%h/.ariadne/logs/qdrant.log
+StandardError=append:%h/.ariadne/logs/qdrant.err.log
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
