@@ -40,7 +40,12 @@ func makePlan(r *report, o opts) []action {
 		{
 			title: fmt.Sprintf("pull embedding model %q (~1.3GiB)", o.model),
 			skip:  o.skipModel || !r.ollama.up || r.ollama.hasModel,
-			run:   func() error { return pullModel(o) },
+			run:   func() error { return pullModel(o, o.model) },
+		},
+		{
+			title: fmt.Sprintf("pull summary model %q (~4.7GiB, session auto-capture)", o.summaryModel),
+			skip:  o.skipModel || !r.ollama.up || r.ollama.hasSummary,
+			run:   func() error { return pullModel(o, o.summaryModel) },
 		},
 		{
 			title: fmt.Sprintf("create collection %q (existing data is never touched)", o.collection),
@@ -56,6 +61,11 @@ func makePlan(r *report, o opts) []action {
 			title: "install Claude Code skill → ~/.claude/skills/ariadne (real copy, not symlink)",
 			skip:  r.skillOK && !isSymlink(filepath.Join(home, ".claude", "skills", "ariadne")),
 			run:   func() error { return installSkill(r) },
+		},
+		{
+			title: "register session hooks in ~/.claude/settings.json (auto-recall + auto-capture; backup kept)",
+			skip:  o.skipHooks || r.hooksOK,
+			run:   func() error { return registerHooks(home) },
 		},
 	}
 }
@@ -200,27 +210,29 @@ func installService(r *report) error {
 }
 
 func buildBinaries(r *report) error {
-	for _, name := range []string{"ariadne", "ariadnectl", "import"} {
-		dest := filepath.Join(r.home, ".ariadne", "bin", name)
-		_ = os.Remove(dest)                                                                        // avoid overwriting a running binary in place
-		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", dest, "./cmd/"+name) //nolint:gosec // fixed argv
+	for bin, pkg := range map[string]string{
+		"ariadne": "ariadne", "ariadnectl": "ariadnectl", "import": "import", "ariadne-hook": "hook",
+	} {
+		dest := filepath.Join(r.home, ".ariadne", "bin", bin)
+		_ = os.Remove(dest)                                                                       // avoid overwriting a running binary in place
+		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", dest, "./cmd/"+pkg) //nolint:gosec // fixed argv
 		cmd.Dir = r.repoRoot
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("go build %s: %w", name, err)
+			return fmt.Errorf("go build %s: %w", bin, err)
 		}
 	}
 	return nil
 }
 
-func pullModel(o opts) error {
+func pullModel(o opts, model string) error {
 	if which("ollama") {
-		cmd := exec.CommandContext(context.Background(), "ollama", "pull", o.model) //nolint:gosec // fixed argv
+		cmd := exec.CommandContext(context.Background(), "ollama", "pull", model) //nolint:gosec // fixed argv
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		return cmd.Run()
 	}
 	// no CLI (remote ollama): use the API and wait
-	body := strings.NewReader(fmt.Sprintf(`{"name":%q}`, o.model))
+	body := strings.NewReader(fmt.Sprintf(`{"name":%q}`, model))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
@@ -297,6 +309,48 @@ func registerMCP(home string, o opts) error {
 	return os.WriteFile(path, out, 0o600)
 }
 
+// registerHooks merges Ariadne's session hooks into ~/.claude/settings.json:
+// SessionStart (startup|resume|clear) → auto-recall, SessionEnd → auto-capture.
+func registerHooks(home string) error {
+	path := filepath.Join(home, ".claude", "settings.json")
+	m := map[string]any{}
+	if b, err := os.ReadFile(path); err == nil { //nolint:gosec // own config
+		if strings.Contains(string(b), "ariadne-hook") {
+			return nil
+		}
+		if err := json.Unmarshal(b, &m); err != nil {
+			return fmt.Errorf("~/.claude/settings.json is not valid JSON, refusing to touch it: %w", err)
+		}
+		backup := path + ".bak-ariadne-" + time.Now().Format("20060102-150405")
+		if err := os.WriteFile(backup, b, 0o600); err != nil { //nolint:gosec // backup of own config
+			return err
+		}
+	}
+	hooks, _ := m["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+	}
+	bin := filepath.Join(home, ".ariadne", "bin", "ariadne-hook")
+	add := func(event, matcher, sub string, timeout int) {
+		entry := map[string]any{
+			"hooks": []any{map[string]any{"type": "command", "command": bin + " " + sub, "timeout": timeout}},
+		}
+		if matcher != "" {
+			entry["matcher"] = matcher
+		}
+		arr, _ := hooks[event].([]any)
+		hooks[event] = append(arr, entry)
+	}
+	add("SessionStart", "startup|resume|clear", "session-start", 15)
+	add("SessionEnd", "", "session-end", 10)
+	m["hooks"] = hooks
+	out, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o600)
+}
+
 func installSkill(r *report) error {
 	src := filepath.Join(r.repoRoot, "skills", "ariadne")
 	dest := filepath.Join(r.home, ".claude", "skills", "ariadne")
@@ -357,6 +411,13 @@ func verify(o opts) bool {
 	home, _ := os.UserHomeDir()
 	check(mcpRegistered(home), "MCP server registered in ~/.claude.json")
 	check(fileExists(filepath.Join(home, ".claude", "skills", "ariadne", "SKILL.md")), "Claude Code skill installed")
+	if !o.skipHooks {
+		hooksOK := false
+		if b, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json")); err == nil { //nolint:gosec // own config
+			hooksOK = strings.Contains(string(b), "ariadne-hook")
+		}
+		check(hooksOK, "session hooks registered (auto-recall + auto-capture)")
+	}
 	return ok
 }
 

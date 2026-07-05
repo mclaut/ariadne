@@ -51,24 +51,33 @@ func New(qHost string, qPort int, ollamaURL, model, collection string) (*Store, 
 	}, nil
 }
 
-// EnsureCollection creates the hybrid collection (dense + IDF sparse) if absent.
+// EnsureCollection creates the hybrid collection (dense + IDF sparse) if absent
+// and makes sure the "wing" payload index exists (used for filtered recall).
 func (s *Store) EnsureCollection(ctx context.Context) error {
 	ok, err := s.qc.CollectionExists(ctx, s.collection)
 	if err != nil {
 		return err
 	}
-	if ok {
-		return nil
+	if !ok {
+		if err := s.qc.CreateCollection(ctx, &qdrant.CreateCollection{
+			CollectionName: s.collection,
+			VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+				"dense": {Size: denseDim, Distance: qdrant.Distance_Cosine},
+			}),
+			SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
+				"sparse": {Modifier: qdrant.Modifier_Idf.Enum()},
+			}),
+		}); err != nil {
+			return err
+		}
 	}
-	return s.qc.CreateCollection(ctx, &qdrant.CreateCollection{
+	// idempotent; an "already exists" error is fine
+	_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 		CollectionName: s.collection,
-		VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
-			"dense": {Size: denseDim, Distance: qdrant.Distance_Cosine},
-		}),
-		SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
-			"sparse": {Modifier: qdrant.Modifier_Idf.Enum()},
-		}),
+		FieldName:      "wing",
+		FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
 	})
+	return nil
 }
 
 // Save embeds text (dense+sparse) and upserts one point. The id is a content
@@ -101,7 +110,8 @@ func (s *Store) Save(ctx context.Context, text string, meta map[string]string) (
 }
 
 // Recall runs a hybrid dense+sparse query fused with RRF, server-side.
-func (s *Store) Recall(ctx context.Context, query string, limit int) ([]Result, error) {
+// A non-empty wing narrows the search to that project/namespace.
+func (s *Store) Recall(ctx context.Context, query string, limit int, wing string) ([]Result, error) {
 	if limit <= 0 {
 		limit = 5
 	}
@@ -111,13 +121,18 @@ func (s *Store) Recall(ctx context.Context, query string, limit int) ([]Result, 
 	}
 	sIdx, sVal := sparseVec(query)
 	pre := uint64(limit * 4)
+	var filter *qdrant.Filter
+	if wing != "" {
+		filter = &qdrant.Filter{Must: []*qdrant.Condition{qdrant.NewMatch("wing", wing)}}
+	}
 	res, err := s.qc.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: s.collection,
 		Prefetch: []*qdrant.PrefetchQuery{
-			{Query: qdrant.NewQueryDense(dense), Using: qdrant.PtrOf("dense"), Limit: &pre},
-			{Query: qdrant.NewQuerySparse(sIdx, sVal), Using: qdrant.PtrOf("sparse"), Limit: &pre},
+			{Query: qdrant.NewQueryDense(dense), Using: qdrant.PtrOf("dense"), Limit: &pre, Filter: filter},
+			{Query: qdrant.NewQuerySparse(sIdx, sVal), Using: qdrant.PtrOf("sparse"), Limit: &pre, Filter: filter},
 		},
 		Query:       qdrant.NewQueryFusion(qdrant.Fusion_RRF),
+		Filter:      filter,
 		Limit:       qdrant.PtrOf(uint64(limit)),
 		WithPayload: qdrant.NewWithPayload(true),
 	})

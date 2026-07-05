@@ -28,8 +28,10 @@ type opts struct {
 	qdrantGRPC         int
 	ollamaURL          string
 	model              string
+	summaryModel       string
 	collection         string
 	skipModel          bool
+	skipHooks          bool
 }
 
 func parseFlags() opts {
@@ -42,8 +44,10 @@ func parseFlags() opts {
 	flag.IntVar(&o.qdrantGRPC, "qdrant-grpc", 6334, "Qdrant gRPC port")
 	flag.StringVar(&o.ollamaURL, "ollama", "http://localhost:11434", "Ollama URL (set to reuse a remote/GPU box)")
 	flag.StringVar(&o.model, "model", "bge-m3", "embedding model")
+	flag.StringVar(&o.summaryModel, "summary-model", "qwen2.5:7b", "local chat model for session-capture summaries")
 	flag.StringVar(&o.collection, "collection", "ariadne", "Qdrant collection name")
-	flag.BoolVar(&o.skipModel, "skip-model-pull", false, "do not pull the embedding model")
+	flag.BoolVar(&o.skipModel, "skip-model-pull", false, "do not pull models")
+	flag.BoolVar(&o.skipHooks, "skip-hooks", false, "do not register Claude Code session hooks (auto-recall/auto-capture)")
 	flag.Parse()
 	return o
 }

@@ -101,11 +101,33 @@ Config via env (defaults in brackets): `ARIADNE_QDRANT_HOST` [localhost],
 `skills/ariadne/` teaches Claude Code when to recall, what (not) to save, and
 how to operate the stack; `tools/doctor.sh` checks the whole chain
 (binaries → services → model → collection → binding → MCP registration) and
-`tools/recall.sh "query"` does CLI recall without MCP. Install:
+`tools/recall.sh "query"` does CLI recall without MCP. Install (a real copy —
+symlinked skills are not discovered at session start):
 
 ```bash
-ln -sfn "$PWD/skills/ariadne" ~/.claude/skills/ariadne
+cp -R skills/ariadne ~/.claude/skills/ariadne
 ```
+
+## Session hooks — auto-recall & auto-capture
+
+The installer registers two Claude Code lifecycle hooks (`cmd/hook`, binary
+`ariadne-hook`; skip with `-skip-hooks`):
+
+- **SessionStart → auto-recall.** When a session starts in a project that HAS
+  memories (wing = the directory name), the top hits are injected as context —
+  Claude "remembers" the project before your first message. Projects without
+  memories start completely clean; failures are silent and never block the
+  session.
+- **SessionEnd → auto-capture.** A detached worker (session exit is never
+  blocked) parses the transcript, extracts deterministic facts (branch,
+  commits, duration) and asks a **local Ollama chat model** to write a 4–8
+  sentence summary — decisions with reasons, fixes, open items. ONE curated
+  diary memory per session; raw transcripts are never stored. Trivial sessions
+  are skipped (min-turns guard + the summarizer can answer `SKIP`).
+  Log: `~/.ariadne/logs/capture.log`.
+
+Config via env: `ARIADNE_CAPTURE=0` disables capture,
+`ARIADNE_SUMMARY_MODEL` [qwen2.5:7b], `ARIADNE_CAPTURE_MIN_TURNS` [3].
 
 ## Backup & portability
 

@@ -48,16 +48,18 @@ type report struct {
 		bindWide bool // foreign instance listens beyond loopback
 	}
 	ollama struct {
-		up       bool
-		version  string
-		hasModel bool
-		remote   bool
+		up         bool
+		version    string
+		hasModel   bool
+		hasSummary bool
+		remote     bool
 	}
 	repoRoot     string
 	goOK         bool
 	svcInstalled bool // our service unit/agent file exists
 	mcpOK        bool // ~/.claude.json points at ~/.ariadne/bin/ariadne
 	skillOK      bool
+	hooksOK      bool // session hooks registered in ~/.claude/settings.json
 	home         string
 }
 
@@ -85,6 +87,9 @@ func preflight(o opts) *report {
 	r.svcInstalled = fileExists(servicePath(r))
 	r.mcpOK = mcpRegistered(r.home)
 	r.skillOK = fileExists(filepath.Join(r.home, ".claude", "skills", "ariadne", "SKILL.md"))
+	if b, err := os.ReadFile(filepath.Join(r.home, ".claude", "settings.json")); err == nil { //nolint:gosec // own config
+		r.hooksOK = strings.Contains(string(b), "ariadne-hook")
+	}
 	return r
 }
 
@@ -140,6 +145,8 @@ func printReport(r *report) {
 			"Linux `curl -fsSL https://ollama.com/install.sh | sh`"))
 	if r.ollama.up {
 		line(r.ollama.hasModel, false, pick(r.ollama.hasModel, "bge-m3 present", "bge-m3 missing → will pull (~1.3GiB)"))
+		line(r.ollama.hasSummary, false, pick(r.ollama.hasSummary,
+			"summary model present", "summary model missing → will pull (~4.7GiB; used by session auto-capture)"))
 	}
 	line(r.repoRoot != "", r.repoRoot == "", pick(r.repoRoot != "", "repo root: "+r.repoRoot,
 		"run me from the ariadne repo root (go.mod with `module ariadne` not found)"))
@@ -215,6 +222,7 @@ func detectOllama(r *report, o opts) {
 	if tags, ok := getJSON(strings.TrimRight(o.ollamaURL, "/") + "/api/tags"); ok {
 		b, _ := json.Marshal(tags)
 		r.ollama.hasModel = strings.Contains(string(b), `"`+o.model)
+		r.ollama.hasSummary = strings.Contains(string(b), `"`+o.summaryModel)
 	}
 }
 
