@@ -324,13 +324,6 @@ func trayAutostartPath(r *report) string {
 	return filepath.Join(r.home, ".config", "autostart", "ariadne-tray.desktop")
 }
 
-// swiftMonitorPresent reports whether the native macOS Swift monitor is already
-// set up — if so, the installer leaves the Go tray autostart alone (no dupes).
-func swiftMonitorPresent(r *report) bool {
-	return r.os == osDarwin &&
-		fileExists(filepath.Join(r.home, "Library", "LaunchAgents", "com.ariadne.monitor.plist"))
-}
-
 func mcpRegistered(home string) bool {
 	b, err := os.ReadFile(filepath.Join(home, ".claude.json")) //nolint:gosec // own config
 	if err != nil {

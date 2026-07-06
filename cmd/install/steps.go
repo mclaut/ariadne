@@ -74,7 +74,7 @@ func makePlan(r *report, o opts) []action {
 		},
 		{
 			title: "install tray-monitor autostart (Linux: autostart entry; macOS: LaunchAgent)",
-			skip:  fileExists(trayAutostartPath(r)) || swiftMonitorPresent(r),
+			skip:  fileExists(trayAutostartPath(r)),
 			run:   func() error { return installTrayAutostart(r) },
 		},
 	}
@@ -290,7 +290,11 @@ func installTrayAutostart(r *report) error {
 		return err
 	}
 	if r.os == osDarwin {
-		tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "com.ariadne.tray.plist")) //nolint:gosec // repo file
+		uid := strconv.Itoa(os.Getuid())
+		// migrate off the legacy Swift monitor so the menu bar shows one icon
+		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.monitor")                        // ignore: may not be loaded
+		_ = os.Remove(filepath.Join(r.home, "Library", "LaunchAgents", "com.ariadne.monitor.plist")) //nolint:errcheck // may not exist
+		tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "com.ariadne.tray.plist"))       //nolint:gosec // repo file
 		if err != nil {
 			return err
 		}
@@ -298,7 +302,6 @@ func installTrayAutostart(r *report) error {
 		if err := os.WriteFile(dst, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
 			return err
 		}
-		uid := strconv.Itoa(os.Getuid())
 		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.tray") // ignore: may not be loaded
 		return runCmd("launchctl", "bootstrap", "gui/"+uid, dst)
 	}
