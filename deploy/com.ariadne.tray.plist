@@ -3,8 +3,7 @@
 <!-- Template: replace __HOME__ with your absolute home dir, then:
        cp deploy/com.ariadne.tray.plist ~/Library/LaunchAgents/
        launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ariadne.tray.plist
-     The cross-platform Go tray (same core as the Swift app). The installer skips
-     this if the Swift AriadneMonitor (com.ariadne.monitor) is already set up.
+     The cross-platform Go tray — the monitor on macOS, Linux and Windows.
      RunAtLoad only (no KeepAlive) so quitting from the menu actually quits. -->
 <plist version="1.0"><dict>
   <key>Label</key><string>com.ariadne.tray</string>

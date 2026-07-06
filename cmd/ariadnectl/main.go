@@ -1,5 +1,5 @@
 // Command ariadnectl is the control/health core for the ariadne stack.
-// The Swift menu-bar app is a thin viewer that shells these subcommands; all
+// The tray monitor is a thin viewer that shells these subcommands; all
 // logic lives here in Go.
 //
 //	status [-json]   health of Qdrant + Ollama + the collection, and any issues.

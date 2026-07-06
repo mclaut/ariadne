@@ -1,8 +1,8 @@
-// ariadne-tray is a system-tray monitor for the ariadne stack (Qdrant + Ollama
-// + the ariadne MCP server) — the Linux/Windows counterpart of the macOS Swift
-// menu-bar app. Thin viewer: it shells `ariadnectl status -json` and renders;
-// all logic lives in the Go core. Cross-platform via fyne.io/systray. The UI is
-// localized (internal/i18n) with a live Language switcher.
+// ariadne-tray is the system-tray monitor for the ariadne stack (Qdrant + Ollama
+// + the ariadne MCP server) on macOS, Linux and Windows. Thin viewer: it shells
+// `ariadnectl status -json` and renders; all logic lives in the Go core.
+// Cross-platform via fyne.io/systray. The UI is localized (internal/i18n) with a
+// live Language switcher.
 package main
 
 import (

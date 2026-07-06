@@ -28,8 +28,7 @@ lock-starvation class simply doesn't exist.
 | `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. |
 | `cmd/ariadnectl` | Control + health core (`status -json`, start/stop, backup/export). |
 | `internal/store` | Storage core: embed (Ollama), BM25 sparse, Qdrant hybrid. |
-| `app/` | macOS Swift menu-bar monitor (status, start/stop, alerts). |
-| `cmd/ariadne-tray` | Cross-platform tray monitor (Linux/Windows) — pure-Go, same `ariadnectl` core as the macOS app. |
+| `cmd/ariadne-tray` | Cross-platform tray monitor (macOS/Linux/Windows) — pure-Go, localized, over the `ariadnectl` core. |
 | `skills/ariadne` | Claude Code skill: recall/save discipline + `doctor.sh`/`recall.sh`. |
 | `deploy/` | LaunchAgent / systemd templates: Qdrant service, daily memfiles-sync, tray autostart. |
 | `poc/` | Standalone experiments that validated the stack. |
@@ -171,8 +170,6 @@ the whole interface stays in one language. Adding a language is one block in
   macOS (migrating off any older Swift monitor so you get one icon). On Linux it
   needs a StatusNotifierItem host (native on KDE/XFCE; on GNOME install the
   "AppIndicator and KStatusNotifierItem" extension). Cross-compiles for Windows.
-- The `app/` **Swift** menu-bar app is legacy — the Go tray replaces it (and adds
-  the language switcher); `app/build.sh` still builds it if you want it on macOS.
 
 ## Backup & portability
 

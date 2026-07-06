@@ -22,7 +22,8 @@ sessions — Qdrant is a server, so the single-writer/lock-starvation class is g
 - `internal/store` — storage core: bge-m3 dense embedding (Ollama) + BM25 sparse
   (pure Go tokenizer; Qdrant computes IDF) fused with RRF server-side. No MCP concerns.
 - `cmd/ariadne` — MCP server (stdio). Tools: `memory_save`, `memory_recall`.
-- `cmd/ariadnectl` — control/health core; the Swift app in `app/` is a thin viewer.
+- `cmd/ariadnectl` — control/health core; `cmd/ariadne-tray` (localized system-tray
+  monitor, macOS/Linux/Windows) is a thin viewer over it.
 - `cmd/import` — backfill (chromadb sqlite / markdown memfiles / JSONL); `-sync`
   keeps memfile chunks true to disk.
 - `cmd/hook` (`ariadne-hook`) — Claude Code session hooks: SessionStart auto-recall,

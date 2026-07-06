@@ -224,8 +224,8 @@ func ensureDepsLinux(o opts) {
 	}
 }
 
-// ensureDepsDarwin installs Ollama via Homebrew if it's local and missing. The
-// macOS tray is the Swift app, so no desktop libs are needed here. Homebrew
+// ensureDepsDarwin installs Ollama via Homebrew if it's local and missing. macOS
+// needs no extra desktop libs for the tray (those are Linux-only). Homebrew
 // itself we don't auto-install (its own installer is interactive/sudo-heavy) —
 // we guide instead, which is the one manual step on a brand-new Mac.
 func ensureDepsDarwin(o opts) {
@@ -282,8 +282,8 @@ func runVisible(bin string, args ...string) {
 }
 
 // installTrayAutostart makes the Go tray start with the desktop session: a
-// LaunchAgent on macOS, a ~/.config/autostart entry on Linux. Skipped when the
-// Swift monitor is already set up (see swiftMonitorPresent).
+// LaunchAgent on macOS (migrating off the legacy Swift monitor), a
+// ~/.config/autostart entry on Linux.
 func installTrayAutostart(r *report) error {
 	dst := trayAutostartPath(r)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { //nolint:gosec // user-owned

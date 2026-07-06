@@ -6,7 +6,6 @@
 
 # Compiled binaries & build artifacts
 /bin/
-app/build/
 poc/bin/
 
 # Logs
