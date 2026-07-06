@@ -165,14 +165,14 @@ glance. The choice persists in `~/.ariadne/lang` and `ariadnectl` follows it, so
 the whole interface stays in one language. Adding a language is one block in
 `internal/i18n`.
 
-- **`ariadne-tray`** (pure-Go, `fyne.io/systray`) is the default: the installer
-  builds it into `~/.ariadne/bin` and registers autostart — a `~/.config/autostart`
-  entry on Linux, a `com.ariadne.tray` LaunchAgent on macOS. On Linux it needs a
-  StatusNotifierItem host (native on KDE/XFCE; on GNOME install the "AppIndicator
-  and KStatusNotifierItem" extension). Cross-compiles for Windows too.
-- **macOS Swift app** (`app/`, `app/build.sh`) is an alternative native menu-bar
-  monitor. If its `com.ariadne.monitor` agent is already set up, the installer
-  leaves it be and skips the Go tray, so you don't get two icons.
+- **`ariadne-tray`** (pure-Go, `fyne.io/systray`) is the monitor on every
+  platform: the installer builds it into `~/.ariadne/bin` and registers autostart
+  — a `~/.config/autostart` entry on Linux, a `com.ariadne.tray` LaunchAgent on
+  macOS (migrating off any older Swift monitor so you get one icon). On Linux it
+  needs a StatusNotifierItem host (native on KDE/XFCE; on GNOME install the
+  "AppIndicator and KStatusNotifierItem" extension). Cross-compiles for Windows.
+- The `app/` **Swift** menu-bar app is legacy — the Go tray replaces it (and adds
+  the language switcher); `app/build.sh` still builds it if you want it on macOS.
 
 ## Backup & portability
 
