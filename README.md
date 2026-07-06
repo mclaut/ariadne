@@ -158,10 +158,11 @@ or pass `-summary-model` to the installer so it pulls that one.
 
 A tray/menu-bar monitor polls `ariadnectl status -json` every 5s and shows a
 green/orange/red/grey icon, per-service detail, and start/stop/restart/backup
-actions; it notifies when a service drops. The `ariadne-tray` UI is localized
-(English / Ukrainian, more to come) with a live **Language** switcher — the
-choice persists in `~/.ariadne/lang` and `ariadnectl` follows it, so the whole
-interface stays in one language. Adding a language is one column in
+actions; it notifies when a service drops. The `ariadne-tray` UI is localized —
+**7 languages** (English, Українська, Deutsch, Italiano, Español, Français,
+Polski) with a live **🌐 Language** switcher that shows the active one at a
+glance. The choice persists in `~/.ariadne/lang` and `ariadnectl` follows it, so
+the whole interface stays in one language. Adding a language is one block in
 `internal/i18n`.
 
 - **`ariadne-tray`** (pure-Go, `fyne.io/systray`) is the default: the installer
