@@ -209,8 +209,24 @@ func ensureDeps(o opts) {
 		} else {
 			fmt.Println("    installing Ollama…")
 			runVisible("sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh")
+			waitOllama(o.ollamaURL) // let the service bind before preflight checks it
 		}
 	}
+}
+
+// waitOllama blocks until the freshly-installed Ollama API answers (or ~30s
+// elapse), so the just-started systemd service doesn't lose the race against the
+// preflight check that immediately follows.
+func waitOllama(url string) {
+	base := strings.TrimRight(url, "/")
+	for i := 0; i < 30; i++ {
+		if getOK(base + "/api/version") {
+			fmt.Println("    Ollama is up")
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	fmt.Fprintln(os.Stderr, "    ⚠ Ollama installed but not answering yet — if preflight aborts, just re-run")
 }
 
 func pkgInstall(o opts, mgr string, args ...string) {
