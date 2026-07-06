@@ -22,10 +22,9 @@ import (
 )
 
 const (
-	qdrantLabel  = "com.ariadne.qdrant"
-	qdrantData   = ".ariadne/qdrant-data" // runtime home is ~/.ariadne (outside any TCC-protected folder)
-	diskWarnMB   = 2048                   // warn if the machine's free space drops under this
-	pointsMinExp = 1                      // a healthy collection should have at least this many points
+	qdrantLabel = "com.ariadne.qdrant"
+	qdrantData  = ".ariadne/qdrant-data" // runtime home is ~/.ariadne (outside any TCC-protected folder)
+	diskWarnMB  = 2048                   // warn if the machine's free space drops under this
 )
 
 // Overridable for reused/remote Qdrant setups (the installer's -qdrant-* flags).
@@ -148,9 +147,8 @@ func gather() status {
 	if s.Qdrant.Up && s.Collection.Status != "" && s.Collection.Status != "green" {
 		s.Issues = append(s.Issues, "collection status: "+s.Collection.Status)
 	}
-	if s.Qdrant.Up && s.Collection.Points < pointsMinExp {
-		s.Issues = append(s.Issues, "collection empty")
-	}
+	// NB: an empty collection is NOT an issue — a fresh install legitimately has
+	// 0 memories until the user saves some; flagging it made the tray cry orange.
 	if s.FreeGB*1024 < diskWarnMB {
 		s.Issues = append(s.Issues, fmt.Sprintf("low disk: %dGB free", s.FreeGB))
 	}
@@ -258,7 +256,9 @@ func dirSizeMB(dir string) int64 {
 }
 
 func freeGB(path string) int64 {
-	out, err := exec.CommandContext(context.Background(), "df", "-g", path).Output() //nolint:gosec // fixed command
+	// -Pk is POSIX-portable (Linux + macOS/BSD); -g is BSD-only and errors on
+	// Linux. Available (KB) is column 4 of the POSIX single-line data row.
+	out, err := exec.CommandContext(context.Background(), "df", "-Pk", path).Output() //nolint:gosec // fixed command
 	if err != nil {
 		return -1
 	}
@@ -270,8 +270,8 @@ func freeGB(path string) int64 {
 	if len(f) < 4 {
 		return -1
 	}
-	g, _ := strconv.ParseInt(f[3], 10, 64)
-	return g
+	availKB, _ := strconv.ParseInt(f[3], 10, 64)
+	return availKB / (1024 * 1024) // KB → GB
 }
 
 func run(bin string, args ...string) {
