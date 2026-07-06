@@ -36,7 +36,26 @@ lock-starvation class simply doesn't exist.
 
 ## Setup
 
-### One-shot installer (macOS + Linux)
+### One command (Linux + macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh
+```
+
+Nothing by hand: `install.sh` bootstraps Go and the source (GitHub tarball — no
+git needed), then runs the installer below, which auto-installs Ollama, Qdrant,
+the models, the services, and — on Linux — the tray plus its desktop deps. Pass
+installer flags straight through, e.g. a lighter summary model or a preview:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh -s -- -summary-model qwen2.5:3b
+curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh -s -- -dry-run
+```
+
+(sudo — for apt packages and Ollama on Linux — prompts on the terminal, so the
+pipe is fine. Windows: PowerShell path is on the roadmap.)
+
+### From a clone (or to hack on it)
 
 ```bash
 go run ./cmd/install -dry-run   # preflight + plan, changes nothing
