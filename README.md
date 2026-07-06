@@ -23,13 +23,14 @@ lock-starvation class simply doesn't exist.
 | Path | What |
 |---|---|
 | `cmd/ariadne` | MCP server (stdio). Tools: `memory_save`, `memory_recall`. |
-| `cmd/import` | Backfill from a chromadb sqlite or markdown memory files. |
-| `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill. |
+| `cmd/import` | Backfill from a chromadb sqlite, markdown memory files or JSONL (batched embeds). |
+| `cmd/hook` | Claude Code session hooks (`ariadne-hook`): SessionStart auto-recall, SessionEnd auto-capture. |
+| `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. |
 | `cmd/ariadnectl` | Control + health core (`status -json`, start/stop, backup/export). |
 | `internal/store` | Storage core: embed (Ollama), BM25 sparse, Qdrant hybrid. |
 | `app/` | Swift menu-bar monitor (status, start/stop, alerts). |
 | `skills/ariadne` | Claude Code skill: recall/save discipline + `doctor.sh`/`recall.sh`. |
-| `deploy/` | LaunchAgent template for the Qdrant service. |
+| `deploy/` | LaunchAgent / systemd templates: Qdrant service + daily memfiles-sync. |
 | `poc/` | Standalone experiments that validated the stack. |
 
 ## Setup
@@ -150,14 +151,17 @@ Two distinct concepts:
 (`-source chroma -db <file>`) or markdown memory files (`-source memfiles`).
 All imports are idempotent (content-hash ids). For memfiles, `-sync` keeps the
 collection true to disk: edited files replace their old chunks and chunks of
-deleted files are reaped — run it whenever your notes change.
+deleted files are reaped. The installer registers a daily agent
+(`com.ariadne.sync` / `ariadne-sync.timer`) that runs this for you; run it by
+hand after large note edits.
 
 ## Status
 
-v1 — working. Hybrid multilingual recall live; ~6k memories imported in testing.
-Next: session-capture hooks (curated, not raw transcripts). A learned-sparse
-upgrade (bge-m3 SPLADE on a CUDA box) is optional if BM25 proves too weak for
-morphology-rich languages.
+v1 — working. Hybrid multilingual recall, session hooks (auto-recall + curated
+auto-capture) and time-ordered diary are all live; several thousand memories in
+daily use. Bulk import batches embeddings for a large backfill speedup. A
+learned-sparse upgrade (bge-m3 SPLADE on a CUDA box) is optional if BM25 proves
+too weak for morphology-rich languages.
 
 ## License
 
