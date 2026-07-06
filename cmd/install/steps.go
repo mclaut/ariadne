@@ -177,14 +177,24 @@ func installSyncAgent(r *report) error {
 	return runCmd("systemctl", "--user", "enable", "--now", "ariadne-sync.timer")
 }
 
-// ensureDeps auto-installs OS prerequisites on Linux BEFORE preflight inspects
-// them: the tray's desktop libs (notifications, xdg-open, the GNOME AppIndicator
-// extension) and Ollama if it's local and missing. Best-effort — failures warn
-// and continue; skip with -skip-deps. macOS keeps its brew-based manual setup.
+// ensureDeps auto-installs OS prerequisites BEFORE preflight inspects them, so a
+// clean machine bootstraps to a working stack. Best-effort — failures warn and
+// continue; skip with -skip-deps. (Windows deps belong to the future Win branch.)
 func ensureDeps(o opts) {
-	if runtime.GOOS != osLinux || o.skipDeps {
+	if o.skipDeps {
 		return
 	}
+	switch runtime.GOOS {
+	case osLinux:
+		ensureDepsLinux(o)
+	case osDarwin:
+		ensureDepsDarwin(o)
+	}
+}
+
+// ensureDepsLinux installs the tray's desktop libs (notifications, xdg-open, the
+// GNOME AppIndicator extension) and Ollama (official script) if local + missing.
+func ensureDepsLinux(o opts) {
 	fmt.Println("\n[deps] Linux prerequisites (skip with -skip-deps)")
 	switch {
 	case which("apt-get"):
@@ -212,6 +222,29 @@ func ensureDeps(o opts) {
 			waitOllama(o.ollamaURL) // let the service bind before preflight checks it
 		}
 	}
+}
+
+// ensureDepsDarwin installs Ollama via Homebrew if it's local and missing. The
+// macOS tray is the Swift app, so no desktop libs are needed here. Homebrew
+// itself we don't auto-install (its own installer is interactive/sudo-heavy) —
+// we guide instead, which is the one manual step on a brand-new Mac.
+func ensureDepsDarwin(o opts) {
+	if o.remoteOllama() || which("ollama") {
+		return
+	}
+	fmt.Println("\n[deps] macOS: Ollama (skip with -skip-deps)")
+	if !which("brew") {
+		fmt.Println("    Homebrew not found — install it (https://brew.sh) or Ollama.app " +
+			"(https://ollama.com/download), then re-run")
+		return
+	}
+	if o.dryRun {
+		fmt.Println("    would: brew install ollama && brew services start ollama")
+		return
+	}
+	runVisible("brew", "install", "ollama")
+	runVisible("brew", "services", "start", "ollama")
+	waitOllama(o.ollamaURL)
 }
 
 // waitOllama blocks until the freshly-installed Ollama API answers (or ~30s
