@@ -160,11 +160,14 @@ A tray/menu-bar monitor polls `ariadnectl status -json` every 5s and shows a
 green/orange/red/grey icon, per-service detail, and start/stop/restart/backup
 actions; it notifies when a service drops.
 
-- **macOS** — the Swift app in `app/` (`app/build.sh`).
-- **Linux / Windows** — `ariadne-tray` (pure-Go, `fyne.io/systray`, no CGO). The
-  installer builds it into `~/.ariadne/bin` and, on Linux, adds an autostart entry.
-  It needs a StatusNotifierItem host — native on KDE/XFCE/etc.; on GNOME install the
-  "AppIndicator and KStatusNotifierItem" extension.
+- **`ariadne-tray`** (pure-Go, `fyne.io/systray`) is the default: the installer
+  builds it into `~/.ariadne/bin` and registers autostart — a `~/.config/autostart`
+  entry on Linux, a `com.ariadne.tray` LaunchAgent on macOS. On Linux it needs a
+  StatusNotifierItem host (native on KDE/XFCE; on GNOME install the "AppIndicator
+  and KStatusNotifierItem" extension). Cross-compiles for Windows too.
+- **macOS Swift app** (`app/`, `app/build.sh`) is an alternative native menu-bar
+  monitor. If its `com.ariadne.monitor` agent is already set up, the installer
+  leaves it be and skips the Go tray, so you don't get two icons.
 
 ## Backup & portability
 

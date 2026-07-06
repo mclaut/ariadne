@@ -73,8 +73,8 @@ func makePlan(r *report, o opts) []action {
 			run:   func() error { return installSyncAgent(r) },
 		},
 		{
-			title: "install tray-monitor autostart → ~/.config/autostart (Linux desktop)",
-			skip:  r.os != osLinux || fileExists(trayAutostartPath(r)),
+			title: "install tray-monitor autostart (Linux: autostart entry; macOS: LaunchAgent)",
+			skip:  fileExists(trayAutostartPath(r)) || swiftMonitorPresent(r),
 			run:   func() error { return installTrayAutostart(r) },
 		},
 	}
@@ -281,12 +281,26 @@ func runVisible(bin string, args ...string) {
 	}
 }
 
-// installTrayAutostart drops the tray .desktop into ~/.config/autostart so the
-// monitor starts with the Linux desktop session. macOS uses the Swift app instead.
+// installTrayAutostart makes the Go tray start with the desktop session: a
+// LaunchAgent on macOS, a ~/.config/autostart entry on Linux. Skipped when the
+// Swift monitor is already set up (see swiftMonitorPresent).
 func installTrayAutostart(r *report) error {
 	dst := trayAutostartPath(r)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { //nolint:gosec // user-owned
 		return err
+	}
+	if r.os == osDarwin {
+		tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "com.ariadne.tray.plist")) //nolint:gosec // repo file
+		if err != nil {
+			return err
+		}
+		rendered := strings.ReplaceAll(string(tpl), "__HOME__", r.home)
+		if err := os.WriteFile(dst, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
+			return err
+		}
+		uid := strconv.Itoa(os.Getuid())
+		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.tray") // ignore: may not be loaded
+		return runCmd("launchctl", "bootstrap", "gui/"+uid, dst)
 	}
 	tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "ariadne-tray.desktop")) //nolint:gosec // repo file
 	if err != nil {
@@ -386,6 +400,12 @@ func buildBinaries(r *report) error {
 		cmd.Dir = r.repoRoot
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
+			if bin == "ariadne-tray" {
+				// the tray needs a C toolchain on macOS (Cocoa); if that's absent
+				// the monitor is skipped but the pure-Go core stack is unaffected.
+				fmt.Fprintf(os.Stderr, "    ⚠ tray build failed (%v) — monitor unavailable, core stack fine\n", err)
+				continue
+			}
 			return fmt.Errorf("go build %s: %w", bin, err)
 		}
 	}

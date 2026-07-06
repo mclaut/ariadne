@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __HOME__ with your absolute home dir, then:
+       cp deploy/com.ariadne.tray.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ariadne.tray.plist
+     The cross-platform Go tray (same core as the Swift app). The installer skips
+     this if the Swift AriadneMonitor (com.ariadne.monitor) is already set up.
+     RunAtLoad only (no KeepAlive) so quitting from the menu actually quits. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.ariadne.tray</string>
+  <key>ProgramArguments</key><array><string>__HOME__/.ariadne/bin/ariadne-tray</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/tray.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/tray.log</string>
+</dict></plist>
