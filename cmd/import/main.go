@@ -38,7 +38,8 @@ func main() {
 	db := flag.String("db", "", "chromadb sqlite path (required for -source chroma)")
 	file := flag.String("file", "", "JSONL export file (for -source jsonl)")
 	limit := flag.Int("n", 0, "max docs (0 = all)")
-	workers := flag.Int("workers", 8, "parallel embed workers")
+	workers := flag.Int("workers", 8, "concurrent embed+upsert workers")
+	batchSize := flag.Int("batch", 64, "docs embedded+upserted per round trip")
 	skipSessions := flag.Bool("skip-sessions", false, "skip the raw-transcript 'sessions' wing")
 	syncMode := flag.Bool("sync", false,
 		"memfiles only: refresh edited files (delete old chunks first) and remove orphans of deleted files")
@@ -56,21 +57,48 @@ func main() {
 	}
 
 	jobs := make(chan doc, 1024)
+	batches := make(chan []store.SaveItem, *workers*2)
 	var done, failed atomic.Int64
 	start := time.Now()
+
+	// batcher: group docs into fixed-size batches, one round trip each.
+	go func() {
+		buf := make([]store.SaveItem, 0, *batchSize)
+		for d := range jobs {
+			buf = append(buf, store.SaveItem{
+				Text: store.SanitizeUTF8(d.text),
+				Meta: map[string]string{"wing": d.wing, "room": d.room},
+			})
+			if len(buf) == *batchSize {
+				batches <- buf
+				buf = make([]store.SaveItem, 0, *batchSize)
+			}
+		}
+		if len(buf) > 0 {
+			batches <- buf
+		}
+		close(batches)
+	}()
 
 	var wg sync.WaitGroup
 	for i := 0; i < *workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for d := range jobs {
-				if _, err := st.Save(ctx, store.SanitizeUTF8(d.text),
-					map[string]string{"wing": d.wing, "room": d.room}); err != nil {
-					failed.Add(1)
+			for b := range batches {
+				if err := st.SaveBatch(ctx, b); err != nil {
+					// one bad doc shouldn't sink the whole batch — retry each alone
+					for _, it := range b {
+						if _, e := st.Save(ctx, it.Text, it.Meta); e != nil {
+							failed.Add(1)
+						} else {
+							done.Add(1)
+						}
+					}
 					continue
 				}
-				if n := done.Add(1); n%500 == 0 {
+				n := done.Add(int64(len(b)))
+				if prev := n - int64(len(b)); n/2000 != prev/2000 {
 					rate := float64(n) / time.Since(start).Seconds()
 					fmt.Printf("  %d saved · %.0f/s · fail=%d\n", n, rate, failed.Load())
 				}

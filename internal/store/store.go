@@ -96,21 +96,6 @@ func (s *Store) Save(ctx context.Context, text string, meta map[string]string) (
 	}
 	sIdx, sVal := sparseVec(text)
 	id := contentID(text)
-	payload := map[string]any{"text": text}
-	for k, v := range meta {
-		if v == "" {
-			continue
-		}
-		// "ts" is stored as a number so its range index (see EnsureCollection)
-		// can order/filter by time; everything else stays a string.
-		if k == "ts" {
-			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-				payload[k] = n
-				continue
-			}
-		}
-		payload[k] = v
-	}
 	_, err = s.qc.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collection,
 		Points: []*qdrant.PointStruct{{
@@ -119,10 +104,67 @@ func (s *Store) Save(ctx context.Context, text string, meta map[string]string) (
 				"dense":  qdrant.NewVectorDense(dense),
 				"sparse": qdrant.NewVectorSparse(sIdx, sVal),
 			}),
-			Payload: qdrant.NewValueMap(payload),
+			Payload: qdrant.NewValueMap(buildPayload(text, meta)),
 		}},
 	})
 	return id, err
+}
+
+// SaveItem is one text plus its metadata, for SaveBatch.
+type SaveItem struct {
+	Text string
+	Meta map[string]string
+}
+
+// SaveBatch embeds all items in one Ollama call and upserts them in one Qdrant
+// call — far fewer round trips than looping Save, which is what makes bulk
+// import fast. Same content-hash id, so it stays idempotent.
+func (s *Store) SaveBatch(ctx context.Context, items []SaveItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	texts := make([]string, len(items))
+	for i, it := range items {
+		texts[i] = it.Text
+	}
+	dense, err := s.embedBatch(ctx, texts)
+	if err != nil {
+		return err
+	}
+	points := make([]*qdrant.PointStruct, len(items))
+	for i, it := range items {
+		sIdx, sVal := sparseVec(it.Text)
+		points[i] = &qdrant.PointStruct{
+			Id: qdrant.NewIDNum(contentID(it.Text)),
+			Vectors: qdrant.NewVectorsMap(map[string]*qdrant.Vector{
+				"dense":  qdrant.NewVectorDense(dense[i]),
+				"sparse": qdrant.NewVectorSparse(sIdx, sVal),
+			}),
+			Payload: qdrant.NewValueMap(buildPayload(it.Text, it.Meta)),
+		}
+	}
+	_, err = s.qc.Upsert(ctx, &qdrant.UpsertPoints{CollectionName: s.collection, Points: points})
+	return err
+}
+
+// buildPayload assembles a point payload: text plus non-empty metadata. "ts" is
+// stored as a number so its range index (see EnsureCollection) can order/filter
+// by time; every other key stays a string.
+func buildPayload(text string, meta map[string]string) map[string]any {
+	payload := map[string]any{"text": text}
+	for k, v := range meta {
+		if v == "" {
+			continue
+		}
+		if k == "ts" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+				payload[k] = n
+				continue
+			}
+		}
+		payload[k] = v
+	}
+	return payload
 }
 
 // Recall runs a hybrid dense+sparse query fused with RRF, server-side.
@@ -170,8 +212,10 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing string
 
 // --- embedding + sparse ---
 
-func (s *Store) embed(ctx context.Context, text string) ([]float32, error) {
-	body, _ := json.Marshal(map[string]any{"model": s.model, "input": text})
+// embedBatch embeds many texts in a single Ollama call — bge-m3's /api/embed
+// accepts an array input, so this is one round trip instead of len(texts).
+func (s *Store) embedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	body, _ := json.Marshal(map[string]any{"model": s.model, "input": texts})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.ollamaURL+"/api/embed", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -188,10 +232,18 @@ func (s *Store) embed(ctx context.Context, text string) ([]float32, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
-	if len(out.Embeddings) == 0 {
-		return nil, fmt.Errorf("ollama returned no embedding")
+	if len(out.Embeddings) != len(texts) {
+		return nil, fmt.Errorf("ollama returned %d embeddings for %d inputs", len(out.Embeddings), len(texts))
 	}
-	return out.Embeddings[0], nil
+	return out.Embeddings, nil
+}
+
+func (s *Store) embed(ctx context.Context, text string) ([]float32, error) {
+	vecs, err := s.embedBatch(ctx, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	return vecs[0], nil
 }
 
 // tokenize: lowercase, split on non-letter/number — Unicode-aware (Cyrillic,
