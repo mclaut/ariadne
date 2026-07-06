@@ -21,7 +21,8 @@ sessions — Qdrant is a server, so the single-writer/lock-starvation class is g
 
 - `internal/store` — storage core: bge-m3 dense embedding (Ollama) + BM25 sparse
   (pure Go tokenizer; Qdrant computes IDF) fused with RRF server-side. No MCP concerns.
-- `cmd/ariadne` — MCP server (stdio). Tools: `memory_save`, `memory_recall`.
+- `cmd/ariadne` — MCP server (stdio). Tools: `memory_save`, `memory_recall`,
+  `memory_delete`, `memory_move` (curate: delete by id, re-home/re-tag by id).
 - `cmd/ariadnectl` — control/health core; `cmd/ariadne-tray` (localized system-tray
   monitor, macOS/Linux/Windows) is a thin viewer over it.
 - `cmd/import` — backfill (chromadb sqlite / markdown memfiles / JSONL); `-sync`

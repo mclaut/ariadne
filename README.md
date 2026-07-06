@@ -22,7 +22,7 @@ lock-starvation class simply doesn't exist.
 
 | Path | What |
 |---|---|
-| `cmd/ariadne` | MCP server (stdio). Tools: `memory_save`, `memory_recall`. |
+| `cmd/ariadne` | MCP server (stdio). Tools: `memory_save`, `memory_recall`, `memory_delete`, `memory_move`. |
 | `cmd/import` | Backfill from a chromadb sqlite, markdown memory files or JSONL (batched embeds). |
 | `cmd/hook` | Claude Code session hooks (`ariadne-hook`): SessionStart auto-recall, SessionEnd auto-capture. |
 | `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. |

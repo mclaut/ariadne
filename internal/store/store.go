@@ -31,6 +31,7 @@ type Store struct {
 
 // Result is one recall hit.
 type Result struct {
+	ID    uint64  `json:"id"`
 	Score float32 `json:"score"`
 	Text  string  `json:"text"`
 	Wing  string  `json:"wing,omitempty"`
@@ -205,6 +206,7 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, colle
 	for _, p := range res {
 		pl := p.GetPayload()
 		out = append(out, Result{
+			ID:    p.GetId().GetNum(),
 			Score: p.GetScore(),
 			Text:  pl["text"].GetStringValue(),
 			Wing:  pl["wing"].GetStringValue(),
@@ -293,6 +295,36 @@ func (s *Store) DeleteByWingRoom(ctx context.Context, wing, room string) error {
 			qdrant.NewMatch("wing", wing),
 			qdrant.NewMatch("room", room),
 		}}),
+	})
+	return err
+}
+
+// DeleteByID removes one memory by its content-hash id (as returned by Recall).
+func (s *Store) DeleteByID(ctx context.Context, id uint64) error {
+	_, err := s.qc.Delete(ctx, &qdrant.DeletePoints{
+		CollectionName: s.collection,
+		Points:         qdrant.NewPointsSelector(qdrant.NewIDNum(id)),
+	})
+	return err
+}
+
+// SetMeta updates the payload (e.g. wing/room) of one memory in place — its text
+// and vectors are untouched, so the id is stable. This is how a memory is moved
+// between wings or re-tagged. Empty values are ignored (that field is left as-is).
+func (s *Store) SetMeta(ctx context.Context, id uint64, meta map[string]string) error {
+	payload := map[string]any{}
+	for k, v := range meta {
+		if v != "" {
+			payload[k] = v
+		}
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	_, err := s.qc.SetPayload(ctx, &qdrant.SetPayloadPoints{
+		CollectionName: s.collection,
+		Payload:        qdrant.NewValueMap(payload),
+		PointsSelector: qdrant.NewPointsSelector(qdrant.NewIDNum(id)),
 	})
 	return err
 }
