@@ -177,6 +177,61 @@ func installSyncAgent(r *report) error {
 	return runCmd("systemctl", "--user", "enable", "--now", "ariadne-sync.timer")
 }
 
+// ensureDeps auto-installs OS prerequisites on Linux BEFORE preflight inspects
+// them: the tray's desktop libs (notifications, xdg-open, the GNOME AppIndicator
+// extension) and Ollama if it's local and missing. Best-effort — failures warn
+// and continue; skip with -skip-deps. macOS keeps its brew-based manual setup.
+func ensureDeps(o opts) {
+	if runtime.GOOS != osLinux || o.skipDeps {
+		return
+	}
+	fmt.Println("\n[deps] Linux prerequisites (skip with -skip-deps)")
+	switch {
+	case which("apt-get"):
+		if o.dryRun {
+			fmt.Println("    would: sudo apt-get update && sudo apt-get install -y " +
+				"libnotify-bin xdg-utils gnome-shell-extension-appindicator")
+		} else {
+			runVisible("sudo", "apt-get", "update")
+			runVisible("sudo", "apt-get", "install", "-y",
+				"libnotify-bin", "xdg-utils", "gnome-shell-extension-appindicator")
+		}
+	case which("dnf"):
+		pkgInstall(o, "dnf", "install", "-y", "libnotify", "xdg-utils", "gnome-shell-extension-appindicator")
+	case which("pacman"):
+		pkgInstall(o, "pacman", "-S", "--needed", "--noconfirm", "libnotify", "xdg-utils")
+	default:
+		fmt.Println("    unknown package manager — install manually: libnotify-bin xdg-utils gnome-shell-extension-appindicator")
+	}
+	if !o.remoteOllama() && !which("ollama") {
+		if o.dryRun {
+			fmt.Println("    would install Ollama: curl -fsSL https://ollama.com/install.sh | sh")
+		} else {
+			fmt.Println("    installing Ollama…")
+			runVisible("sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh")
+		}
+	}
+}
+
+func pkgInstall(o opts, mgr string, args ...string) {
+	if o.dryRun {
+		fmt.Printf("    would: sudo %s %s\n", mgr, strings.Join(args, " "))
+		return
+	}
+	runVisible("sudo", append([]string{mgr}, args...)...)
+}
+
+// runVisible runs a command with the terminal attached (so sudo can prompt) and
+// only warns on failure — prerequisites are best-effort, never fatal.
+func runVisible(bin string, args ...string) {
+	fmt.Printf("    $ %s %s\n", bin, strings.Join(args, " "))
+	cmd := exec.CommandContext(context.Background(), bin, args...) //nolint:gosec // fixed package-manager / installer argv
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "    ⚠ %s failed (%v) — install it manually and re-run\n", bin, err)
+	}
+}
+
 // installTrayAutostart drops the tray .desktop into ~/.config/autostart so the
 // monitor starts with the Linux desktop session. macOS uses the Swift app instead.
 func installTrayAutostart(r *report) error {

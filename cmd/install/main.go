@@ -32,6 +32,12 @@ type opts struct {
 	collection         string
 	skipModel          bool
 	skipHooks          bool
+	skipDeps           bool
+}
+
+// remoteOllama reports whether -ollama points at a non-local box.
+func (o opts) remoteOllama() bool {
+	return !strings.Contains(o.ollamaURL, "localhost") && !strings.Contains(o.ollamaURL, "127.0.0.1")
 }
 
 func parseFlags() opts {
@@ -49,6 +55,7 @@ func parseFlags() opts {
 	flag.StringVar(&o.collection, "collection", "ariadne", "Qdrant collection name")
 	flag.BoolVar(&o.skipModel, "skip-model-pull", false, "do not pull models")
 	flag.BoolVar(&o.skipHooks, "skip-hooks", false, "do not register Claude Code session hooks (auto-recall/auto-capture)")
+	flag.BoolVar(&o.skipDeps, "skip-deps", false, "do not auto-install OS prerequisites (Linux: tray libs + Ollama)")
 	flag.Parse()
 	return o
 }
@@ -56,6 +63,8 @@ func parseFlags() opts {
 func main() {
 	o := parseFlags()
 	fmt.Println("== Ariadne installer ==")
+
+	ensureDeps(o) // Linux: auto-install tray libs + Ollama BEFORE preflight sees them
 
 	pf := preflight(o)
 	printReport(pf)
