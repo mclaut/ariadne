@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -77,6 +78,12 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 		FieldName:      "wing",
 		FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
 	})
+	// "ts" (unix seconds) — range index so diary can be ordered/filtered by time
+	_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+		CollectionName: s.collection,
+		FieldName:      "ts",
+		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
+	})
 	return nil
 }
 
@@ -91,9 +98,18 @@ func (s *Store) Save(ctx context.Context, text string, meta map[string]string) (
 	id := contentID(text)
 	payload := map[string]any{"text": text}
 	for k, v := range meta {
-		if v != "" {
-			payload[k] = v
+		if v == "" {
+			continue
 		}
+		// "ts" is stored as a number so its range index (see EnsureCollection)
+		// can order/filter by time; everything else stays a string.
+		if k == "ts" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+				payload[k] = n
+				continue
+			}
+		}
+		payload[k] = v
 	}
 	_, err = s.qc.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collection,

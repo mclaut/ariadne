@@ -111,7 +111,13 @@ func captureRun(args []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	id, err := st.Save(ctx, text, map[string]string{"wing": project, "room": "diary"})
+	meta := map[string]string{"wing": project, "room": "diary"}
+	if t := first; !t.IsZero() {
+		meta["ts"] = strconv.FormatInt(t.Unix(), 10) // session start, unix seconds
+	} else if !last.IsZero() {
+		meta["ts"] = strconv.FormatInt(last.Unix(), 10)
+	}
+	id, err := st.Save(ctx, text, meta)
 	if err != nil {
 		log.Printf("FAIL %s: save: %v", short(*session), err)
 		return
