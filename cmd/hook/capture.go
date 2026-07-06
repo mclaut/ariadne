@@ -242,8 +242,11 @@ func summarize(body string) string {
 			{"role": "system", "content": summaryPrompt},
 			{"role": "user", "content": body},
 		},
-		"stream":  false,
-		"options": map[string]any{"temperature": 0.2, "num_ctx": 8192},
+		"stream": false,
+		// unload the ~4.7GB summary model right after summarizing — it's used
+		// only here and capture runs detached, so the reload cost is invisible.
+		"keep_alive": 0,
+		"options":    map[string]any{"temperature": 0.2, "num_ctx": 8192},
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
