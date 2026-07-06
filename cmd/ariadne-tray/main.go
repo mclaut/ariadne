@@ -100,7 +100,7 @@ func onReady() {
 	mLang = systray.AddMenuItem("", "")
 	langItems = make(map[i18n.Lang]*systray.MenuItem, len(i18n.Available))
 	for _, l := range i18n.Available {
-		langItems[l] = mLang.AddSubMenuItem(i18n.Name[l], "")
+		langItems[l] = mLang.AddSubMenuItem(i18n.Flag[l]+"  "+i18n.Name[l], "")
 	}
 	systray.AddSeparator()
 	mQuit = systray.AddMenuItem("", "")
@@ -168,7 +168,7 @@ func relabel() {
 	mExport.SetTitle(i18n.T(lang, "menu.export"))
 	mData.SetTitle(i18n.T(lang, "menu.data"))
 	mLogs.SetTitle(i18n.T(lang, "menu.logs"))
-	mLang.SetTitle(i18n.T(lang, "menu.language"))
+	mLang.SetTitle("🌐 " + i18n.T(lang, "menu.language") + ": " + i18n.Name[lang])
 	mQuit.SetTitle(i18n.T(lang, "menu.quit"))
 	for l, it := range langItems {
 		if l == lang {
