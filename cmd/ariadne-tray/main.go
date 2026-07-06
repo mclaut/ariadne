@@ -1,10 +1,12 @@
 // ariadne-tray is a system-tray monitor for the ariadne stack (Qdrant + Ollama
 // + the ariadne MCP server) — the Linux/Windows counterpart of the macOS Swift
 // menu-bar app. Thin viewer: it shells `ariadnectl status -json` and renders;
-// all logic lives in the Go core. Cross-platform via fyne.io/systray.
+// all logic lives in the Go core. Cross-platform via fyne.io/systray. The UI is
+// localized (internal/i18n) with a live Language switcher.
 package main
 
 import (
+	"ariadne/internal/i18n"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,6 +20,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/systray"
@@ -59,8 +62,14 @@ type status struct {
 }
 
 var (
-	rowHealth, rowQdrant, rowOllama, rowPoints, rowDisk *systray.MenuItem
-	lastIssues                                          []string
+	mu         sync.Mutex // serializes UI updates across poll/switch goroutines
+	lang       i18n.Lang
+	lastIssues []string
+
+	rowHealth, rowQdrant, rowOllama, rowPoints, rowDisk            *systray.MenuItem
+	mStart, mStop, mRestart, mBackup, mExport, mData, mLogs, mLang *systray.MenuItem
+	mQuit                                                          *systray.MenuItem
+	langItems                                                      map[i18n.Lang]*systray.MenuItem
 )
 
 func main() {
@@ -68,6 +77,7 @@ func main() {
 }
 
 func onReady() {
+	lang = i18n.Current()
 	systray.SetIcon(dotIcon(gray))
 	systray.SetTitle("ariadne")
 	systray.SetTooltip("ariadne monitor")
@@ -78,45 +88,95 @@ func onReady() {
 	rowPoints = infoRow("")
 	rowDisk = infoRow("")
 	systray.AddSeparator()
-	mStart := systray.AddMenuItem("▶ Старт", "start the stack")
-	mStop := systray.AddMenuItem("■ Стоп", "stop the stack")
-	mRestart := systray.AddMenuItem("⟳ Рестарт", "restart the stack")
+	mStart = systray.AddMenuItem("", "")
+	mStop = systray.AddMenuItem("", "")
+	mRestart = systray.AddMenuItem("", "")
 	systray.AddSeparator()
-	mBackup := systray.AddMenuItem("💾 Бекап зараз", "snapshot the collection")
-	mExport := systray.AddMenuItem("⬇ Експорт (JSONL)", "portable export")
-	mData := systray.AddMenuItem("Показати бекапи/дані", "open the data dir")
-	mLogs := systray.AddMenuItem("Показати логи", "open the logs dir")
+	mBackup = systray.AddMenuItem("", "")
+	mExport = systray.AddMenuItem("", "")
+	mData = systray.AddMenuItem("", "")
+	mLogs = systray.AddMenuItem("", "")
 	systray.AddSeparator()
-	mQuit := systray.AddMenuItem("Вийти", "quit the monitor")
+	mLang = systray.AddMenuItem("", "")
+	langItems = make(map[i18n.Lang]*systray.MenuItem, len(i18n.Available))
+	for _, l := range i18n.Available {
+		langItems[l] = mLang.AddSubMenuItem(i18n.Name[l], "")
+	}
+	systray.AddSeparator()
+	mQuit = systray.AddMenuItem("", "")
 
-	go poll()
-	go func() {
-		t := time.NewTicker(pollEvery)
-		defer t.Stop()
-		for {
-			select {
-			case <-t.C:
-				poll()
-			case <-mStart.ClickedCh:
-				ctl("start", "")
-			case <-mStop.ClickedCh:
-				ctl("stop", "")
-			case <-mRestart.ClickedCh:
-				ctl("restart", "")
-			case <-mBackup.ClickedCh:
-				ctl("backup", "Бекап")
-			case <-mExport.ClickedCh:
-				ctl("export", "Експорт")
-			case <-mData.ClickedCh:
-				openPath(runtimeDir("backups"))
-			case <-mLogs.ClickedCh:
-				openPath(runtimeDir("logs"))
-			case <-mQuit.ClickedCh:
-				systray.Quit()
-				return
+	relabel()
+	// one click-listener goroutine per language item — extensible: new languages
+	// in i18n.Available get their own listener automatically.
+	for l, it := range langItems {
+		go func(l i18n.Lang, it *systray.MenuItem) {
+			for range it.ClickedCh {
+				switchLang(l)
 			}
+		}(l, it)
+	}
+	go poll()
+	go loop()
+}
+
+func loop() {
+	t := time.NewTicker(pollEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			poll()
+		case <-mStart.ClickedCh:
+			ctl("start", "")
+		case <-mStop.ClickedCh:
+			ctl("stop", "")
+		case <-mRestart.ClickedCh:
+			ctl("restart", "")
+		case <-mBackup.ClickedCh:
+			ctl("backup", i18n.T(lang, "notify.backup"))
+		case <-mExport.ClickedCh:
+			ctl("export", i18n.T(lang, "notify.export"))
+		case <-mData.ClickedCh:
+			openPath(runtimeDir("backups"))
+		case <-mLogs.ClickedCh:
+			openPath(runtimeDir("logs"))
+		case <-mQuit.ClickedCh:
+			systray.Quit()
+			return
 		}
-	}()
+	}
+}
+
+func switchLang(l i18n.Lang) {
+	mu.Lock()
+	lang = l
+	_ = i18n.Set(l)
+	mu.Unlock()
+	relabel()
+	poll() // re-render rows + re-fetch (ariadnectl now emits issues in the new lang)
+}
+
+// relabel sets every static menu title in the active language + ticks the
+// current language in the switcher.
+func relabel() {
+	mu.Lock()
+	defer mu.Unlock()
+	mStart.SetTitle(i18n.T(lang, "menu.start"))
+	mStop.SetTitle(i18n.T(lang, "menu.stop"))
+	mRestart.SetTitle(i18n.T(lang, "menu.restart"))
+	mBackup.SetTitle(i18n.T(lang, "menu.backup"))
+	mExport.SetTitle(i18n.T(lang, "menu.export"))
+	mData.SetTitle(i18n.T(lang, "menu.data"))
+	mLogs.SetTitle(i18n.T(lang, "menu.logs"))
+	mLang.SetTitle(i18n.T(lang, "menu.language"))
+	mQuit.SetTitle(i18n.T(lang, "menu.quit"))
+	for l, it := range langItems {
+		if l == lang {
+			it.Check()
+		} else {
+			it.Uncheck()
+		}
+	}
 }
 
 func infoRow(title string) *systray.MenuItem {
@@ -127,25 +187,27 @@ func infoRow(title string) *systray.MenuItem {
 
 func poll() {
 	s := fetch()
+	mu.Lock()
+	defer mu.Unlock()
 	var icon []byte
 	var word string
 	switch {
 	case !s.reachable:
-		icon, word = dotIcon(gray), "ariadnectl недоступний"
+		icon, word = dotIcon(gray), i18n.T(lang, "health.unreachable")
 	case !s.Qdrant.Up || !s.Ollama.Up:
-		icon, word = dotIcon(red), "сервіс впав"
+		icon, word = dotIcon(red), i18n.T(lang, "health.down")
 	case len(s.Issues) > 0:
-		icon, word = dotIcon(orange), "увага"
+		icon, word = dotIcon(orange), i18n.T(lang, "health.warn")
 	default:
-		icon, word = dotIcon(green), "OK"
+		icon, word = dotIcon(green), i18n.T(lang, "health.ok")
 	}
 	systray.SetIcon(icon)
 	systray.SetTooltip("ariadne — " + word)
 	rowHealth.SetTitle("ariadne — " + word)
 	rowQdrant.SetTitle(fmt.Sprintf("Qdrant: %s · %dMB", upWord(s.Qdrant.Up), s.Qdrant.RSSMB))
 	rowOllama.SetTitle(fmt.Sprintf("Ollama: %s · %dMB", upVer(s.Ollama), s.Ollama.RSSMB))
-	rowPoints.SetTitle(fmt.Sprintf("Записів: %s (%s)", grouped(s.Collection.Points), s.Collection.Status))
-	rowDisk.SetTitle(fmt.Sprintf("Дані: %dMB · вільно %dGB", s.DataMB, s.FreeGB))
+	rowPoints.SetTitle(fmt.Sprintf("%s: %s (%s)", i18n.T(lang, "row.records"), grouped(s.Collection.Points), s.Collection.Status))
+	rowDisk.SetTitle(fmt.Sprintf("%s: %dMB · %s %dGB", i18n.T(lang, "row.data"), s.DataMB, i18n.T(lang, "row.free"), s.FreeGB))
 
 	// notify only when a NEW issue appears (or a service just dropped)
 	if s.reachable && len(s.Issues) > 0 && !slices.Equal(s.Issues, lastIssues) {
@@ -175,11 +237,11 @@ func ctl(action, banner string) {
 	defer cancel()
 	err := exec.CommandContext(ctx, ctlPath(), action).Run() //nolint:gosec // our own binary, fixed action set
 	if banner != "" {
-		if err == nil {
-			notify("ariadne", banner+": готово ✅")
-		} else {
-			notify("ariadne", banner+": помилка")
+		result := i18n.T(lang, "notify.done")
+		if err != nil {
+			result = i18n.T(lang, "notify.failed")
 		}
+		notify("ariadne", banner+": "+result)
 	}
 	poll()
 }
@@ -231,19 +293,19 @@ func dotIcon(c color.RGBA) []byte {
 
 func upWord(up bool) string {
 	if up {
-		return "up"
+		return i18n.T(lang, "status.up")
 	}
-	return "DOWN"
+	return i18n.T(lang, "status.down")
 }
 
 func upVer(o svc) string {
 	if !o.Up {
-		return "DOWN"
+		return i18n.T(lang, "status.down")
 	}
 	if o.Version != "" {
-		return "up " + o.Version
+		return i18n.T(lang, "status.up") + " " + o.Version
 	}
-	return "up"
+	return i18n.T(lang, "status.up")
 }
 
 // grouped formats an int with thin-space thousands separators.

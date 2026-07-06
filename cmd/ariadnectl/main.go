@@ -8,6 +8,7 @@
 package main
 
 import (
+	"ariadne/internal/i18n"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -138,20 +139,21 @@ func gather() status {
 	s.DataMB = dirSizeMB(filepath.Join(home, qdrantData))
 	s.FreeGB = freeGB(home)
 
-	// issues
+	// issues (localized — the tray surfaces these verbatim)
+	lang := i18n.Current()
 	if !s.Qdrant.Up {
-		s.Issues = append(s.Issues, "Qdrant DOWN")
+		s.Issues = append(s.Issues, i18n.T(lang, "issue.qdrant_down"))
 	}
 	if !s.Ollama.Up {
-		s.Issues = append(s.Issues, "Ollama DOWN")
+		s.Issues = append(s.Issues, i18n.T(lang, "issue.ollama_down"))
 	}
 	if s.Qdrant.Up && s.Collection.Status != "" && s.Collection.Status != "green" {
-		s.Issues = append(s.Issues, "collection status: "+s.Collection.Status)
+		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.coll_status"), s.Collection.Status))
 	}
 	// NB: an empty collection is NOT an issue — a fresh install legitimately has
 	// 0 memories until the user saves some; flagging it made the tray cry orange.
 	if s.FreeGB*1024 < diskWarnMB {
-		s.Issues = append(s.Issues, fmt.Sprintf("low disk: %dGB free", s.FreeGB))
+		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.low_disk"), s.FreeGB))
 	}
 	s.OK = len(s.Issues) == 0
 	return s
@@ -164,11 +166,16 @@ func printStatus(asJSON bool) {
 		fmt.Println(string(b))
 		return
 	}
-	fmt.Printf("ariadne %s\n", pick(s.OK, "OK", "ISSUES"))
-	fmt.Printf("  Qdrant : %s  (%dMB RSS)\n", upStr(s.Qdrant.Up), s.Qdrant.RSSMB)
-	fmt.Printf("  Ollama : %s  %s  (%dMB RSS)\n", upStr(s.Ollama.Up), s.Ollama.Version, s.Ollama.RSSMB)
-	fmt.Printf("  Points : %d  (%s)\n", s.Collection.Points, s.Collection.Status)
-	fmt.Printf("  Data   : %dMB · free %dGB\n", s.DataMB, s.FreeGB)
+	lang := i18n.Current()
+	if s.OK {
+		fmt.Println(i18n.T(lang, "status.ok"))
+	} else {
+		fmt.Println(i18n.T(lang, "status.issues"))
+	}
+	fmt.Printf("  Qdrant : %s  (%dMB RSS)\n", upStr(lang, s.Qdrant.Up), s.Qdrant.RSSMB)
+	fmt.Printf("  Ollama : %s  %s  (%dMB RSS)\n", upStr(lang, s.Ollama.Up), s.Ollama.Version, s.Ollama.RSSMB)
+	fmt.Printf("  %s : %d  (%s)\n", i18n.T(lang, "row.records"), s.Collection.Points, s.Collection.Status)
+	fmt.Printf("  %s : %dMB · %s %dGB\n", i18n.T(lang, "row.data"), s.DataMB, i18n.T(lang, "row.free"), s.FreeGB)
 	for _, i := range s.Issues {
 		fmt.Printf("  ! %s\n", i)
 	}
@@ -293,10 +300,10 @@ func toInt(v any) int64 {
 	}
 	return 0
 }
-func upStr(b bool) string { return pick(b, "up", "DOWN") }
-func pick(b bool, y, n string) string {
+
+func upStr(lang i18n.Lang, b bool) string {
 	if b {
-		return y
+		return i18n.T(lang, "status.up")
 	}
-	return n
+	return i18n.T(lang, "status.down")
 }
