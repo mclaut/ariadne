@@ -41,6 +41,7 @@ func main() {
 	workers := flag.Int("workers", 8, "concurrent embed+upsert workers")
 	batchSize := flag.Int("batch", 64, "docs embedded+upserted per round trip")
 	skipSessions := flag.Bool("skip-sessions", false, "skip the raw-transcript 'sessions' wing")
+	onlyWing := flag.String("only-wing", "", "chroma only: import just this one wing")
 	syncMode := flag.Bool("sync", false,
 		"memfiles only: refresh edited files (delete old chunks first) and remove orphans of deleted files")
 	flag.Parse()
@@ -113,7 +114,7 @@ func main() {
 	case "jsonl":
 		feed = feedJSONL(jobs, *file)
 	default:
-		feed = feedChroma(jobs, *db, *skipSessions, *limit)
+		feed = feedChroma(jobs, *db, *skipSessions, *onlyWing, *limit)
 	}
 	close(jobs)
 	wg.Wait()
@@ -124,7 +125,7 @@ func main() {
 }
 
 // feedChroma reads documents from the archived chromadb sqlite.
-func feedChroma(jobs chan<- doc, dbPath string, skipSessions bool, limit int) int {
+func feedChroma(jobs chan<- doc, dbPath string, skipSessions bool, onlyWing string, limit int) int {
 	if dbPath == "" {
 		fatal("chroma source needs -db <path to the archived chromadb sqlite>")
 	}
@@ -138,13 +139,17 @@ func feedChroma(jobs chan<- doc, dbPath string, skipSessions bool, limit int) in
 	      FROM embedding_metadata d
 	      JOIN embedding_metadata w ON w.id=d.id AND w.key='wing'
 	      WHERE d.key='chroma:document' AND length(d.string_value) > 120`
-	if skipSessions {
+	var args []any
+	if onlyWing != "" {
+		q += ` AND w.string_value = ?` // parameterized — no injection
+		args = append(args, onlyWing)
+	} else if skipSessions {
 		q += ` AND w.string_value NOT IN ('sessions')`
 	}
 	if limit > 0 {
 		q += ` LIMIT ` + strconv.Itoa(limit) //nolint:gosec // limit is an int flag, not user text
 	}
-	rows, err := sq.QueryContext(context.Background(), q)
+	rows, err := sq.QueryContext(context.Background(), q, args...)
 	if err != nil {
 		fatal("query:", err)
 	}

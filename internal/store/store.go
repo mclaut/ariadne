@@ -168,10 +168,14 @@ func buildPayload(text string, meta map[string]string) map[string]any {
 }
 
 // Recall runs a hybrid dense+sparse query fused with RRF, server-side.
-// A non-empty wing narrows the search to that project/namespace.
-func (s *Store) Recall(ctx context.Context, query string, limit int, wing string) ([]Result, error) {
+// A non-empty wing narrows the search to that project/namespace; a non-empty
+// collection overrides the default one (e.g. a separate "sessions" archive).
+func (s *Store) Recall(ctx context.Context, query string, limit int, wing, collection string) ([]Result, error) {
 	if limit <= 0 {
 		limit = 5
+	}
+	if collection == "" {
+		collection = s.collection
 	}
 	dense, err := s.embed(ctx, query)
 	if err != nil {
@@ -184,7 +188,7 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing string
 		filter = &qdrant.Filter{Must: []*qdrant.Condition{qdrant.NewMatch("wing", wing)}}
 	}
 	res, err := s.qc.Query(ctx, &qdrant.QueryPoints{
-		CollectionName: s.collection,
+		CollectionName: collection,
 		Prefetch: []*qdrant.PrefetchQuery{
 			{Query: qdrant.NewQueryDense(dense), Using: qdrant.PtrOf("dense"), Limit: &pre, Filter: filter},
 			{Query: qdrant.NewQuerySparse(sIdx, sVal), Using: qdrant.PtrOf("sparse"), Limit: &pre, Filter: filter},
