@@ -1,0 +1,14 @@
+[Desktop Entry]
+# Ariadne tray monitor autostart (Linux desktop). Template: replace __HOME__
+# with your absolute home dir, then:
+#   cp deploy/ariadne-tray.desktop ~/.config/autostart/
+# The tray needs a StatusNotifierItem host: KDE/XFCE/etc. show it natively;
+# on GNOME install the "AppIndicator and KStatusNotifierItem" extension.
+Type=Application
+Name=Ariadne Monitor
+Comment=Tray monitor for the Ariadne memory stack (Qdrant + Ollama)
+Exec=__HOME__/.ariadne/bin/ariadne-tray
+Icon=network-server
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

@@ -28,9 +28,10 @@ lock-starvation class simply doesn't exist.
 | `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. |
 | `cmd/ariadnectl` | Control + health core (`status -json`, start/stop, backup/export). |
 | `internal/store` | Storage core: embed (Ollama), BM25 sparse, Qdrant hybrid. |
-| `app/` | Swift menu-bar monitor (status, start/stop, alerts). |
+| `app/` | macOS Swift menu-bar monitor (status, start/stop, alerts). |
+| `cmd/ariadne-tray` | Cross-platform tray monitor (Linux/Windows) — pure-Go, same `ariadnectl` core as the macOS app. |
 | `skills/ariadne` | Claude Code skill: recall/save discipline + `doctor.sh`/`recall.sh`. |
-| `deploy/` | LaunchAgent / systemd templates: Qdrant service + daily memfiles-sync. |
+| `deploy/` | LaunchAgent / systemd templates: Qdrant service, daily memfiles-sync, tray autostart. |
 | `poc/` | Standalone experiments that validated the stack. |
 
 ## Setup
@@ -133,6 +134,18 @@ summary model is loaded only for capture and unloaded right after
 (`keep_alive:0`), so it costs RAM only briefly; for a smaller footprint set
 `ARIADNE_SUMMARY_MODEL=qwen2.5:3b` (~2GB vs ~4.7GB, at some summary quality) —
 or pass `-summary-model` to the installer so it pulls that one.
+
+## Monitor
+
+A tray/menu-bar monitor polls `ariadnectl status -json` every 5s and shows a
+green/orange/red/grey icon, per-service detail, and start/stop/restart/backup
+actions; it notifies when a service drops.
+
+- **macOS** — the Swift app in `app/` (`app/build.sh`).
+- **Linux / Windows** — `ariadne-tray` (pure-Go, `fyne.io/systray`, no CGO). The
+  installer builds it into `~/.ariadne/bin` and, on Linux, adds an autostart entry.
+  It needs a StatusNotifierItem host — native on KDE/XFCE/etc.; on GNOME install the
+  "AppIndicator and KStatusNotifierItem" extension.
 
 ## Backup & portability
 

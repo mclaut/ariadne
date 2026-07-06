@@ -16,7 +16,10 @@ import (
 	"time"
 )
 
-const osDarwin = "darwin"
+const (
+	osDarwin = "darwin"
+	osLinux  = "linux"
+)
 
 type qdrantState int
 
@@ -312,6 +315,10 @@ func syncAgentPath(r *report) string {
 		return filepath.Join(r.home, "Library", "LaunchAgents", "com.ariadne.sync.plist")
 	}
 	return filepath.Join(r.home, ".config", "systemd", "user", "ariadne-sync.timer")
+}
+
+func trayAutostartPath(r *report) string {
+	return filepath.Join(r.home, ".config", "autostart", "ariadne-tray.desktop")
 }
 
 func mcpRegistered(home string) bool {

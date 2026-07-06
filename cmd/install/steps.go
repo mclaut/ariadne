@@ -72,6 +72,11 @@ func makePlan(r *report, o opts) []action {
 			skip:  fileExists(syncAgentPath(r)),
 			run:   func() error { return installSyncAgent(r) },
 		},
+		{
+			title: "install tray-monitor autostart → ~/.config/autostart (Linux desktop)",
+			skip:  r.os != osLinux || fileExists(trayAutostartPath(r)),
+			run:   func() error { return installTrayAutostart(r) },
+		},
 	}
 }
 
@@ -172,6 +177,21 @@ func installSyncAgent(r *report) error {
 	return runCmd("systemctl", "--user", "enable", "--now", "ariadne-sync.timer")
 }
 
+// installTrayAutostart drops the tray .desktop into ~/.config/autostart so the
+// monitor starts with the Linux desktop session. macOS uses the Swift app instead.
+func installTrayAutostart(r *report) error {
+	dst := trayAutostartPath(r)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { //nolint:gosec // user-owned
+		return err
+	}
+	tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "ariadne-tray.desktop")) //nolint:gosec // repo file
+	if err != nil {
+		return err
+	}
+	rendered := strings.ReplaceAll(string(tpl), "__HOME__", r.home)
+	return os.WriteFile(dst, []byte(rendered), 0o644) //nolint:gosec // desktop entry, not a secret
+}
+
 func downloadQdrant(url, dest string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -253,7 +273,8 @@ func installService(r *report) error {
 
 func buildBinaries(r *report) error {
 	for bin, pkg := range map[string]string{
-		"ariadne": "ariadne", "ariadnectl": "ariadnectl", "import": "import", "ariadne-hook": "hook",
+		"ariadne": "ariadne", "ariadnectl": "ariadnectl", "import": "import",
+		"ariadne-hook": "hook", "ariadne-tray": "ariadne-tray",
 	} {
 		dest := filepath.Join(r.home, ".ariadne", "bin", bin)
 		_ = os.Remove(dest)                                                                       // avoid overwriting a running binary in place

@@ -3,6 +3,7 @@ module ariadne
 go 1.26.2
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/mark3labs/mcp-go v0.55.1
 	github.com/qdrant/go-client v1.18.3
 	modernc.org/sqlite v1.53.0
@@ -10,6 +11,7 @@ require (
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
