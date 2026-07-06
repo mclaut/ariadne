@@ -43,7 +43,7 @@ func makePlan(r *report, o opts) []action {
 			run:   func() error { return pullModel(o, o.model) },
 		},
 		{
-			title: fmt.Sprintf("pull summary model %q (~4.7GiB, session auto-capture)", o.summaryModel),
+			title: fmt.Sprintf("pull summary model %q (session auto-capture)", o.summaryModel),
 			skip:  o.skipModel || !r.ollama.up || r.ollama.hasSummary,
 			run:   func() error { return pullModel(o, o.summaryModel) },
 		},

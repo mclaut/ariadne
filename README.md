@@ -128,7 +128,11 @@ The installer registers two Claude Code lifecycle hooks (`cmd/hook`, binary
   Log: `~/.ariadne/logs/capture.log`.
 
 Config via env: `ARIADNE_CAPTURE=0` disables capture,
-`ARIADNE_SUMMARY_MODEL` [qwen2.5:7b], `ARIADNE_CAPTURE_MIN_TURNS` [3].
+`ARIADNE_SUMMARY_MODEL` [qwen2.5:7b], `ARIADNE_CAPTURE_MIN_TURNS` [3]. The
+summary model is loaded only for capture and unloaded right after
+(`keep_alive:0`), so it costs RAM only briefly; for a smaller footprint set
+`ARIADNE_SUMMARY_MODEL=qwen2.5:3b` (~2GB vs ~4.7GB, at some summary quality) —
+or pass `-summary-model` to the installer so it pulls that one.
 
 ## Backup & portability
 
