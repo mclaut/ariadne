@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -173,8 +174,16 @@ func printStatus(asJSON bool) {
 	}
 }
 
-// control starts/stops the two native services.
+// control starts/stops the native services. action is "start" or "stop" (main
+// decomposes "restart" into stop+start).
 func control(action string) {
+	if runtime.GOOS == "linux" {
+		// Ariadne owns only the Qdrant user unit; Ollama on Linux is a SYSTEM
+		// service we reuse (like a foreign Qdrant) — leave it to the OS.
+		run("systemctl", "--user", action, "ariadne-qdrant")
+		fmt.Println(action, "issued (ariadne-qdrant user unit; Ollama is a system service, left alone)")
+		return
+	}
 	home, _ := os.UserHomeDir()
 	uid := strconv.Itoa(os.Getuid())
 	plist := filepath.Join(home, "Library", "LaunchAgents", qdrantLabel+".plist")
