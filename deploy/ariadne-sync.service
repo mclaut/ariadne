@@ -1,0 +1,15 @@
+# Ariadne memfiles sync — systemd USER unit (Linux), oneshot; run by the timer.
+# Install (with the timer):
+#   cp deploy/ariadne-sync.service deploy/ariadne-sync.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now ariadne-sync.timer
+# Reconciles edited/deleted memory notes into the store; needs Qdrant + Ollama up.
+[Unit]
+Description=Ariadne memfiles sync (reconcile memory notes into the store)
+After=ariadne-qdrant.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.ariadne/bin/import -source memfiles -sync
+WorkingDirectory=%h/.ariadne
+StandardOutput=append:%h/.ariadne/logs/sync.log
+StandardError=append:%h/.ariadne/logs/sync.log

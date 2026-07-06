@@ -307,6 +307,13 @@ func servicePath(r *report) string {
 	return filepath.Join(r.home, ".config", "systemd", "user", "ariadne-qdrant.service")
 }
 
+func syncAgentPath(r *report) string {
+	if r.os == osDarwin {
+		return filepath.Join(r.home, "Library", "LaunchAgents", "com.ariadne.sync.plist")
+	}
+	return filepath.Join(r.home, ".config", "systemd", "user", "ariadne-sync.timer")
+}
+
 func mcpRegistered(home string) bool {
 	b, err := os.ReadFile(filepath.Join(home, ".claude.json")) //nolint:gosec // own config
 	if err != nil {

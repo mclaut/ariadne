@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __HOME__ with your absolute home dir (launchd does not
+     expand ~ or env vars), then:
+       cp deploy/com.ariadne.sync.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ariadne.sync.plist
+     Runs `import -source memfiles -sync` once a day so edited/deleted memory
+     notes (~/.claude/projects/*/memory/*.md) stay true to the store without a
+     manual run. It only reconciles chunks — the curated diary hook is separate.
+     Needs Qdrant + Ollama up; if they're down the run just logs and exits. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.ariadne.sync</string>
+  <key>ProgramArguments</key><array>
+    <string>__HOME__/.ariadne/bin/import</string>
+    <string>-source</string><string>memfiles</string>
+    <string>-sync</string>
+  </array>
+  <key>WorkingDirectory</key><string>__HOME__/.ariadne</string>
+  <!-- daily at 04:30; RunAtLoad off so it doesn't fire on every login -->
+  <key>StartCalendarInterval</key><dict>
+    <key>Hour</key><integer>4</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/sync.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/sync.log</string>
+</dict></plist>

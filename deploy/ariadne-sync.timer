@@ -1,0 +1,10 @@
+# Ariadne memfiles sync timer — daily at 04:30 (Linux). Pairs with the service.
+[Unit]
+Description=Daily Ariadne memfiles sync
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

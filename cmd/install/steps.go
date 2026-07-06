@@ -67,6 +67,11 @@ func makePlan(r *report, o opts) []action {
 			skip:  o.skipHooks || r.hooksOK,
 			run:   func() error { return registerHooks(home) },
 		},
+		{
+			title: "register daily memfiles-sync agent (keeps memory notes true to the store)",
+			skip:  fileExists(syncAgentPath(r)),
+			run:   func() error { return installSyncAgent(r) },
+		},
 	}
 }
 
@@ -128,6 +133,43 @@ func installQdrant(r *report, o opts) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return errors.New("qdrant did not come up within 20s — check ~/.ariadne/logs/qdrant*.log")
+}
+
+// installSyncAgent registers the daily memfiles-sync: a launchd agent on macOS,
+// a systemd user timer+oneshot on Linux. Mirrors installService.
+func installSyncAgent(r *report) error {
+	dst := syncAgentPath(r)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { //nolint:gosec // user-owned
+		return err
+	}
+	if r.os == osDarwin {
+		tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "com.ariadne.sync.plist")) //nolint:gosec // repo file
+		if err != nil {
+			return err
+		}
+		rendered := strings.ReplaceAll(string(tpl), "__HOME__", r.home)
+		if err := os.WriteFile(dst, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
+			return err
+		}
+		uid := strconv.Itoa(os.Getuid())
+		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.sync") // ignore: may not be loaded
+		return runCmd("launchctl", "bootstrap", "gui/"+uid, dst)
+	}
+	// linux: oneshot service + daily timer (systemd user units use %h natively)
+	unitDir := filepath.Dir(dst)
+	for _, name := range []string{"ariadne-sync.service", "ariadne-sync.timer"} {
+		tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", name)) //nolint:gosec // repo file
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(unitDir, name), tpl, 0o644); err != nil { //nolint:gosec // systemd reads it
+			return err
+		}
+	}
+	if err := runCmd("systemctl", "--user", "daemon-reload"); err != nil {
+		return err
+	}
+	return runCmd("systemctl", "--user", "enable", "--now", "ariadne-sync.timer")
 }
 
 func downloadQdrant(url, dest string) error {
