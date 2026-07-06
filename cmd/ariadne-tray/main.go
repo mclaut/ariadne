@@ -14,6 +14,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,7 +80,7 @@ func main() {
 func onReady() {
 	lang = i18n.Current()
 	systray.SetIcon(dotIcon(gray))
-	systray.SetTitle("ariadne")
+	systray.SetTitle("") // dot only — no text label
 	systray.SetTooltip("ariadne monitor")
 
 	rowHealth = infoRow("…")
@@ -273,22 +274,42 @@ var (
 	gray   = color.RGBA{0x95, 0xa5, 0xa6, 0xff}
 )
 
-// dotIcon draws a filled circle PNG of the given colour — no asset files.
+// dotIcon draws an anti-aliased filled circle PNG of the given colour, with a
+// faint top highlight for a bit of depth — no asset files.
 func dotIcon(c color.RGBA) []byte {
 	const n = 64
 	img := image.NewRGBA(image.Rect(0, 0, n, n))
-	cx, cy, r2 := float64(n)/2, float64(n)/2, float64(n/2-4)*float64(n/2-4)
+	cx, cy := float64(n-1)/2, float64(n-1)/2
+	r := float64(n)/2 - 3
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
-			dx, dy := float64(x)+0.5-cx, float64(y)+0.5-cy
-			if dx*dx+dy*dy <= r2 {
-				img.Set(x, y, c)
+			dx, dy := float64(x)-cx, float64(y)-cy
+			cov := r + 0.5 - math.Hypot(dx, dy) // edge coverage → smooth border
+			if cov <= 0 {
+				continue
 			}
+			if cov > 1 {
+				cov = 1
+			}
+			hi := 1 + 0.15*(-dy/r) // subtle brighten toward the top, like the emoji sheen
+			img.SetRGBA(x, y, color.RGBA{shade(c.R, hi), shade(c.G, hi), shade(c.B, hi), uint8(cov * 255)})
 		}
 	}
 	var b bytes.Buffer
 	_ = png.Encode(&b, img)
 	return b.Bytes()
+}
+
+// shade multiplies a colour channel by f, clamped to [0,255].
+func shade(v uint8, f float64) uint8 {
+	switch x := float64(v) * f; {
+	case x > 255:
+		return 255
+	case x < 0:
+		return 0
+	default:
+		return uint8(x)
+	}
 }
 
 func upWord(up bool) string {
