@@ -171,10 +171,28 @@ func installSyncAgent(r *report) error {
 			return err
 		}
 	}
+	// A headless box has no user D-Bus session, so `systemctl --user` fails with
+	// "Failed to connect to bus"; linger starts a persistent user manager. Even
+	// then the sync agent is a nice-to-have, so never abort the install over it.
+	enableLinger()
 	if err := runCmd("systemctl", "--user", "daemon-reload"); err != nil {
-		return err
+		fmt.Fprintf(os.Stderr, "    ⚠ systemd --user unavailable (%v) — sync agent skipped; "+
+			"run `~/.ariadne/bin/import -source memfiles -sync` manually or from a system timer\n", err)
+		return nil
 	}
-	return runCmd("systemctl", "--user", "enable", "--now", "ariadne-sync.timer")
+	if err := runCmd("systemctl", "--user", "enable", "--now", "ariadne-sync.timer"); err != nil {
+		fmt.Fprintf(os.Stderr, "    ⚠ could not enable the sync timer (%v) — non-critical, run the sync by hand\n", err)
+	}
+	return nil
+}
+
+// enableLinger starts a persistent `systemctl --user` manager for the current
+// user so user units work on a headless box (no login session / user D-Bus).
+// Best-effort: loginctl uses the system bus, which exists even headless.
+func enableLinger() {
+	if u := os.Getenv("USER"); u != "" {
+		_ = runCmd("loginctl", "enable-linger", u)
+	}
 }
 
 // ensureDeps auto-installs OS prerequisites BEFORE preflight inspects them, so a
@@ -382,13 +400,13 @@ func installService(r *report) error {
 	if err := os.WriteFile(svc, tpl, 0o644); err != nil { //nolint:gosec // systemd reads it
 		return err
 	}
+	enableLinger() // headless: make `systemctl --user` work + start Qdrant on boot without login
 	if err := runCmd("systemctl", "--user", "daemon-reload"); err != nil {
 		return err
 	}
 	if err := runCmd("systemctl", "--user", "enable", "--now", "ariadne-qdrant"); err != nil {
 		return err
 	}
-	fmt.Println("    hint: for start-on-boot without login run: loginctl enable-linger $USER")
 	return nil
 }
 
