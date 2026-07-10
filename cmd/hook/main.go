@@ -13,8 +13,10 @@
 // Config via env (defaults in brackets):
 //
 //	ARIADNE_CAPTURE            "0" disables capture [on]
+//	ARIADNE_SUMMARY_OLLAMA     Ollama URL for summaries [ARIADNE_OLLAMA or localhost]
 //	ARIADNE_SUMMARY_MODEL      Ollama chat model for summaries [qwen2.5:7b]
 //	ARIADNE_CAPTURE_MIN_TURNS  min user turns worth capturing [3]
+//	ARIADNE_CAPTURE_REMOTE     "1" allows sending condensed transcripts to a remote summary endpoint [off]
 //	ARIADNE_QDRANT_HOST/PORT, ARIADNE_OLLAMA, ARIADNE_MODEL, ARIADNE_COLLECTION
 package main
 

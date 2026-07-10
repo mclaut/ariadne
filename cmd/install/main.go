@@ -26,6 +26,7 @@ type opts struct {
 	qdrantHost         string
 	qdrantREST         int
 	qdrantGRPC         int
+	qdrantVersion      string
 	ollamaURL          string
 	model              string
 	summaryModel       string
@@ -33,6 +34,7 @@ type opts struct {
 	skipModel          bool
 	skipHooks          bool
 	skipDeps           bool
+	strictSupplyChain  bool
 }
 
 // remoteOllama reports whether -ollama points at a non-local box.
@@ -48,6 +50,7 @@ func parseFlags() opts {
 	flag.StringVar(&o.qdrantHost, "qdrant-host", "127.0.0.1", "Qdrant host (set to reuse a remote instance)")
 	flag.IntVar(&o.qdrantREST, "qdrant-rest", 6333, "Qdrant REST port")
 	flag.IntVar(&o.qdrantGRPC, "qdrant-grpc", 6334, "Qdrant gRPC port")
+	flag.StringVar(&o.qdrantVersion, "qdrant-version", "v1.18.2", "pinned Qdrant release tag to install")
 	flag.StringVar(&o.ollamaURL, "ollama", "http://localhost:11434", "Ollama URL (set to reuse a remote/GPU box)")
 	flag.StringVar(&o.model, "model", "bge-m3", "embedding model")
 	flag.StringVar(&o.summaryModel, "summary-model", "qwen2.5:7b",
@@ -56,6 +59,7 @@ func parseFlags() opts {
 	flag.BoolVar(&o.skipModel, "skip-model-pull", false, "do not pull models")
 	flag.BoolVar(&o.skipHooks, "skip-hooks", false, "do not register Claude Code session hooks (auto-recall/auto-capture)")
 	flag.BoolVar(&o.skipDeps, "skip-deps", false, "do not auto-install OS prerequisites (Linux: tray libs + Ollama)")
+	flag.BoolVar(&o.strictSupplyChain, "strict-supply-chain", false, "avoid curl|sh installers; require manual deps where needed")
 	flag.Parse()
 	return o
 }

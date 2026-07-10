@@ -5,6 +5,7 @@ import (
 	"ariadne/internal/store"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -106,7 +107,7 @@ func qdrantTarget() (string, error) {
 	case "linux/amd64":
 		return "x86_64-unknown-linux-gnu", nil
 	case "linux/arm64":
-		return "aarch64-unknown-linux-gnu", nil
+		return "aarch64-unknown-linux-musl", nil
 	}
 	return "", fmt.Errorf("no Qdrant release for %s/%s — install Qdrant manually and re-run with -qdrant-host", runtime.GOOS, runtime.GOARCH)
 }
@@ -118,9 +119,20 @@ func installQdrant(r *report, o opts) error {
 		if err != nil {
 			return err
 		}
-		url := "https://github.com/qdrant/qdrant/releases/latest/download/qdrant-" + target + ".tar.gz"
+		asset := "qdrant-" + target + ".tar.gz"
+		url := fmt.Sprintf("https://github.com/qdrant/qdrant/releases/download/%s/%s", o.qdrantVersion, asset)
+		sum, err := qdrantAssetDigest(o.qdrantVersion, asset)
+		if err != nil {
+			if envSum := os.Getenv("ARIADNE_QDRANT_SHA256"); envSum != "" {
+				sum = envSum
+				err = nil
+			}
+		}
+		if err != nil {
+			return err
+		}
 		fmt.Printf("    downloading %s\n", url)
-		if err := downloadQdrant(url, dest); err != nil {
+		if err := downloadQdrant(url, sum, dest); err != nil {
 			return err
 		}
 	} else {
@@ -234,6 +246,8 @@ func ensureDepsLinux(o opts) {
 	if !o.remoteOllama() && !which("ollama") {
 		if o.dryRun {
 			fmt.Println("    would install Ollama: curl -fsSL https://ollama.com/install.sh | sh")
+		} else if o.strictSupplyChain {
+			fmt.Println("    Ollama missing — strict supply-chain mode will not run curl|sh; install Ollama manually and re-run")
 		} else {
 			fmt.Println("    installing Ollama…")
 			runVisible("sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh")
@@ -331,7 +345,44 @@ func installTrayAutostart(r *report) error {
 	return os.WriteFile(dst, []byte(rendered), 0o644) //nolint:gosec // desktop entry, not a secret
 }
 
-func downloadQdrant(url, dest string) error {
+func qdrantAssetDigest(version, asset string) (string, error) {
+	api := "https://api.github.com/repos/qdrant/qdrant/releases/tags/" + version
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return "", fmt.Errorf("qdrant release metadata: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("qdrant release metadata: HTTP %d", resp.StatusCode)
+	}
+	var rel struct {
+		Assets []struct {
+			Name   string `json:"name"`
+			Digest string `json:"digest"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return "", err
+	}
+	for _, a := range rel.Assets {
+		if a.Name != asset {
+			continue
+		}
+		if strings.HasPrefix(a.Digest, "sha256:") {
+			return strings.TrimPrefix(a.Digest, "sha256:"), nil
+		}
+		return "", fmt.Errorf("qdrant asset %s has no sha256 digest; set ARIADNE_QDRANT_SHA256", asset)
+	}
+	return "", fmt.Errorf("qdrant asset %s not found in %s", asset, version)
+}
+
+func downloadQdrant(url, wantSHA256, dest string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -346,10 +397,34 @@ func downloadQdrant(url, dest string) error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("download: HTTP %d (release asset for this platform may not exist)", resp.StatusCode)
 	}
-	gz, err := gzip.NewReader(resp.Body)
+	tmp, err := os.CreateTemp(filepath.Dir(dest), "qdrant-*.tar.gz")
 	if err != nil {
 		return err
 	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	hash := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(tmp, hash), resp.Body); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	got := fmt.Sprintf("%x", hash.Sum(nil))
+	if !strings.EqualFold(got, wantSHA256) {
+		return fmt.Errorf("qdrant checksum mismatch: got %s, want %s", got, wantSHA256)
+	}
+	f, err := os.Open(tmpName) //nolint:gosec // temp file was created by us in the runtime bin dir
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	for {
 		hdr, err := tr.Next()

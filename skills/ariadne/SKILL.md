@@ -74,7 +74,10 @@ operations (restore, migration, bulk import) run a backup first.
   `diary` memory. Don't duplicate it by saving your own session summary;
   DO still save important decisions/gotchas explicitly (better wording,
   right room). Capture log: `~/.ariadne/logs/capture.log`;
-  disable with `ARIADNE_CAPTURE=0`.
+  disable with `ARIADNE_CAPTURE=0`. Capture summaries use
+  `ARIADNE_SUMMARY_OLLAMA` (default: local Ollama); remote summary endpoints are
+  blocked unless `ARIADNE_CAPTURE_REMOTE=1` is set, because condensed transcript
+  text is sent there.
 
 ## Troubleshooting
 

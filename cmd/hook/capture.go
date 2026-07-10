@@ -8,7 +8,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,7 +78,13 @@ func captureRun(args []string) {
 	project := filepath.Base(*cwd)
 	branch, commits := gitFacts(*cwd, first, last)
 
-	summary := summarize(condense(turns))
+	summaryURL, ok := summaryOllamaURL()
+	if !ok {
+		log.Printf("skip %s: summary endpoint %q is remote; set ARIADNE_CAPTURE_REMOTE=1 to allow it",
+			short(*session), env("ARIADNE_SUMMARY_OLLAMA", env("ARIADNE_OLLAMA", "http://localhost:11434")))
+		return
+	}
+	summary := summarize(condense(turns), summaryURL)
 	if summary == "" {
 		log.Printf("FAIL %s: empty summary (model down or not pulled? ollama pull %s)",
 			short(*session), env("ARIADNE_SUMMARY_MODEL", "qwen2.5:7b"))
@@ -232,7 +240,32 @@ const summaryPrompt = "Ти — архіваріус сесій розробки
 	"Пиши щільні факти без води, без заголовків і списків. " +
 	"Якщо сесія беззмістовна (привітання, проби), відповідай рівно одним словом: SKIP"
 
-func summarize(body string) string {
+func summaryOllamaURL() (string, bool) {
+	u := env("ARIADNE_SUMMARY_OLLAMA", env("ARIADNE_OLLAMA", "http://localhost:11434"))
+	u = strings.TrimRight(u, "/")
+	if isLocalEndpoint(u) || env("ARIADNE_CAPTURE_REMOTE", "0") == "1" {
+		return u, true
+	}
+	return u, false
+}
+
+func isLocalEndpoint(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func summarize(body, ollamaURL string) string {
 	if body == "" {
 		return ""
 	}
@@ -251,8 +284,7 @@ func summarize(body string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		strings.TrimRight(env("ARIADNE_OLLAMA", "http://localhost:11434"), "/")+"/api/chat",
-		bytes.NewReader(payload))
+		ollamaURL+"/api/chat", bytes.NewReader(payload))
 	if err != nil {
 		return ""
 	}

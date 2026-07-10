@@ -18,9 +18,34 @@ REPO="mclaut/ariadne"
 BRANCH="${ARIADNE_BRANCH:-main}"
 SRC="${ARIADNE_SRC:-$HOME/.ariadne/src}"
 GOLOCAL="$HOME/.ariadne/go"
+GO_VERSION="${ARIADNE_GO_VERSION:-go1.26.2}"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    die "need sha256sum or shasum to verify downloads"
+  fi
+}
+
+download_verified() {
+  url="$1"
+  want="$2"
+  dest="$3"
+  tmp="${dest}.tmp.$$"
+  curl -fsSL "$url" -o "$tmp"
+  got="$(sha256_file "$tmp")"
+  if [ "$got" != "$want" ]; then
+    rm -f "$tmp"
+    die "checksum mismatch for $url: got $got, want $want"
+  fi
+  mv "$tmp" "$dest"
+}
 
 os="$(uname -s)"
 arch="$(uname -m)"
@@ -48,12 +73,17 @@ fi
 if [ "$go_ok" -eq 1 ]; then
   say "Go present: $(go version)"
 else
-  gover="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1)"
-  [ -n "$gover" ] || die "could not determine the latest Go version"
+  gover="$GO_VERSION"
+  go_url="https://go.dev/dl/${gover}.${goos}-${arch}.tar.gz"
+  go_sha="${ARIADNE_GO_SHA256:-$(curl -fsSL "${go_url}.sha256" | awk '{print $1}')}"
+  [ -n "$go_sha" ] || die "could not determine checksum for $go_url"
   say "Installing $gover -> $GOLOCAL"
   mkdir -p "$HOME/.ariadne"
   rm -rf "$GOLOCAL"
-  curl -fsSL "https://go.dev/dl/${gover}.${goos}-${arch}.tar.gz" | tar -C "$HOME/.ariadne" -xz
+  tmp_tar="$HOME/.ariadne/${gover}.${goos}-${arch}.tar.gz"
+  download_verified "$go_url" "$go_sha" "$tmp_tar"
+  tar -C "$HOME/.ariadne" -xzf "$tmp_tar"
+  rm -f "$tmp_tar"
   PATH="$GOLOCAL/bin:$PATH"
   export PATH
   say "Go installed: $(go version)"

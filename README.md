@@ -49,10 +49,18 @@ installer flags straight through, e.g. a lighter summary model or a preview:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh -s -- -summary-model qwen2.5:3b
 curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh -s -- -dry-run
+curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh -s -- -strict-supply-chain
 ```
 
 (sudo — for apt packages and Ollama on Linux — prompts on the terminal, so the
 pipe is fine. Windows: PowerShell path is on the roadmap.)
+
+Supply-chain defaults are pinned: `install.sh` installs `go1.26.2` unless
+`ARIADNE_GO_VERSION` is set, verifies the Go tarball SHA256 before unpacking,
+and the Go installer installs Qdrant from a pinned `-qdrant-version` release
+(default `v1.18.2`) after checking the GitHub release-asset digest. For locked
+down environments, pass `-strict-supply-chain`; on Linux this refuses the
+Ollama `curl | sh` bootstrap and asks you to install Ollama manually first.
 
 ### From a clone (or to hack on it)
 
@@ -147,8 +155,12 @@ The installer registers two Claude Code lifecycle hooks (`cmd/hook`, binary
   Log: `~/.ariadne/logs/capture.log`.
 
 Config via env: `ARIADNE_CAPTURE=0` disables capture,
+`ARIADNE_SUMMARY_OLLAMA` [defaults to `ARIADNE_OLLAMA` or localhost],
 `ARIADNE_SUMMARY_MODEL` [qwen2.5:7b], `ARIADNE_CAPTURE_MIN_TURNS` [3]. The
-summary model is loaded only for capture and unloaded right after
+summary endpoint must be local by default; if you deliberately want a remote
+summary model, set `ARIADNE_SUMMARY_OLLAMA` and `ARIADNE_CAPTURE_REMOTE=1`
+because condensed transcript text is sent to that endpoint for summarization.
+The summary model is loaded only for capture and unloaded right after
 (`keep_alive:0`), so it costs RAM only briefly; for a smaller footprint set
 `ARIADNE_SUMMARY_MODEL=qwen2.5:3b` (~2GB vs ~4.7GB, at some summary quality) —
 or pass `-summary-model` to the installer so it pulls that one.

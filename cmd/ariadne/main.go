@@ -173,6 +173,16 @@ func moveHandler(st *store.Store) server.ToolHandlerFunc {
 		if err := st.SetMeta(ctx, id, map[string]string{"wing": wing, "room": room}); err != nil {
 			return mcp.NewToolResultError("move failed: " + err.Error()), nil //nolint:nilerr // MCP tool errors go in-band
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("moved (id=%d wing=%q room=%q)", id, wing, room)), nil
+		return mcp.NewToolResultText(formatMoveResult(id, wing, room)), nil
 	}
+}
+
+func formatMoveResult(id uint64, wing, room string) string {
+	part := func(name, value string) string {
+		if value == "" {
+			return name + "=<kept>"
+		}
+		return fmt.Sprintf("%s=%q", name, value)
+	}
+	return fmt.Sprintf("moved (id=%d %s %s)", id, part("wing", wing), part("room", room))
 }
