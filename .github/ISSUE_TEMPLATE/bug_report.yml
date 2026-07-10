@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible Ariadne problem on any supported platform.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. For setup questions, use GitHub Discussions.
+        Do not include real memories, credentials, tokens, personal paths, or unredacted logs.
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation method
+      options:
+        - Windows PowerShell installer
+        - macOS/Linux installer
+        - GitHub Release archive
+        - MCPB
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Ariadne version
+      description: Use the tray version or release tag, for example v0.3.0.
+      placeholder: v0.3.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and architecture
+      placeholder: Ubuntu 24.04 x86_64, macOS 15 arm64, Windows 11 x64
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Problem summary
+      description: Describe what failed and when it started.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reliable sequence that triggers the problem.
+      placeholder: |
+        1. Start Ariadne...
+        2. Run...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include `ariadnectl status -json` and relevant sanitized log lines when possible.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: I removed memory content, credentials, tokens, personal paths, and unrelated logs.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

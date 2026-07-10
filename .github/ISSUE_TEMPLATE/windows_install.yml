@@ -1,0 +1,92 @@
+name: Windows installer report
+description: Report a native Windows install, update, tray, Qdrant, or Ollama problem.
+title: "[Windows]: "
+labels:
+  - bug
+  - windows
+  - installer
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is for the native `install.ps1` path. Do not include real memories, credentials, tokens, personal paths, or unredacted logs.
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      placeholder: Windows 11 24H2, build 26100
+    validations:
+      required: true
+  - type: input
+    id: powershell
+    attributes:
+      label: PowerShell version
+      placeholder: Windows PowerShell 5.1 or PowerShell 7.5
+    validations:
+      required: true
+  - type: dropdown
+    id: scenario
+    attributes:
+      label: Scenario
+      options:
+        - Fresh installation
+        - Update from an earlier Ariadne release
+        - Repair or repeated installation
+        - Uninstallation or cleanup
+    validations:
+      required: true
+  - type: dropdown
+    id: ollama
+    attributes:
+      label: Ollama state before installation
+      options:
+        - Already installed and running
+        - Installed by Ariadne
+        - Skipped with an installer option
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Installer command and options
+      description: Remove private paths and other sensitive values.
+      render: powershell
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What happened?
+      description: Include the failed installer stage and visible error text.
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Sanitized status and logs
+      description: Include tray version, `ariadnectl status -json`, and relevant sanitized installer or update log lines.
+      render: shell
+  - type: checkboxes
+    id: components
+    attributes:
+      label: Affected components
+      options:
+        - label: Ariadne MCP server
+        - label: Qdrant scheduled task or service
+        - label: Ollama or model pull
+        - label: Tray startup, version, or update
+        - label: Codex or Claude Code registration
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I ran the installer as my regular user and noted if elevation occurred.
+          required: true
+        - label: I searched existing Windows reports.
+          required: true
+        - label: I removed memory content, credentials, tokens, personal paths, and unrelated logs.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

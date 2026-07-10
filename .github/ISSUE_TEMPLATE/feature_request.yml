@@ -1,0 +1,58 @@
+name: Feature request
+description: Propose a focused improvement to Ariadne.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user problem before the implementation. Use Discussions for broad brainstorming or support questions.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow is difficult or impossible today, and who experiences it?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the behavior you want, without requiring a specific implementation.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - MCP tools and client integration
+        - Search and ranking
+        - Import, export, and backup
+        - Session hooks and capture
+        - Installer and updates
+        - Tray and health monitoring
+        - Documentation and website
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note current workarounds or competing approaches.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add sanitized examples, mockups, or links that clarify the request.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: This request preserves local-first behavior and does not expose Qdrant publicly by default.
+          required: true

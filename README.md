@@ -320,6 +320,17 @@ embeddings for a large backfill speedup. A
 learned-sparse upgrade (bge-m3 SPLADE on a CUDA box) is optional if BM25 proves
 too weak for morphology-rich languages.
 
+## Contributing and security
+
+Reproducible bug reports, native Windows installer feedback, and focused feature
+requests are welcome through the
+[issue chooser](https://github.com/mclaut/ariadne/issues/new/choose). Setup and
+usage questions belong in [GitHub Discussions](https://github.com/mclaut/ariadne/discussions).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and pull request guidance.
+
+Do not open a public issue for a vulnerability. Follow [SECURITY.md](SECURITY.md)
+and use GitHub's private vulnerability reporting instead.
+
 ## Contributors
 
 - **Project maintainer** — architecture, product direction, validation, and
