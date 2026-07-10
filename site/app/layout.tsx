@@ -3,8 +3,9 @@ import "./globals.css";
 
 const description =
   "Ariadne is a local-first multilingual memory server for Codex, Claude Code, and MCP clients, powered by Qdrant, Ollama, and bge-m3 hybrid search.";
-const siteUrl = "https://ariadne-memory.mclaut124670.chatgpt.site";
+const siteUrl = "https://mclaut.github.io/ariadne";
 const socialImage = `${siteUrl}/og.png`;
+const favicon = `${siteUrl}/favicon.svg`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -26,13 +27,13 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Ariadne contributors" }],
   creator: "Ariadne contributors",
-  alternates: { canonical: "/" },
+  alternates: { canonical: siteUrl },
   openGraph: {
     type: "website",
     title: "Ariadne - Local-first memory for AI agents",
     description,
     siteName: "Ariadne",
-    url: "/",
+    url: siteUrl,
     images: [{ url: socialImage, width: 1280, height: 640, alt: "Ariadne local-first AI memory" }],
   },
   twitter: {
@@ -42,8 +43,8 @@ export const metadata: Metadata = {
     images: [socialImage],
   },
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: favicon,
+    shortcut: favicon,
   },
 };
 

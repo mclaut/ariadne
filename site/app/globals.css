@@ -692,7 +692,6 @@ footer {
 }
 
 .social-card-visual {
-  background-image: url("/og-visual.png");
   background-position: 100% top;
   background-size: auto 720px;
   bottom: 88px;

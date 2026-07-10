@@ -20,7 +20,7 @@ agent sessions without a single-writer database bottleneck.
 - Release checksums, CycloneDX SBOM, and Sigstore verification.
 - MIT licensed and published through GitHub Releases and the MCP Registry.
 
-**Project site:** https://ariadne-memory.mclaut124670.chatgpt.site
+**Project site:** https://mclaut.github.io/ariadne/
 
 ## Show HN
 
@@ -48,7 +48,7 @@ agent sessions without a single-writer database bottleneck.
 > I would value feedback on the installer, cross-lingual retrieval, and how MCP
 > clients should communicate local runtime dependencies.
 >
-> Site: https://ariadne-memory.mclaut124670.chatgpt.site
+> Site: https://mclaut.github.io/ariadne/
 >
 > Source: https://github.com/mclaut/ariadne
 
@@ -77,14 +77,14 @@ coding agents.
 > I am especially interested in real-world Windows feedback and multilingual
 > retrieval tests.
 >
-> https://ariadne-memory.mclaut124670.chatgpt.site
+> https://mclaut.github.io/ariadne/
 
 ## X / Bluesky
 
 > Ariadne v0.3.0 is out: local-first multilingual memory for Codex, Claude Code,
 > and any MCP client. Now native on Windows, macOS, and Linux. Go + Qdrant +
 > Ollama bge-m3, hybrid dense/BM25 recall, no Docker, no cloud, no API key.
-> https://ariadne-memory.mclaut124670.chatgpt.site
+> https://mclaut.github.io/ariadne/
 
 ## LinkedIn
 

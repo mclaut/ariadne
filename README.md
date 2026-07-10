@@ -9,7 +9,7 @@ no Docker, no cloud, no API keys.
 [![CI](https://github.com/mclaut/ariadne/actions/workflows/ci.yml/badge.svg)](https://github.com/mclaut/ariadne/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-11120f.svg)](LICENSE)
 
-**[Project site](https://ariadne-memory.mclaut124670.chatgpt.site)** ·
+**[Project site](https://mclaut.github.io/ariadne/)** ·
 **[Latest release](https://github.com/mclaut/ariadne/releases/latest)**
 
 Built as a replacement for embedded vector-DB memory backends that crash or
