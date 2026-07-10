@@ -15,18 +15,14 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	qdrantLabel = "com.ariadne.qdrant"
-	qdrantData  = ".ariadne/qdrant-data" // runtime home is ~/.ariadne (outside any TCC-protected folder)
-	diskWarnMB  = 2048                   // warn if the machine's free space drops under this
+	qdrantData = ".ariadne/qdrant-data" // runtime home is ~/.ariadne (outside any TCC-protected folder)
+	diskWarnMB = 2048                   // warn if the machine's free space drops under this
 )
 
 // Overridable for reused/remote Qdrant setups (the installer's -qdrant-* flags).
@@ -181,30 +177,6 @@ func printStatus(asJSON bool) {
 	}
 }
 
-// control starts/stops the native services. action is "start" or "stop" (main
-// decomposes "restart" into stop+start).
-func control(action string) {
-	if runtime.GOOS == "linux" {
-		// Ariadne owns only the Qdrant user unit; Ollama on Linux is a SYSTEM
-		// service we reuse (like a foreign Qdrant) — leave it to the OS.
-		run("systemctl", "--user", action, "ariadne-qdrant")
-		fmt.Println(action, "issued (ariadne-qdrant user unit; Ollama is a system service, left alone)")
-		return
-	}
-	home, _ := os.UserHomeDir()
-	uid := strconv.Itoa(os.Getuid())
-	plist := filepath.Join(home, "Library", "LaunchAgents", qdrantLabel+".plist")
-	switch action {
-	case "start":
-		run("launchctl", "bootstrap", "gui/"+uid, plist)
-		run("brew", "services", "start", "ollama")
-	case "stop":
-		run("launchctl", "bootout", "gui/"+uid+"/"+qdrantLabel)
-		run("brew", "services", "stop", "ollama")
-	}
-	fmt.Println(action, "issued (qdrant agent + ollama brew service)")
-}
-
 // --- helpers ---
 
 func httpClient() *http.Client { return &http.Client{Timeout: 3 * time.Second} }
@@ -237,26 +209,6 @@ func getJSON(url string) (map[string]any, bool) {
 	return m, true
 }
 
-// rss returns the summed RSS (MB) of processes whose args contain marker.
-func rss(marker string) int64 {
-	out, err := exec.CommandContext(context.Background(), "ps", "axo", "rss,args").Output() //nolint:gosec // fixed command
-	if err != nil {
-		return 0
-	}
-	var total int64
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || !strings.Contains(line, marker) || strings.Contains(line, "ariadnectl") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if kb, err := strconv.ParseInt(fields[0], 10, 64); err == nil {
-			total += kb
-		}
-	}
-	return total / 1024
-}
-
 func dirSizeMB(dir string) int64 {
 	var total int64
 	_ = filepath.WalkDir(dir, func(_ string, e fs.DirEntry, err error) error {
@@ -269,29 +221,6 @@ func dirSizeMB(dir string) int64 {
 		return nil
 	})
 	return total / (1024 * 1024)
-}
-
-func freeGB(path string) int64 {
-	// -Pk is POSIX-portable (Linux + macOS/BSD); -g is BSD-only and errors on
-	// Linux. Available (KB) is column 4 of the POSIX single-line data row.
-	out, err := exec.CommandContext(context.Background(), "df", "-Pk", path).Output() //nolint:gosec // fixed command
-	if err != nil {
-		return -1
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) < 2 {
-		return -1
-	}
-	f := strings.Fields(lines[len(lines)-1])
-	if len(f) < 4 {
-		return -1
-	}
-	availKB, _ := strconv.ParseInt(f[3], 10, 64)
-	return availKB / (1024 * 1024) // KB → GB
-}
-
-func run(bin string, args ...string) {
-	_ = exec.CommandContext(context.Background(), bin, args...).Run() //nolint:gosec,errcheck // fixed service controls
 }
 
 func toInt(v any) int64 {

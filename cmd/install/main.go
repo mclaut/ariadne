@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Command install sets up the Ariadne runtime on macOS or Linux (console).
 //
 // It is deliberately careful with EXISTING infrastructure:

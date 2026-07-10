@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify release tag
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Match source version to tag
+        run: |
+          source_version=$(sed -n 's/.*Current[[:space:]]*= "\([^"]*\)".*/\1/p' internal/version/version.go)
+          test "v$source_version" = "$GITHUB_REF_NAME"
+      - run: go test ./...
+      - run: go build ./...
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+        with:
+          version: v2.11.4
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+            cgo: "0"
+            format: tar
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: arm64
+            cgo: "0"
+            format: tar
+          - runner: ubuntu-24.04
+            goos: windows
+            goarch: amd64
+            cgo: "0"
+            format: zip
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            cgo: "1"
+            format: tar
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+            cgo: "1"
+            format: tar
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build and package
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: |
+          set -euo pipefail
+          root="dist/ariadne-${GITHUB_REF_NAME}-${GOOS}-${GOARCH}"
+          mkdir -p "$root/bin"
+          ext=""
+          if [[ "$GOOS" == windows ]]; then ext=".exe"; fi
+          while read -r output command; do
+            go build -trimpath -ldflags="-s -w" -o "$root/bin/${output}${ext}" "./cmd/${command}"
+          done <<'BUILDS'
+          ariadne ariadne
+          ariadnectl ariadnectl
+          import import
+          ariadne-hook hook
+          ariadne-tray ariadne-tray
+          BUILDS
+          cp -R skills "$root/"
+          cp README.md LICENSE install.sh install.ps1 "$root/"
+          if [[ "${{ matrix.format }}" == zip ]]; then
+            (cd dist && zip -qr "$(basename "$root").zip" "$(basename "$root")")
+          else
+            tar -C dist -czf "${root}.tar.gz" "$(basename "$root")"
+          fi
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ariadne-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/ariadne-*.tar.gz
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ariadne-${{ matrix.goos }}-${{ matrix.goarch }}-zip
+          path: dist/ariadne-*.zip
+          if-no-files-found: ignore
+
+  publish:
+    name: Publish release and MCP Registry entry
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Build MCPB, SBOM, and metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          stage="$(mktemp -d)"
+          mkdir -p "$stage/mcpb/server"
+          cp packaging/mcpb/launch packaging/mcpb/launch.ps1 "$stage/mcpb/server/"
+          chmod +x "$stage/mcpb/server/launch"
+          jq --arg version "$version" '.version = $version' packaging/mcpb/manifest.json > "$stage/mcpb/manifest.json"
+
+          for target in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
+            mkdir -p "$stage/extract/$target" "$stage/mcpb/server/$target"
+            tar -xzf "release-assets/ariadne-${tag}-${target}.tar.gz" -C "$stage/extract/$target"
+            cp "$stage/extract/$target/ariadne-${tag}-${target}/bin/ariadne" "$stage/mcpb/server/$target/ariadne"
+            chmod +x "$stage/mcpb/server/$target/ariadne"
+          done
+          mkdir -p "$stage/extract/windows-amd64" "$stage/mcpb/server/windows-amd64"
+          unzip -q "release-assets/ariadne-${tag}-windows-amd64.zip" -d "$stage/extract/windows-amd64"
+          cp "$stage/extract/windows-amd64/ariadne-${tag}-windows-amd64/bin/ariadne.exe" \
+            "$stage/mcpb/server/windows-amd64/ariadne.exe"
+          (cd "$stage/mcpb" && zip -qr "$GITHUB_WORKSPACE/release-assets/ariadne-${tag}.mcpb" .)
+
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0
+          "$(go env GOPATH)/bin/cyclonedx-gomod" mod -licenses -json \
+            -output "release-assets/ariadne-${tag}-sbom.cdx.json" .
+
+          mcpb_sha=$(sha256sum "release-assets/ariadne-${tag}.mcpb" | cut -d' ' -f1)
+          jq --arg version "$version" --arg tag "$tag" --arg sha "$mcpb_sha" \
+            '.version = $version |
+             .packages[0].version = $version |
+             .packages[0].identifier = "https://github.com/mclaut/ariadne/releases/download/" + $tag + "/ariadne-" + $tag + ".mcpb" |
+             .packages[0].fileSha256 = $sha' \
+            server.json > release-assets/server.json
+          (cd release-assets && sha256sum ariadne-* server.json > SHA256SUMS)
+      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+      - name: Sign checksums with Sigstore
+        run: cosign sign-blob --yes --bundle release-assets/SHA256SUMS.sigstore.json release-assets/SHA256SUMS
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --title "Ariadne $GITHUB_REF_NAME" \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+      - name: Install verified MCP publisher
+        run: |
+          curl -fsSLo mcp-publisher.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.7.9/mcp-publisher_linux_amd64.tar.gz
+          echo "ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac  mcp-publisher.tar.gz" | sha256sum -c -
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
+      - name: Publish to the official MCP Registry
+        working-directory: release-assets
+        run: |
+          ../mcp-publisher login github-oidc
+          ../mcp-publisher publish

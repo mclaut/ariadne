@@ -5,26 +5,33 @@ A **native, local-first, multilingual memory server** for Codex,
 [Qdrant](https://qdrant.tech) + [bge-m3](https://huggingface.co/BAAI/bge-m3) —
 no Docker, no cloud, no API keys.
 
+[![Release](https://img.shields.io/github/v/release/mclaut/ariadne)](https://github.com/mclaut/ariadne/releases/latest)
+[![CI](https://github.com/mclaut/ariadne/actions/workflows/ci.yml/badge.svg)](https://github.com/mclaut/ariadne/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-11120f.svg)](LICENSE)
+
 Built as a replacement for embedded vector-DB memory backends that crash or
 starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.2.0
+## What's New in v0.3.0
 
-- **Version-aware tray updates** — the tray shows the installed Ariadne version,
-  checks GitHub Releases every six hours, notifies once per new release, and
-  updates macOS/Linux only after explicit user confirmation. Windows opens the
-  release page until the native installer is available.
-- **Memory curation** — `memory_delete` removes one confirmed memory and
-  `memory_move` re-homes or re-tags one memory without re-embedding its text.
-- **Safer installation** — pinned Go/Qdrant versions, SHA256 verification,
-  atomic binary replacement, release-tagged updates, and a strict supply-chain
-  mode that refuses the automatic Ollama `curl | sh` bootstrap.
-- **Capture privacy** — session summaries stay on local Ollama by default;
-  remote summary endpoints require an explicit opt-in.
-- **More confidence and clearer ops** — focused tests for storage, imports,
-  hooks, curation, localization and updates, plus expanded Linux/Ollama docs.
+- **Native Windows installation** — `install.ps1` installs release binaries,
+  native Qdrant, signed Ollama, user-level startup tasks, Codex/Claude Code MCP
+  bindings, the skill, and session hooks. Docker and administrator access are
+  not required.
+- **Windows self-updates** — the version-aware tray now offers the same explicit
+  confirmation and automatic restart flow on Windows as on macOS and Linux.
+- **Five release targets** — Windows x64, Linux x64/ARM64, and macOS
+  Intel/Apple Silicon archives are built from tags by GitHub Actions.
+- **Verifiable artifacts** — releases include SHA-256 checksums, a CycloneDX
+  SBOM, and a keyless Sigstore bundle for the checksum manifest.
+- **MCP discovery** — a cross-platform MCPB and `server.json` are generated from
+  the release binaries and published to the official MCP Registry with GitHub
+  OIDC.
+- **Public project site and launch kit** — structured metadata, `llms.txt`,
+  platform installation paths, architecture, security notes, and ready-to-use
+  launch copy make Ariadne easier for both people and AI systems to discover.
 
 ## Why
 
@@ -34,8 +41,8 @@ lock-starvation class simply doesn't exist.
   de/it/pl/ro/hu/lt/lv/et/fi/fr/ar).
 - **Hybrid search** — dense (bge-m3) + BM25 sparse (pure Go tokenizer; Qdrant
   computes IDF server-side) fused with RRF. Exact terms/codes/names rank sharply.
-- **Native** — Qdrant binary + Ollama; Metal on Apple Silicon and supported
-  NVIDIA/AMD acceleration on Linux, with a CPU fallback.
+- **Native** — Qdrant binary + Ollama on Windows, macOS, and Linux; supported
+  NVIDIA/AMD acceleration, Metal on Apple Silicon, and a CPU fallback.
 
 ## Components
 
@@ -44,7 +51,7 @@ lock-starvation class simply doesn't exist.
 | `cmd/ariadne` | MCP server (stdio). Tools: `memory_save`, `memory_recall`, `memory_delete`, `memory_move`. |
 | `cmd/import` | Backfill from a chromadb sqlite, markdown memory files or JSONL (batched embeds). |
 | `cmd/hook` | Claude Code session hooks (`ariadne-hook`): SessionStart auto-recall, SessionEnd auto-capture. |
-| `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. |
+| `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. Windows uses `install.ps1`. |
 | `cmd/ariadnectl` | Control + health core (`status -json`, start/stop, backup/export). |
 | `internal/store` | Storage core: embed (Ollama), BM25 sparse, Qdrant hybrid. |
 | `cmd/ariadne-tray` | Cross-platform tray monitor (macOS/Linux/Windows) — pure-Go, localized, over the `ariadnectl` core. |
@@ -53,6 +60,30 @@ lock-starvation class simply doesn't exist.
 | `poc/` | Standalone experiments that validated the stack. |
 
 ## Setup
+
+### Windows
+
+Open PowerShell as your regular user. Download the script first so it remains
+inspectable before execution:
+
+```powershell
+irm https://raw.githubusercontent.com/mclaut/ariadne/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The Windows installer downloads the matching GitHub Release archive and checks
+it against `SHA256SUMS`. If Ollama is missing, it downloads the official
+`OllamaSetup.exe`, verifies that its Authenticode signer is **Ollama Inc.**, and
+installs it without elevation. It installs the pinned native Qdrant x64 asset
+after verifying its SHA-256 digest, registers Qdrant and `ariadne-tray` as
+current-user scheduled tasks, pulls `bge-m3` and the summary model, then
+registers Ariadne with Codex and Claude Code when their CLIs/configs are found.
+
+Qdrant is always bound to `127.0.0.1`. Ollama remains managed by its native
+Windows app and serves `http://localhost:11434`. Requirements: Windows 10 22H2
+or newer, x64, at least 6 GiB RAM and 5 GiB free disk (12 GiB RAM recommended).
+Use `-SkipOllama` or `-SkipModels` when those dependencies are provisioned
+separately.
 
 ### One command (Linux + macOS)
 
@@ -72,8 +103,7 @@ curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh
 ```
 
 (sudo — for distro packages and the official Ollama installer on Linux —
-prompts on the terminal, so the pipe is fine. Windows: PowerShell path is on
-the roadmap.)
+prompts on the terminal, so the pipe is fine.)
 
 Supply-chain defaults are pinned: `install.sh` installs `go1.26.2` unless
 `ARIADNE_GO_VERSION` is set, verifies the Go tarball SHA256 before unpacking,
@@ -114,7 +144,7 @@ Ollama and the Linux tray dependencies entirely to you. To reuse Ollama on
 another machine, provision the required models there and pass
 `-ollama http://host:11434` together with `-skip-model-pull`.
 
-### From a clone (or to hack on it)
+### From a clone (macOS/Linux, or to hack on it)
 
 ```bash
 go run ./cmd/install -dry-run   # preflight + plan, changes nothing
@@ -139,7 +169,16 @@ pulls `bge-m3`, creates the collection, registers the MCP server in
 Codex and other MCP clients can use the same installation by registering
 `~/.ariadne/bin/ariadne` as a stdio MCP server.
 
-### Manual setup
+### Release archives and MCPB
+
+Every stable release includes native archives for five targets, a portable
+cross-platform `.mcpb`, `server.json`, `SHA256SUMS`, a CycloneDX SBOM, and a
+Sigstore bundle. The MCPB contains the MCP server for all supported platforms;
+Qdrant and Ollama still need to be installed by the native OS installer first.
+See [GitHub Releases](https://github.com/mclaut/ariadne/releases/latest) for
+manual downloads and verification files.
+
+### Manual setup (macOS example)
 
 The **runtime lives in `~/.ariadne`** (binaries, data, backups, logs) — the repo
 holds only source. On macOS this is not just taste: launchd agents **cannot**
@@ -225,8 +264,9 @@ A tray/menu-bar monitor polls `ariadnectl status -json` every 5s and shows a
 green/orange/red/grey icon, per-service detail, and start/stop/restart/backup
 actions; it notifies when a service drops. The menu and tooltip show the current
 Ariadne version. A background check queries GitHub Releases every six hours and
-offers a consent-gated update when a newer stable version exists; update output
-is written to `~/.ariadne/logs/update.log`. The `ariadne-tray` UI is localized —
+offers a consent-gated update when a newer stable version exists on Windows,
+macOS, and Linux; update output is written to
+`~/.ariadne/logs/update.log`. The `ariadne-tray` UI is localized —
 **7 languages** (English, Українська, Deutsch, Italiano, Español, Français,
 Polski) with a live **🌐 Language** switcher that shows the active one at a
 glance. The choice persists in `~/.ariadne/lang` and `ariadnectl` follows it, so
@@ -238,7 +278,8 @@ the whole interface stays in one language. Adding a language is one block in
   — a `~/.config/autostart` entry on Linux, a `com.ariadne.tray` LaunchAgent on
   macOS (migrating off any older Swift monitor so you get one icon). On Linux it
   needs a StatusNotifierItem host (native on KDE/XFCE; on GNOME install the
-  "AppIndicator and KStatusNotifierItem" extension). Cross-compiles for Windows.
+  "AppIndicator and KStatusNotifierItem" extension). On Windows it starts from
+  a current-user scheduled task and updates through the signed release archive.
 
 ## Backup & portability
 
@@ -267,9 +308,10 @@ hand after large note edits.
 
 ## Status
 
-v1 — working. Hybrid multilingual recall, session hooks (auto-recall + curated
-auto-capture) and time-ordered diary are all live; several thousand memories in
-daily use. Bulk import batches embeddings for a large backfill speedup. A
+v0.3.0 — working. Hybrid multilingual recall, native desktop installation,
+session hooks (auto-recall + curated auto-capture), and time-ordered diary are
+all live; several thousand memories are in daily use. Bulk import batches
+embeddings for a large backfill speedup. A
 learned-sparse upgrade (bge-m3 SPLADE on a CUDA box) is optional if BM25 proves
 too weak for morphology-rich languages.
 

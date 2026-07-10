@@ -1,0 +1,77 @@
+{
+  "manifest_version": "0.3",
+  "name": "ariadne",
+  "display_name": "Ariadne",
+  "version": "0.3.0",
+  "description": "Local-first multilingual memory for Codex, Claude Code, and MCP clients.",
+  "long_description": "Ariadne provides durable local memory through hybrid dense and sparse retrieval. It uses a local Qdrant server and Ollama bge-m3 embeddings, supports 100+ languages, and avoids embedded database locking under concurrent sessions. Install the native runtime first so Qdrant and Ollama are available, then connect this MCP server.",
+  "author": {
+    "name": "Ariadne contributors",
+    "url": "https://github.com/mclaut/ariadne"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mclaut/ariadne.git"
+  },
+  "homepage": "https://github.com/mclaut/ariadne",
+  "documentation": "https://github.com/mclaut/ariadne#setup",
+  "support": "https://github.com/mclaut/ariadne/issues",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/launch",
+    "mcp_config": {
+      "command": "${__dirname}/server/launch",
+      "args": [],
+      "env": {},
+      "platform_overrides": {
+        "win32": {
+          "command": "powershell.exe",
+          "args": [
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "${__dirname}/server/launch.ps1"
+          ]
+        }
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "memory_recall",
+      "description": "Recall relevant multilingual memories with hybrid dense and keyword search."
+    },
+    {
+      "name": "memory_save",
+      "description": "Save a durable fact, decision, or piece of project context."
+    },
+    {
+      "name": "memory_delete",
+      "description": "Delete one confirmed memory by its exact id."
+    },
+    {
+      "name": "memory_move",
+      "description": "Move or retag one memory without re-embedding its text."
+    }
+  ],
+  "keywords": [
+    "memory",
+    "local-first",
+    "multilingual",
+    "hybrid-search",
+    "qdrant",
+    "ollama",
+    "codex",
+    "claude-code"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ]
+  }
+}

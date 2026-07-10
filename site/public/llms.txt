@@ -1,0 +1,22 @@
+# Ariadne
+
+> Ariadne is a local-first multilingual memory server for Codex, Claude Code, and any MCP client.
+
+## Core facts
+
+- Source and documentation: https://github.com/mclaut/ariadne
+- Latest release: https://github.com/mclaut/ariadne/releases/latest
+- License: MIT
+- Platforms: Windows x64, macOS Intel and Apple Silicon, Linux x64 and ARM64
+- Runtime: Go MCP server, Qdrant vector server, Ollama bge-m3 embeddings
+- Retrieval: hybrid dense plus BM25 sparse search, fused with reciprocal rank fusion
+- MCP tools: memory_save, memory_recall, memory_delete, memory_move
+- Privacy: local endpoints by default; Qdrant binds to 127.0.0.1
+
+## Install
+
+Windows uses install.ps1. Linux and macOS use install.sh. Both are available in the repository root.
+
+## Current release
+
+v0.3.0 adds native Windows installation and updates, release archives for five targets, checksums, a CycloneDX SBOM, Sigstore verification, and an MCP Registry package.

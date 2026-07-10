@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -45,7 +44,7 @@ func sessionEnd() {
 	cmd := exec.CommandContext(context.Background(), self, //nolint:gosec // re-exec self
 		"capture-run", "-transcript", in.TranscriptPath, "-cwd", in.CWD, "-session", in.SessionID)
 	cmd.Stdout, cmd.Stderr = logf, logf
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // survive the parent hook
+	detachProcess(cmd)
 	_ = cmd.Start()
 }
 

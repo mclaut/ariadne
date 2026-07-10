@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+case "$(uname -s)" in
+Darwin) os=darwin ;;
+Linux) os=linux ;;
+*) echo "Ariadne MCPB: unsupported operating system" >&2; exit 1 ;;
+esac
+
+case "$(uname -m)" in
+x86_64|amd64) arch=amd64 ;;
+arm64|aarch64) arch=arm64 ;;
+*) echo "Ariadne MCPB: unsupported CPU architecture" >&2; exit 1 ;;
+esac
+
+base=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$base/$os-$arch/ariadne"

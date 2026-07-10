@@ -1,0 +1,52 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mclaut/ariadne",
+  "title": "Ariadne",
+  "description": "Local-first multilingual memory for Codex, Claude Code, and MCP clients, backed by Qdrant and Ollama bge-m3 hybrid search.",
+  "websiteUrl": "https://github.com/mclaut/ariadne",
+  "repository": {
+    "url": "https://github.com/mclaut/ariadne",
+    "source": "github",
+    "id": "1289765011"
+  },
+  "version": "0.3.0",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "registryBaseUrl": "https://github.com",
+      "identifier": "https://github.com/mclaut/ariadne/releases/download/v0.3.0/ariadne-v0.3.0.mcpb",
+      "version": "0.3.0",
+      "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ARIADNE_QDRANT_HOST",
+          "description": "Qdrant host",
+          "default": "localhost"
+        },
+        {
+          "name": "ARIADNE_QDRANT_PORT",
+          "description": "Qdrant gRPC port",
+          "default": "6334"
+        },
+        {
+          "name": "ARIADNE_OLLAMA",
+          "description": "Ollama API URL",
+          "default": "http://localhost:11434"
+        },
+        {
+          "name": "ARIADNE_MODEL",
+          "description": "Embedding model",
+          "default": "bge-m3"
+        },
+        {
+          "name": "ARIADNE_COLLECTION",
+          "description": "Qdrant collection",
+          "default": "ariadne"
+        }
+      ]
+    }
+  ]
+}

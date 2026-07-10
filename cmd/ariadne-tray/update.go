@@ -5,6 +5,8 @@ import (
 	"ariadne/internal/version"
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"fyne.io/systray"
 )
@@ -132,11 +135,7 @@ func refreshUpdateMenuLocked() {
 		mUpdate.SetTitle(i18n.T(lang, "menu.checking_updates"))
 		mUpdate.Disable()
 	case updates.available.TagName != "":
-		key := "menu.update_to"
-		if runtime.GOOS == osWindows {
-			key = "menu.open_update"
-		}
-		mUpdate.SetTitle(fmt.Sprintf(i18n.T(lang, key), updates.available.TagName))
+		mUpdate.SetTitle(fmt.Sprintf(i18n.T(lang, "menu.update_to"), updates.available.TagName))
 		mUpdate.Enable()
 	default:
 		mUpdate.SetTitle(i18n.T(lang, "menu.check_updates"))
@@ -145,10 +144,6 @@ func refreshUpdateMenuLocked() {
 }
 
 func startUpdate(release releaseInfo) {
-	if runtime.GOOS == osWindows {
-		openURL(release.HTMLURL)
-		return
-	}
 	if !confirmUpdate(release.TagName) {
 		return
 	}
@@ -165,9 +160,15 @@ func startUpdate(release releaseInfo) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	installerName := "install.sh"
+	if runtime.GOOS == osWindows {
+		installerName = "install.ps1"
+	}
 	installURL := "https://raw.githubusercontent.com/" + version.Repository + "/" +
-		url.PathEscape(release.TagName) + "/install.sh"
-	scriptPath, err := downloadInstallScript(ctx, &http.Client{Timeout: 30 * time.Second}, installURL, runtimeDir(""))
+		url.PathEscape(release.TagName) + "/" + installerName
+	scriptPath, err := downloadInstaller(
+		ctx, &http.Client{Timeout: 30 * time.Second}, installURL, runtimeDir(""), installerName,
+	)
 	if err != nil {
 		updateStartFailed(release.TagName, err)
 		return
@@ -179,11 +180,20 @@ func startUpdate(release releaseInfo) {
 		updateStartFailed(release.TagName, err)
 		return
 	}
-	helper := exec.CommandContext( //nolint:gosec // our executable, validated release tag, and downloaded installer
-		context.Background(), exe, "--apply-update", release.TagName, scriptPath,
+	helperExe, err := updateHelperExecutable(exe)
+	if err != nil {
+		_ = os.Remove(scriptPath)
+		updateStartFailed(release.TagName, err)
+		return
+	}
+	helper := exec.CommandContext( //nolint:gosec // our copied executable, validated release tag, and downloaded installer
+		context.Background(), helperExe, "--apply-update", release.TagName, scriptPath,
 	)
 	if err := helper.Start(); err != nil {
 		_ = os.Remove(scriptPath)
+		if helperExe != exe {
+			_ = os.Remove(helperExe)
+		}
 		updateStartFailed(release.TagName, err)
 		return
 	}
@@ -234,6 +244,14 @@ func confirmUpdate(tag string) bool {
 		// Choosing the explicit "Update to ..." tray action is the consent fallback
 		// on minimal desktops without a dialog provider.
 		return true
+	case osWindows:
+		command := "$w=New-Object -ComObject WScript.Shell;" +
+			"$r=$w.Popup(" + psQuote(body) + ",0," + psQuote(title) + ",36);" +
+			"if($r -eq 6){exit 0};exit 1"
+		return exec.CommandContext( //nolint:gosec // encoded fixed dialog command with localized UI-only text
+			context.Background(), "powershell.exe", "-NoProfile", "-NonInteractive",
+			"-EncodedCommand", encodePowerShell(command),
+		).Run() == nil
 	default:
 		return false
 	}
@@ -273,7 +291,9 @@ func fetchLatestRelease(ctx context.Context, client *http.Client, endpoint strin
 	return release, nil
 }
 
-func downloadInstallScript(ctx context.Context, client *http.Client, sourceURL, dir string) (string, error) {
+func downloadInstaller(
+	ctx context.Context, client *http.Client, sourceURL, dir, installerName string,
+) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
 	if err != nil {
 		return "", err
@@ -294,14 +314,21 @@ func downloadInstallScript(ctx context.Context, client *http.Client, sourceURL, 
 	if len(body) > maxInstallScriptSize {
 		return "", errors.New("installer is unexpectedly large")
 	}
-	if !bytes.HasPrefix(body, []byte("#!/bin/sh")) ||
-		!bytes.Contains(body, []byte(`REPO="`+version.Repository+`"`)) {
+	valid := bytes.HasPrefix(body, []byte("#!/bin/sh")) &&
+		bytes.Contains(body, []byte(`REPO="`+version.Repository+`"`))
+	pattern := "update-install-*.sh"
+	if installerName == "install.ps1" {
+		valid = bytes.HasPrefix(body, []byte("# Ariadne Windows installer")) &&
+			bytes.Contains(body, []byte(`$Repository = "`+version.Repository+`"`))
+		pattern = "update-install-*.ps1"
+	}
+	if !valid {
 		return "", errors.New("downloaded file is not the Ariadne installer")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // user-owned runtime directory
 		return "", err
 	}
-	f, err := os.CreateTemp(dir, "update-install-*.sh")
+	f, err := os.CreateTemp(dir, pattern)
 	if err != nil {
 		return "", err
 	}
@@ -375,6 +402,7 @@ func markUpdateNotified(tag string) bool {
 }
 
 func reportUpdateResult() {
+	cleanupUpdateHelpers()
 	path := runtimeDir("update-result.json")
 	b, err := os.ReadFile(path) //nolint:gosec // own runtime state
 	if err != nil {
@@ -396,9 +424,6 @@ func reportUpdateResult() {
 }
 
 func applyUpdate(tag, scriptPath string) int {
-	if runtime.GOOS == osWindows {
-		return 2
-	}
 	if _, ok := parseSemver(tag); !ok || !validUpdateScript(scriptPath) {
 		return 2
 	}
@@ -415,10 +440,19 @@ func applyUpdate(tag, scriptPath string) int {
 	defer func() { _ = os.Remove(scriptPath) }() //nolint:gosec // validated update-install file under ~/.ariadne
 
 	_, _ = fmt.Fprintf(logf, "\n[%s] updating Ariadne to %s\n", time.Now().Format(time.RFC3339), tag)
-	cmd := exec.CommandContext( //nolint:gosec // validated update-install file under ~/.ariadne
-		context.Background(), "/bin/sh", scriptPath, "-skip-deps",
-	)
-	cmd.Env = envWith("ARIADNE_REF", tag)
+	var cmd *exec.Cmd
+	if runtime.GOOS == osWindows {
+		cmd = exec.CommandContext( //nolint:gosec // validated PowerShell installer under ~/.ariadne
+			context.Background(), "powershell.exe", "-NoProfile", "-NonInteractive",
+			"-ExecutionPolicy", "Bypass", "-File", scriptPath,
+			"-Version", tag, "-Yes", "-Update",
+		)
+	} else {
+		cmd = exec.CommandContext( //nolint:gosec // validated shell installer under ~/.ariadne
+			context.Background(), "/bin/sh", scriptPath, "-skip-deps",
+		)
+		cmd.Env = envWith("ARIADNE_REF", tag)
+	}
 	cmd.Stdout, cmd.Stderr = logf, logf
 	err = cmd.Run()
 	result := updateResult{Version: tag, Success: err == nil}
@@ -432,7 +466,11 @@ func applyUpdate(tag, scriptPath string) int {
 		_, _ = fmt.Fprintf(logf, "could not write update result: %v\n", writeErr)
 	}
 
-	tray := runtimeDir("bin/ariadne-tray")
+	trayName := "ariadne-tray"
+	if runtime.GOOS == osWindows {
+		trayName += ".exe"
+	}
+	tray := runtimeDir(filepath.Join("bin", trayName))
 	restart := exec.CommandContext(context.Background(), tray) //nolint:gosec // fixed installed tray path
 	restart.Stdout, restart.Stderr = logf, logf
 	if startErr := restart.Start(); startErr != nil {
@@ -443,6 +481,61 @@ func applyUpdate(tag, scriptPath string) int {
 		return 1
 	}
 	return 0
+}
+
+func updateHelperExecutable(exe string) (string, error) {
+	if runtime.GOOS != osWindows {
+		return exe, nil
+	}
+	dir := runtimeDir("updates")
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // user-owned runtime directory
+		return "", err
+	}
+	src, err := os.Open(exe) //nolint:gosec // current executable path from the OS
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = src.Close() }()
+	dst, err := os.CreateTemp(dir, "ariadne-update-helper-*.exe")
+	if err != nil {
+		return "", err
+	}
+	path := dst.Name()
+	ok := false
+	defer func() {
+		_ = dst.Close()
+		if !ok {
+			_ = os.Remove(path)
+		}
+	}()
+	if _, err := io.Copy(dst, src); err != nil {
+		return "", err
+	}
+	if err := dst.Close(); err != nil {
+		return "", err
+	}
+	ok = true
+	return path, nil
+}
+
+func cleanupUpdateHelpers() {
+	paths, _ := filepath.Glob(runtimeDir("updates/ariadne-update-helper-*.exe"))
+	for _, path := range paths {
+		_ = os.Remove(path)
+	}
+}
+
+func psQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+func encodePowerShell(command string) string {
+	encoded := utf16.Encode([]rune(command))
+	bytesLE := make([]byte, len(encoded)*2)
+	for i, value := range encoded {
+		binary.LittleEndian.PutUint16(bytesLE[i*2:], value)
+	}
+	return base64.StdEncoding.EncodeToString(bytesLE)
 }
 
 func pathWithin(base, target string) bool {
@@ -505,24 +598,6 @@ func appendUpdateLog(format string, args ...any) {
 	}
 	defer func() { _ = f.Close() }()
 	_, _ = fmt.Fprintf(f, format, args...)
-}
-
-func openURL(rawURL string) {
-	if !trustedReleaseURL(rawURL) {
-		return
-	}
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case osDarwin:
-		cmd = exec.CommandContext(context.Background(), "open", rawURL) //nolint:gosec // validated GitHub release URL
-	case osWindows:
-		cmd = exec.CommandContext( //nolint:gosec // validated GitHub release URL
-			context.Background(), "rundll32", "url.dll,FileProtocolHandler", rawURL,
-		)
-	default:
-		cmd = exec.CommandContext(context.Background(), "xdg-open", rawURL) //nolint:gosec // validated GitHub release URL
-	}
-	_ = cmd.Start()
 }
 
 func trustedReleaseURL(raw string) bool {

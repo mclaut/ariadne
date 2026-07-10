@@ -60,7 +60,7 @@ func TestDownloadInstallScript(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	path, err := downloadInstallScript(ctx, srv.Client(), srv.URL, t.TempDir())
+	path, err := downloadInstaller(ctx, srv.Client(), srv.URL, t.TempDir(), "install.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,8 +89,26 @@ func TestDownloadInstallScriptRejectsUnexpectedFile(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if _, err := downloadInstallScript(ctx, srv.Client(), srv.URL, t.TempDir()); err == nil {
+	if _, err := downloadInstaller(ctx, srv.Client(), srv.URL, t.TempDir(), "install.sh"); err == nil {
 		t.Fatal("unexpected file was accepted")
+	}
+}
+
+func TestDownloadPowerShellInstaller(t *testing.T) {
+	script := "# Ariadne Windows installer\n$Repository = \"mclaut/ariadne\"\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(script))
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	path, err := downloadInstaller(ctx, srv.Client(), srv.URL, t.TempDir(), "install.ps1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Ext(path) != ".ps1" {
+		t.Fatalf("installer extension = %q", filepath.Ext(path))
 	}
 }
 
@@ -108,11 +126,11 @@ func TestValidUpdateScriptRejectsSymlink(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	runtimeRoot := filepath.Join(home, ".ariadne")
-	if err := os.MkdirAll(runtimeRoot, 0o755); err != nil {
+	if err := os.MkdirAll(runtimeRoot, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	realScript := filepath.Join(runtimeRoot, "update-install-real.sh")
-	if err := os.WriteFile(realScript, []byte("#!/bin/sh\n"), 0o700); err != nil {
+	if err := os.WriteFile(realScript, []byte("#!/bin/sh\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if !validUpdateScript(realScript) {
