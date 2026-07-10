@@ -6,6 +6,3 @@ contact_links:
   - name: Design discussion
     url: https://github.com/mclaut/ariadne/discussions/categories/ideas
     about: Explore broader ideas before turning them into a focused feature request.
-  - name: Report a security vulnerability
-    url: https://github.com/mclaut/ariadne/security/advisories/new
-    about: Send a confidential report instead of opening a public issue.
