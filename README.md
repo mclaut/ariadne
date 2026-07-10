@@ -1,10 +1,12 @@
 # ariadne
 
-A **native, local-first, multilingual memory server** for [Claude Code](https://claude.com/claude-code)
-(and any MCP client). Go + [Qdrant](https://qdrant.tech) + [bge-m3](https://huggingface.co/BAAI/bge-m3) — no Docker, no cloud, no API keys.
+A **native, local-first, multilingual memory server** for Codex,
+[Claude Code](https://claude.com/claude-code), and any MCP client. Go +
+[Qdrant](https://qdrant.tech) + [bge-m3](https://huggingface.co/BAAI/bge-m3) —
+no Docker, no cloud, no API keys.
 
 Built as a replacement for embedded vector-DB memory backends that crash or
-starve under several concurrent Claude sessions. ariadne is a **server**: one
+starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
@@ -16,7 +18,8 @@ lock-starvation class simply doesn't exist.
   de/it/pl/ro/hu/lt/lv/et/fi/fr/ar).
 - **Hybrid search** — dense (bge-m3) + BM25 sparse (pure Go tokenizer; Qdrant
   computes IDF server-side) fused with RRF. Exact terms/codes/names rank sharply.
-- **Native** — Qdrant binary + Ollama (Metal), everything runs on the laptop.
+- **Native** — Qdrant binary + Ollama; Metal on Apple Silicon and supported
+  NVIDIA/AMD acceleration on Linux, with a CPU fallback.
 
 ## Components
 
@@ -52,8 +55,9 @@ curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh -s -- -strict-supply-chain
 ```
 
-(sudo — for apt packages and Ollama on Linux — prompts on the terminal, so the
-pipe is fine. Windows: PowerShell path is on the roadmap.)
+(sudo — for distro packages and the official Ollama installer on Linux —
+prompts on the terminal, so the pipe is fine. Windows: PowerShell path is on
+the roadmap.)
 
 Supply-chain defaults are pinned: `install.sh` installs `go1.26.2` unless
 `ARIADNE_GO_VERSION` is set, verifies the Go tarball SHA256 before unpacking,
@@ -61,6 +65,38 @@ and the Go installer installs Qdrant from a pinned `-qdrant-version` release
 (default `v1.18.2`) after checking the GitHub release-asset digest. For locked
 down environments, pass `-strict-supply-chain`; on Linux this refuses the
 Ollama `curl | sh` bootstrap and asks you to install Ollama manually first.
+
+#### Linux and Ollama
+
+Ariadne uses Ollama for `bge-m3` embeddings and, when session hooks are enabled,
+for the local summary model. An existing local Ollama installation is reused.
+If the `ollama` command is missing, the default installer runs Ollama's official
+Linux install script, waits for `http://localhost:11434` to become ready, then
+pulls `bge-m3` and the configured summary model.
+
+If Ollama is installed but its daemon is stopped, start it before running the
+Ariadne installer:
+
+```bash
+sudo systemctl enable ollama
+sudo systemctl start ollama
+sudo systemctl status ollama
+curl -fsS http://127.0.0.1:11434/api/version
+```
+
+On Linux, Ollama remains a system service owned by the OS. The
+`ariadnectl start`, `ariadnectl stop`, and `ariadnectl restart` commands manage
+Ariadne's Qdrant user unit and deliberately leave Ollama alone. On systems
+without systemd, run `ollama serve` under the local service manager instead.
+See Ollama's official
+[Linux installation guide](https://docs.ollama.com/linux) for manual packages,
+ARM64, NVIDIA, and AMD/ROCm setup.
+
+With `-strict-supply-chain`, Ariadne never runs Ollama's `curl | sh` installer.
+Install and start Ollama yourself, then rerun Ariadne. `-skip-deps` also leaves
+Ollama and the Linux tray dependencies entirely to you. To reuse Ollama on
+another machine, provision the required models there and pass
+`-ollama http://host:11434` together with `-skip-model-pull`.
 
 ### From a clone (or to hack on it)
 
@@ -84,6 +120,8 @@ It installs the Qdrant binary + service (macOS LaunchAgent / Linux systemd
 user unit, loopback-only), builds the Go binaries into `~/.ariadne/bin`,
 pulls `bge-m3`, creates the collection, registers the MCP server in
 `~/.claude.json` (backup kept) and installs the Claude Code skill.
+Codex and other MCP clients can use the same installation by registering
+`~/.ariadne/bin/ariadne` as a stdio MCP server.
 
 ### Manual setup
 
