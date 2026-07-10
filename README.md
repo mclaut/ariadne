@@ -1,7 +1,9 @@
 # ariadne
 
-A **native, local-first, multilingual memory server** for Codex,
-[Claude Code](https://claude.com/claude-code), and any MCP client. Go +
+A **native, local-first, multilingual memory server** for
+[Codex](https://github.com/openai/codex),
+[Claude Code](https://claude.com/claude-code), and any MCP client.
+[Go](https://go.dev/) +
 [Qdrant](https://qdrant.tech) + [bge-m3](https://huggingface.co/BAAI/bge-m3) —
 no Docker, no cloud, no API keys.
 
@@ -317,6 +319,14 @@ all live; several thousand memories are in daily use. Bulk import batches
 embeddings for a large backfill speedup. A
 learned-sparse upgrade (bge-m3 SPLADE on a CUDA box) is optional if BM25 proves
 too weak for morphology-rich languages.
+
+## Contributors
+
+- **Project maintainer** — architecture, product direction, validation, and
+  release decisions.
+- **[OpenAI Codex](https://github.com/openai/codex)** — implementation, tests,
+  documentation, cross-platform packaging, and release engineering, with all
+  changes reviewed and approved by the maintainer.
 
 ## License
 

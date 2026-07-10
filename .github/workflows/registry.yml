@@ -1,0 +1,71 @@
+name: Publish MCP Registry metadata
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing Ariadne release tag
+        required: true
+        default: v0.3.0
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish metadata for ${{ inputs.tag }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Prepare corrected release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          source_version=$(sed -n 's/.*Current[[:space:]]*= "\([^"]*\)".*/\1/p' internal/version/version.go)
+          test "$version" = "$source_version"
+
+          mkdir release-assets
+          gh release download "$TAG" --dir release-assets
+          mcpb_sha=$(sha256sum "release-assets/ariadne-${TAG}.mcpb" | cut -d' ' -f1)
+          jq --arg version "$version" --arg tag "$TAG" --arg sha "$mcpb_sha" \
+            '.version = $version |
+             .packages[0].version = $version |
+             .packages[0].identifier = "https://github.com/mclaut/ariadne/releases/download/" + $tag + "/ariadne-" + $tag + ".mcpb" |
+             .packages[0].fileSha256 = $sha' \
+            server.json > release-assets/server.json
+          (cd release-assets && sha256sum ariadne-* server.json > SHA256SUMS)
+
+      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Re-sign and upload corrected metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          cosign sign-blob --yes \
+            --bundle release-assets/SHA256SUMS.sigstore.json \
+            release-assets/SHA256SUMS
+          gh release upload "$TAG" --clobber \
+            release-assets/server.json \
+            release-assets/SHA256SUMS \
+            release-assets/SHA256SUMS.sigstore.json
+
+      - name: Install verified MCP publisher
+        run: |
+          curl -fsSLo mcp-publisher.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.7.9/mcp-publisher_linux_amd64.tar.gz
+          echo "ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac  mcp-publisher.tar.gz" | sha256sum -c -
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
+
+      - name: Publish to the official MCP Registry
+        working-directory: release-assets
+        run: |
+          ../mcp-publisher login github-oidc
+          ../mcp-publisher publish
