@@ -3,7 +3,7 @@
   "name": "io.github.mclaut/ariadne",
   "title": "Ariadne",
   "description": "Local-first multilingual memory for Codex, Claude Code, and MCP clients, backed by Qdrant and Ollama bge-m3 hybrid search.",
-  "websiteUrl": "https://github.com/mclaut/ariadne",
+  "websiteUrl": "https://ariadne-memory.mclaut124670.chatgpt.site",
   "repository": {
     "url": "https://github.com/mclaut/ariadne",
     "source": "github",

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -76,7 +77,7 @@ func TestDownloadInstallScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o700 {
+	if runtime.GOOS != osWindows && info.Mode().Perm() != 0o700 {
 		t.Fatalf("mode = %o", info.Mode().Perm())
 	}
 }
@@ -125,6 +126,7 @@ func TestPathWithin(t *testing.T) {
 func TestValidUpdateScriptRejectsSymlink(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	runtimeRoot := filepath.Join(home, ".ariadne")
 	if err := os.MkdirAll(runtimeRoot, 0o750); err != nil {
 		t.Fatal(err)
@@ -138,6 +140,9 @@ func TestValidUpdateScriptRejectsSymlink(t *testing.T) {
 	}
 	symlink := filepath.Join(runtimeRoot, "update-install-link.sh")
 	if err := os.Symlink(realScript, symlink); err != nil {
+		if runtime.GOOS == osWindows {
+			t.Skipf("Windows symlink creation is unavailable: %v", err)
+		}
 		t.Fatal(err)
 	}
 	if validUpdateScript(symlink) {

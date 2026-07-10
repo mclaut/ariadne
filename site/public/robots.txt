@@ -4,4 +4,4 @@ Allow: /
 User-agent: OAI-SearchBot
 Allow: /
 
-Sitemap: https://github.com/mclaut/ariadne
+Sitemap: https://ariadne-memory.mclaut124670.chatgpt.site/sitemap.xml

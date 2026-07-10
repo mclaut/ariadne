@@ -4,6 +4,7 @@
 
 ## Core facts
 
+- Project site: https://ariadne-memory.mclaut124670.chatgpt.site
 - Source and documentation: https://github.com/mclaut/ariadne
 - Latest release: https://github.com/mclaut/ariadne/releases/latest
 - License: MIT
