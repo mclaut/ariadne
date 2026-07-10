@@ -324,9 +324,12 @@ too weak for morphology-rich languages.
 
 - **Project maintainer** — architecture, product direction, validation, and
   release decisions.
-- **[Claude Code](https://claude.com/claude-code)** — implementation, tests,
-  documentation, cross-platform packaging, and release engineering, with all
-  changes reviewed and approved by the maintainer.
+- **[OpenAI Codex](https://github.com/codex)** — implementation, tests,
+  documentation, cross-platform packaging, and release engineering.
+- **[Claude Code](https://github.com/claude)** — implementation, localization,
+  installer hardening, and cross-platform runtime improvements.
+
+All AI-assisted changes are reviewed and approved by the maintainer.
 
 ## License
 
