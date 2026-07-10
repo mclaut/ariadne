@@ -19,12 +19,27 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
+## What's New in v0.3.1
+
+- **Clean Windows prerequisite repair** — the installer now detects the
+  Microsoft Visual C++ Runtime required by the official Qdrant Windows binary.
+  When it is missing or older than 14.44, Ariadne downloads Microsoft's
+  official redistributable, verifies its Authenticode signer, and requests
+  administrator approval for that prerequisite only.
+- **Actionable Qdrant failures** — startup gets a full 60-second window, loader
+  and process errors are preserved in `~/.ariadne/logs/qdrant.log`, and the
+  installer prints the scheduled-task result plus the last log lines instead of
+  returning only a generic timeout.
+- **Real Windows Qdrant coverage** — CI now downloads the exact pinned Qdrant
+  archive, verifies its SHA-256 digest, starts it with Ariadne's loopback/storage
+  settings, and waits for `/healthz` on a Windows runner.
+
 ## What's New in v0.3.0
 
 - **Native Windows installation** — `install.ps1` installs release binaries,
   native Qdrant, signed Ollama, user-level startup tasks, Codex/Claude Code MCP
-  bindings, the skill, and session hooks. Docker and administrator access are
-  not required.
+  bindings, the skill, and session hooks. Docker is not required; administrator
+  approval is needed only when Windows lacks Qdrant's Microsoft VC++ Runtime.
 - **Windows self-updates** — the version-aware tray now offers the same explicit
   confirmation and automatic restart flow on Windows as on macOS and Linux.
 - **Five release targets** — Windows x64, Linux x64/ARM64, and macOS
@@ -83,6 +98,14 @@ installs it without elevation. It installs the pinned native Qdrant x64 asset
 after verifying its SHA-256 digest, registers Qdrant and `ariadne-tray` as
 current-user scheduled tasks, pulls `bge-m3` and the summary model, then
 registers Ariadne with Codex and Claude Code when their CLIs/configs are found.
+
+The official Qdrant Windows binary requires Microsoft Visual C++ Runtime 14.44
+or newer. Ariadne checks it before starting Qdrant. If it is absent or outdated,
+the installer downloads the official Microsoft x64 redistributable, verifies
+the Microsoft Authenticode signer, and Windows requests administrator approval
+for that prerequisite. Rerun the same install command after a cancelled prompt.
+If Qdrant still cannot start, the installer prints diagnostics and the tail of
+`~/.ariadne/logs/qdrant.log` directly in PowerShell.
 
 Qdrant is always bound to `127.0.0.1`. Ollama remains managed by its native
 Windows app and serves `http://localhost:11434`. Requirements: Windows 10 22H2

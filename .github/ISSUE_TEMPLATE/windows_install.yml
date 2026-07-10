@@ -65,8 +65,12 @@ body:
     id: status
     attributes:
       label: Sanitized status and logs
-      description: Include tray version, `ariadnectl status -json`, and relevant sanitized installer or update log lines.
-      render: shell
+      description: Remove private data, then include tray version, `ariadnectl status -json`, the last Qdrant log lines, and the scheduled-task result.
+      value: |
+        ariadnectl status -json
+        Get-Content "$env:USERPROFILE\.ariadne\logs\qdrant.log" -Tail 40
+        Get-ScheduledTaskInfo -TaskName "Ariadne Qdrant"
+      render: powershell
   - type: checkboxes
     id: components
     attributes:

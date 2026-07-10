@@ -28,7 +28,8 @@ const installs = {
     icon: Monitor,
     command:
       "irm https://raw.githubusercontent.com/mclaut/ariadne/main/install.ps1 -OutFile install.ps1\npowershell -ExecutionPolicy Bypass -File .\\install.ps1",
-    note: "Native x64 installer. No Docker and no administrator account required.",
+    note:
+      "Native x64 installer. No Docker; administrator approval is requested only when Windows needs Qdrant's Microsoft VC++ runtime.",
   },
   linux: {
     label: "Linux",
@@ -54,7 +55,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.3.0",
+  softwareVersion: "0.3.1",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -129,7 +130,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.3.0 ships native Windows support
+            v0.3.1 hardens native Windows setup
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -167,12 +168,12 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.3.0</span>
-            <h2>Windows joins the native stack.</h2>
+            <span className="eyebrow">New in v0.3.1</span>
+            <h2>Clean Windows installs now self-repair.</h2>
             <p>
-              One release now covers five targets, with checksums, an SBOM,
-              Sigstore verification, and the same user-approved update flow on
-              every desktop.
+              Ariadne now installs Qdrant&apos;s verified Microsoft runtime when
+              needed, reports the actual startup error, and tests the native
+              database on Windows before every release.
             </p>
           </div>
           <div className="new-grid">
@@ -180,8 +181,8 @@ export default function Home() {
               <Monitor aria-hidden="true" />
               <h3>Windows installer</h3>
               <p>
-                Native Qdrant, signed Ollama, startup tasks, Codex, Claude Code,
-                skills, and hooks from a regular PowerShell session.
+                Native Qdrant, its Microsoft VC++ prerequisite, signed Ollama,
+                startup tasks, Codex, Claude Code, skills, and hooks.
               </p>
             </article>
             <article className="new-item accent-blue">
@@ -341,7 +342,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.3.0"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.3.1"
               target="_blank"
               rel="noreferrer"
             >

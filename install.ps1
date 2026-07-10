@@ -25,6 +25,8 @@ $TaskTray = "Ariadne Tray"
 $QdrantVersion = "v1.18.2"
 $QdrantAsset = "qdrant-x86_64-pc-windows-msvc.zip"
 $QdrantSHA256 = "b2b262cba6f78cf4fa794ae78d73a8f70a221c93c76c75ac8fd6fe95d809b142"
+$VCRuntimeURL = "https://aka.ms/vc14/vc_redist.x64.exe"
+$VCRuntimeMinimum = [version]"14.44.0.0"
 $UserAgent = "ariadne-windows-installer"
 
 function Write-Step([string]$Message) {
@@ -98,6 +100,54 @@ function Assert-OllamaSignature([string]$File) {
     }
 }
 
+function Assert-MicrosoftSignature([string]$File) {
+    $signature = Get-AuthenticodeSignature -FilePath $File
+    if ($signature.Status -ne "Valid") { throw "Microsoft VC++ Runtime signature is not valid." }
+    if ($signature.SignerCertificate.Subject -notmatch "(^|, )O=Microsoft Corporation(,|$)") {
+        throw "Microsoft VC++ Runtime has an unexpected signer."
+    }
+}
+
+function Test-VCRuntime {
+    $runtime = Join-Path $env:WINDIR "System32\vcruntime140.dll"
+    if (-not (Test-Path $runtime)) { return $false }
+    try {
+        $text = (Get-Item $runtime).VersionInfo.FileVersion
+        $match = [regex]::Match($text, "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+")
+        if (-not $match.Success) { return $false }
+        return ([version]($match.Value) -ge $VCRuntimeMinimum)
+    } catch {
+        return $false
+    }
+}
+
+function Install-VCRuntime([string]$TempDir) {
+    if (Test-VCRuntime) { return }
+
+    Write-Step "Installing Microsoft Visual C++ Runtime required by Qdrant"
+    Write-Host "Windows may request administrator approval for this Microsoft prerequisite."
+    $installer = Join-Path $TempDir "vc_redist.x64.exe"
+    $installLog = Join-Path $LogsDir "vc-redist.log"
+    Invoke-Download $VCRuntimeURL $installer
+    Assert-MicrosoftSignature $installer
+    $arguments = "/install /passive /norestart /log `"$installLog`""
+    try {
+        $process = Start-Process -FilePath $installer -ArgumentList $arguments `
+            -Verb RunAs -Wait -PassThru
+    } catch {
+        throw "Qdrant requires Microsoft Visual C++ Runtime 14.44 or newer. " +
+            "Administrator approval was not completed. Install $VCRuntimeURL and rerun Ariadne. " +
+            "Original error: $($_.Exception.Message)"
+    }
+    if (-not (Test-VCRuntime)) {
+        throw "Microsoft Visual C++ Runtime did not become available (exit code $($process.ExitCode)). " +
+            "See $installLog"
+    }
+    if ($process.ExitCode -eq 3010) {
+        Write-Host "Microsoft VC++ Runtime requested a restart; continuing because the runtime is available."
+    }
+}
+
 function ConvertTo-PSLiteral([string]$Value) {
     return "'" + $Value.Replace("'", "''") + "'"
 }
@@ -126,11 +176,39 @@ function Register-AriadneTask(
     Register-ScheduledTask -TaskName $Name -InputObject $task -Force | Out-Null
 }
 
+function Show-QdrantFailure([string]$LogPath) {
+    Write-Host "`nQdrant startup diagnostics:" -ForegroundColor Yellow
+    try {
+        $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskQdrant -ErrorAction Stop
+        Write-Host "Scheduled task last result: $($taskInfo.LastTaskResult)"
+    } catch {
+        Write-Host "Scheduled task status could not be read: $($_.Exception.Message)"
+    }
+
+    $lines = @()
+    if (Test-Path $LogPath) {
+        $lines = @(Get-Content -Path $LogPath -Tail 40 -ErrorAction SilentlyContinue |
+            Where-Object { $_ -and $_.Trim().Length -gt 0 })
+    }
+    if ($lines.Count -gt 0) {
+        Write-Host "--- last Qdrant log lines ---"
+        $lines | ForEach-Object { Write-Host $_ }
+        Write-Host "--- end Qdrant log ---"
+    } else {
+        Write-Host "No Qdrant output was captured. Windows may have rejected the executable before startup."
+    }
+    if (-not (Test-VCRuntime)) {
+        Write-Host "Microsoft Visual C++ Runtime 14.44 or newer is still unavailable."
+    }
+}
+
 function Install-Qdrant([string]$TempDir) {
     if (Test-HTTP "http://127.0.0.1:6333/healthz") {
         Write-Host "Qdrant is already running; reusing it without reconfiguration."
         return
     }
+
+    Install-VCRuntime $TempDir
 
     $qdrantExe = Join-Path $BinDir "qdrant.exe"
     if (-not (Test-Path $qdrantExe)) {
@@ -150,21 +228,29 @@ function Install-Qdrant([string]$TempDir) {
     Write-Step "Registering loopback-only Qdrant"
     $launcher = Join-Path $RuntimeDir "start-qdrant.ps1"
     $qdrantLog = Join-Path $LogsDir "qdrant.log"
+    Set-Content -Path $qdrantLog -Value "" -Encoding UTF8
     $content = @(
         '$ErrorActionPreference = "Stop"',
         ('$env:QDRANT__SERVICE__HOST = ' + (ConvertTo-PSLiteral "127.0.0.1")),
         ('$env:QDRANT__STORAGE__STORAGE_PATH = ' + (ConvertTo-PSLiteral $DataDir)),
         ('$env:QDRANT__STORAGE__SNAPSHOTS_PATH = ' + (ConvertTo-PSLiteral (Join-Path $DataDir "snapshots"))),
         ('Set-Location ' + (ConvertTo-PSLiteral $RuntimeDir)),
-        ('& ' + (ConvertTo-PSLiteral $qdrantExe) + ' *>> ' + (ConvertTo-PSLiteral $qdrantLog))
+        'try {',
+        ('    & ' + (ConvertTo-PSLiteral $qdrantExe) + ' *>> ' + (ConvertTo-PSLiteral $qdrantLog)),
+        '    if ($LASTEXITCODE -ne 0) { throw "qdrant.exe exited with code $LASTEXITCODE" }',
+        '} catch {',
+        ('    ($_ | Out-String) | Add-Content -Path ' + (ConvertTo-PSLiteral $qdrantLog)),
+        '    exit 1',
+        '}'
     ) -join "`r`n"
     Set-Content -Path $launcher -Value $content -Encoding UTF8
 
     $taskArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcher`""
     Register-AriadneTask $TaskQdrant "powershell.exe" $taskArgs $RuntimeDir $true
     Start-ScheduledTask -TaskName $TaskQdrant
-    if (-not (Wait-HTTP "http://127.0.0.1:6333/healthz" 30)) {
-        throw "Qdrant did not become ready. See $qdrantLog"
+    if (-not (Wait-HTTP "http://127.0.0.1:6333/healthz" 60)) {
+        Show-QdrantFailure $qdrantLog
+        throw "Qdrant did not become ready after 60 seconds. See $qdrantLog"
     }
 }
 

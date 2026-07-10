@@ -20,4 +20,4 @@ Windows uses install.ps1. Linux and macOS use install.sh. Both are available in 
 
 ## Current release
 
-v0.3.0 adds native Windows installation and updates, release archives for five targets, checksums, a CycloneDX SBOM, Sigstore verification, and an MCP Registry package.
+v0.3.1 hardens native Windows setup by bootstrapping Qdrant's verified Microsoft VC++ prerequisite, surfacing startup diagnostics, and smoke-testing the pinned Qdrant binary on Windows. v0.3.0 added native Windows installation and updates, five release targets, checksums, a CycloneDX SBOM, Sigstore verification, and an MCP Registry package.

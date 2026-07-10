@@ -49,6 +49,9 @@ jobs:
           if ($errors.Count -gt 0) {
             $errors | Format-List | Out-String | Write-Error
           }
+      - name: Smoke-test pinned Qdrant
+        shell: powershell
+        run: .\.github\scripts\windows-qdrant-smoke.ps1
       - run: go test ./...
       - run: go build ./...
 
