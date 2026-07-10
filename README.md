@@ -10,6 +10,22 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
+## What's New in v0.2.0
+
+- **Version-aware tray updates** — the tray shows the installed Ariadne version,
+  checks GitHub Releases every six hours, notifies once per new release, and
+  updates macOS/Linux only after explicit user confirmation. Windows opens the
+  release page until the native installer is available.
+- **Memory curation** — `memory_delete` removes one confirmed memory and
+  `memory_move` re-homes or re-tags one memory without re-embedding its text.
+- **Safer installation** — pinned Go/Qdrant versions, SHA256 verification,
+  atomic binary replacement, release-tagged updates, and a strict supply-chain
+  mode that refuses the automatic Ollama `curl | sh` bootstrap.
+- **Capture privacy** — session summaries stay on local Ollama by default;
+  remote summary endpoints require an explicit opt-in.
+- **More confidence and clearer ops** — focused tests for storage, imports,
+  hooks, curation, localization and updates, plus expanded Linux/Ollama docs.
+
 ## Why
 
 - **Stable** — Qdrant server, not an embedded HNSW that SIGSEGVs on compaction.
@@ -207,7 +223,10 @@ or pass `-summary-model` to the installer so it pulls that one.
 
 A tray/menu-bar monitor polls `ariadnectl status -json` every 5s and shows a
 green/orange/red/grey icon, per-service detail, and start/stop/restart/backup
-actions; it notifies when a service drops. The `ariadne-tray` UI is localized —
+actions; it notifies when a service drops. The menu and tooltip show the current
+Ariadne version. A background check queries GitHub Releases every six hours and
+offers a consent-gated update when a newer stable version exists; update output
+is written to `~/.ariadne/logs/update.log`. The `ariadne-tray` UI is localized —
 **7 languages** (English, Українська, Deutsch, Italiano, Español, Français,
 Polski) with a live **🌐 Language** switcher that shows the active one at a
 glance. The choice persists in `~/.ariadne/lang` and `ariadnectl` follows it, so

@@ -491,11 +491,13 @@ func buildBinaries(r *report) error {
 		"ariadne-hook": "hook", "ariadne-tray": "ariadne-tray",
 	} {
 		dest := filepath.Join(r.home, ".ariadne", "bin", bin)
-		_ = os.Remove(dest)                                                                       // avoid overwriting a running binary in place
-		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", dest, "./cmd/"+pkg) //nolint:gosec // fixed argv
+		next := dest + ".new"
+		_ = os.Remove(next)
+		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", next, "./cmd/"+pkg) //nolint:gosec // fixed argv
 		cmd.Dir = r.repoRoot
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
+			_ = os.Remove(next)
 			if bin == "ariadne-tray" {
 				// the tray needs a C toolchain on macOS (Cocoa); if that's absent
 				// the monitor is skipped but the pure-Go core stack is unaffected.
@@ -503,6 +505,10 @@ func buildBinaries(r *report) error {
 				continue
 			}
 			return fmt.Errorf("go build %s: %w", bin, err)
+		}
+		if err := os.Rename(next, dest); err != nil {
+			_ = os.Remove(next)
+			return fmt.Errorf("install %s: %w", bin, err)
 		}
 	}
 	return nil

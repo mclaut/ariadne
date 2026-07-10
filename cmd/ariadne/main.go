@@ -16,6 +16,7 @@ package main
 
 import (
 	"ariadne/internal/store"
+	"ariadne/internal/version"
 	"context"
 	"fmt"
 	"os"
@@ -50,7 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s := server.NewMCPServer("ariadne", "0.1.0",
+	s := server.NewMCPServer("ariadne", version.Current,
 		server.WithToolCapabilities(false))
 
 	s.AddTool(mcp.NewTool("memory_recall",

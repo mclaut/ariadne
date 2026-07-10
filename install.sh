@@ -10,12 +10,15 @@
 #   curl -fsSL .../install.sh | sh -s -- -summary-model qwen2.5:3b
 #   curl -fsSL .../install.sh | sh -s -- -dry-run
 #
+# Set ARIADNE_REF to install an exact release tag (used by the tray updater).
+# ARIADNE_BRANCH remains as a backwards-compatible alias.
+#
 # sudo (for apt packages + Ollama on Linux) prompts on the terminal, so the
 # curl | sh pipe is fine. Windows: use the PowerShell path (see README).
 set -eu
 
 REPO="mclaut/ariadne"
-BRANCH="${ARIADNE_BRANCH:-main}"
+REF="${ARIADNE_REF:-${ARIADNE_BRANCH:-main}}"
 SRC="${ARIADNE_SRC:-$HOME/.ariadne/src}"
 GOLOCAL="$HOME/.ariadne/go"
 GO_VERSION="${ARIADNE_GO_VERSION:-go1.26.2}"
@@ -90,9 +93,9 @@ else
 fi
 
 # 2. Source — GitHub branch tarball (no git dependency).
-say "Fetching Ariadne source ($BRANCH) -> $SRC"
+say "Fetching Ariadne source ($REF) -> $SRC"
 mkdir -p "$SRC"
-curl -fsSL "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz" |
+curl -fsSL "https://github.com/${REPO}/archive/${REF}.tar.gz" |
   tar -xz -C "$SRC" --strip-components=1
 
 # 3. Hand off to the Go installer (Ollama, Qdrant, models, services, tray + deps).

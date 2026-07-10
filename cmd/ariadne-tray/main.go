@@ -7,6 +7,7 @@ package main
 
 import (
 	"ariadne/internal/i18n"
+	"ariadne/internal/version"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -27,7 +28,12 @@ import (
 	"fyne.io/systray"
 )
 
-const pollEvery = 5 * time.Second
+const (
+	pollEvery = 5 * time.Second
+	osDarwin  = "darwin"
+	osLinux   = "linux"
+	osWindows = "windows"
+)
 
 func ctlPath() string {
 	home, _ := os.UserHomeDir()
@@ -67,13 +73,16 @@ var (
 	lang       i18n.Lang
 	lastIssues []string
 
-	rowHealth, rowQdrant, rowOllama, rowPoints, rowDisk            *systray.MenuItem
-	mStart, mStop, mRestart, mBackup, mExport, mData, mLogs, mLang *systray.MenuItem
-	mQuit                                                          *systray.MenuItem
-	langItems                                                      map[i18n.Lang]*systray.MenuItem
+	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints, rowDisk         *systray.MenuItem
+	mUpdate, mStart, mStop, mRestart, mBackup, mExport, mData, mLogs, mLang *systray.MenuItem
+	mQuit                                                                   *systray.MenuItem
+	langItems                                                               map[i18n.Lang]*systray.MenuItem
 )
 
 func main() {
+	if len(os.Args) == 4 && os.Args[1] == "--apply-update" {
+		os.Exit(applyUpdate(os.Args[2], os.Args[3]))
+	}
 	systray.Run(onReady, func() {})
 }
 
@@ -81,13 +90,15 @@ func onReady() {
 	lang = i18n.Current()
 	systray.SetIcon(dotIcon(gray))
 	systray.SetTitle("") // dot only — no text label
-	systray.SetTooltip("ariadne monitor")
+	systray.SetTooltip("Ariadne " + version.Tag)
 
+	rowVersion = infoRow("Ariadne " + version.Tag)
 	rowHealth = infoRow("…")
 	rowQdrant = infoRow("")
 	rowOllama = infoRow("")
 	rowPoints = infoRow("")
 	rowDisk = infoRow("")
+	mUpdate = systray.AddMenuItem("", "")
 	systray.AddSeparator()
 	mStart = systray.AddMenuItem("", "")
 	mStop = systray.AddMenuItem("", "")
@@ -118,6 +129,9 @@ func onReady() {
 	}
 	go poll()
 	go loop()
+	go reportUpdateResult()
+	go checkForUpdates(false)
+	go updateLoop()
 }
 
 func loop() {
@@ -133,6 +147,8 @@ func loop() {
 			ctl("stop", "")
 		case <-mRestart.ClickedCh:
 			ctl("restart", "")
+		case <-mUpdate.ClickedCh:
+			go updateClicked()
 		case <-mBackup.ClickedCh:
 			ctl("backup", i18n.T(lang, "notify.backup"))
 		case <-mExport.ClickedCh:
@@ -171,6 +187,7 @@ func relabel() {
 	mLogs.SetTitle(i18n.T(lang, "menu.logs"))
 	mLang.SetTitle("🌐 " + i18n.T(lang, "menu.language") + ": " + i18n.Name[lang])
 	mQuit.SetTitle(i18n.T(lang, "menu.quit"))
+	refreshUpdateMenuLocked()
 	for l, it := range langItems {
 		if l == lang {
 			it.Check()
@@ -203,7 +220,8 @@ func poll() {
 		icon, word = dotIcon(green), i18n.T(lang, "health.ok")
 	}
 	systray.SetIcon(icon)
-	systray.SetTooltip("ariadne — " + word)
+	systray.SetTooltip("Ariadne " + version.Tag + " — " + word)
+	rowVersion.SetTitle("Ariadne " + version.Tag)
 	rowHealth.SetTitle("ariadne — " + word)
 	rowQdrant.SetTitle(fmt.Sprintf("Qdrant: %s · %dMB", upWord(s.Qdrant.Up), s.Qdrant.RSSMB))
 	rowOllama.SetTitle(fmt.Sprintf("Ollama: %s · %dMB", upVer(s.Ollama), s.Ollama.RSSMB))
@@ -249,8 +267,11 @@ func ctl(action, banner string) {
 
 func openPath(p string) {
 	opener := "xdg-open"
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case osDarwin:
 		opener = "open"
+	case osWindows:
+		opener = "explorer"
 	}
 	_ = exec.CommandContext(context.Background(), opener, p).Start() //nolint:gosec // fixed opener, our own path
 }

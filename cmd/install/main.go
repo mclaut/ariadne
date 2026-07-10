@@ -14,6 +14,7 @@
 package main
 
 import (
+	"ariadne/internal/version"
 	"bufio"
 	"flag"
 	"fmt"
@@ -66,7 +67,7 @@ func parseFlags() opts {
 
 func main() {
 	o := parseFlags()
-	fmt.Println("== Ariadne installer ==")
+	fmt.Printf("== Ariadne installer %s ==\n", version.Tag)
 
 	ensureDeps(o) // Linux: auto-install tray libs + Ollama BEFORE preflight sees them
 
