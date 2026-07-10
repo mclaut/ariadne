@@ -25,6 +25,7 @@ jobs:
         run: |
           jq empty server.json packaging/mcpb/manifest.json
           test "$(jq -r '.description | length' server.json)" -le 100
+          jq -e 'all(.packages[]; .registryType != "mcpb" or (has("registryBaseUrl") | not))' server.json
       - run: go test ./...
       - run: go build ./...
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
