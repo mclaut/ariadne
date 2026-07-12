@@ -21,6 +21,9 @@ Qdrant data, backups, logs); source lives in the repo.
 - Queries are multilingual — query in ANY language, memories in any language
   will match (bge-m3 is cross-lingual; scores ≥0.6 are usually relevant).
 - Prefer 2–3 focused recalls over one vague one. `limit` default 5 is fine.
+- The raw session archive lives in a separate collection — pass
+  `collection: "sessions"` to dig into old transcripts; normal recall never
+  sees them.
 
 ## Save — what and what NOT
 
@@ -55,11 +58,17 @@ always exactly one point.
 
 ```bash
 ~/.ariadne/bin/ariadnectl status        # health: Qdrant, Ollama, points, disk
+~/.ariadne/bin/ariadnectl metrics       # estimated tokens saved by recalls (net avoided)
 ~/.ariadne/bin/ariadnectl start|stop|restart
 ~/.ariadne/bin/ariadnectl backup        # Qdrant snapshot → ~/.ariadne/backups (keeps 10)
 ~/.ariadne/bin/ariadnectl restore <f>   # DESTRUCTIVE: replace collection from snapshot
 ~/.ariadne/bin/ariadnectl export [f]    # portable JSONL (no vectors, re-embeddable)
+~/.ariadne/bin/ariadnectl consolidate --before 24h  # merge old diaries → durable memories
 ```
+
+`metrics` only credits savings for diaries that carry source/memory token
+metadata (captures made after the metrics feature) — legacy memories count as
+delivery cost only, so a fresh install can show a negative number at first.
 
 Backup vs export: **backup** = fast 1:1 snapshot tied to the embedding model;
 **export** = portable text that any future model can re-embed. Before risky
@@ -70,9 +79,12 @@ operations (restore, migration, bulk import) run a backup first.
 - **SessionStart auto-recall**: project memories may already be injected at
   session start (marked "🧵 Ariadne auto-recall") — treat them as background
   context and recall deeper with the MCP tool when needed.
-- **SessionEnd auto-capture**: a local model summarizes each session into ONE
-  `diary` memory. Don't duplicate it by saving your own session summary;
-  DO still save important decisions/gotchas explicitly (better wording,
+- **SessionEnd + PreCompact auto-capture**: a local model summarizes the session
+  into ONE `diary` memory — on exit, and also right before Claude Code compacts
+  the context (so long sessions are remembered mid-flight, at the moment detail
+  would otherwise be lost). The daily `consolidate` run merges accumulated
+  diaries into durable memories. Don't duplicate this by saving your own session
+  summary; DO still save important decisions/gotchas explicitly (better wording,
   right room). Capture log: `~/.ariadne/logs/capture.log`;
   disable with `ARIADNE_CAPTURE=0`. Capture summaries use
   `ARIADNE_SUMMARY_OLLAMA` (default: local Ollama); remote summary endpoints are
