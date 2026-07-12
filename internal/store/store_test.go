@@ -4,9 +4,11 @@ import "testing"
 
 func TestBuildPayloadSkipsEmptyAndParsesTS(t *testing.T) {
 	payload := buildPayload("hello", map[string]string{
-		"wing": "ariadne",
-		"room": "",
-		"ts":   "123",
+		"wing":          "ariadne",
+		"room":          "",
+		"ts":            "123",
+		"source_tokens": "456",
+		"memory_tokens": "78",
 	})
 	if payload["text"] != "hello" {
 		t.Fatalf("text = %v", payload["text"])
@@ -19,6 +21,9 @@ func TestBuildPayloadSkipsEmptyAndParsesTS(t *testing.T) {
 	}
 	if payload["ts"] != int64(123) {
 		t.Fatalf("ts = %#v", payload["ts"])
+	}
+	if payload["source_tokens"] != int64(456) || payload["memory_tokens"] != int64(78) {
+		t.Fatalf("token metadata = %#v/%#v", payload["source_tokens"], payload["memory_tokens"])
 	}
 }
 

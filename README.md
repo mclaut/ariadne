@@ -19,6 +19,15 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
+## Unreleased
+
+- **Local token-efficiency metrics** — Ariadne now estimates represented,
+  delivered, and net avoided context for automatic and MCP recalls. Totals are
+  available through `ariadnectl metrics`, its JSON form, and the tray menu.
+- **Content-free accounting** — only numeric counters and opaque event hashes
+  are stored locally. Repeated hook delivery counts as overhead without claiming
+  the same represented session context twice.
+
 ## What's New in v0.3.1
 
 - **Clean Windows prerequisite repair** — the installer now detects the
@@ -72,7 +81,7 @@ lock-starvation class simply doesn't exist.
 | `cmd/import` | Backfill from a chromadb sqlite, markdown memory files or JSONL (batched embeds). |
 | `cmd/hook` | Claude Code session hooks (`ariadne-hook`): SessionStart auto-recall, SessionEnd auto-capture. |
 | `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. Windows uses `install.ps1`. |
-| `cmd/ariadnectl` | Control + health core (`status -json`, start/stop, backup/export). |
+| `cmd/ariadnectl` | Control + health core (`status -json`, `metrics -json`, start/stop, backup/export). |
 | `internal/store` | Storage core: embed (Ollama), BM25 sparse, Qdrant hybrid. |
 | `cmd/ariadne-tray` | Cross-platform tray monitor (macOS/Linux/Windows) — pure-Go, localized, over the `ariadnectl` core. |
 | `skills/ariadne` | Claude Code skill: recall/save discipline + `doctor.sh`/`recall.sh`. |
@@ -300,6 +309,27 @@ Polski) with a live **🌐 Language** switcher that shows the active one at a
 glance. The choice persists in `~/.ariadne/lang` and `ariadnectl` follows it, so
 the whole interface stays in one language. Adding a language is one block in
 `internal/i18n`.
+
+### Estimated token savings
+
+Ariadne locally tracks how much context recall delivers and how much original
+session context each new curated diary memory represents. The tray shows the
+all-time estimated net token savings, and the full counters are available as:
+
+```bash
+ariadnectl metrics
+ariadnectl metrics -json
+```
+
+The estimate is `represented source context - delivered recall context`, using
+a deterministic multilingual UTF-8 byte estimate because the exact tokenizer
+depends on the MCP client and model. The `~` prefix is intentional: this is a
+transparent context-reuse estimate, not a claim about provider billing. Legacy
+memories without source-size metadata never receive invented savings, though
+their delivered recall tokens are still counted. Metrics contain only numeric
+counters and opaque event hashes, never memory or transcript text, and stay in
+`~/.ariadne/metrics.db` with user-only permissions. Set `ARIADNE_METRICS=0` to
+disable new records.
 
 - **`ariadne-tray`** (pure-Go, `fyne.io/systray`) is the monitor on every
   platform: the installer builds it into `~/.ariadne/bin` and registers autostart

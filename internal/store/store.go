@@ -31,11 +31,13 @@ type Store struct {
 
 // Result is one recall hit.
 type Result struct {
-	ID    uint64  `json:"id"`
-	Score float32 `json:"score"`
-	Text  string  `json:"text"`
-	Wing  string  `json:"wing,omitempty"`
-	Room  string  `json:"room,omitempty"`
+	ID           uint64  `json:"id"`
+	Score        float32 `json:"score"`
+	Text         string  `json:"text"`
+	Wing         string  `json:"wing,omitempty"`
+	Room         string  `json:"room,omitempty"`
+	SourceTokens int64   `json:"source_tokens,omitempty"`
+	MemoryTokens int64   `json:"memory_tokens,omitempty"`
 }
 
 // New connects to Qdrant (gRPC) and prepares the Ollama client.
@@ -148,16 +150,15 @@ func (s *Store) SaveBatch(ctx context.Context, items []SaveItem) error {
 	return err
 }
 
-// buildPayload assembles a point payload: text plus non-empty metadata. "ts" is
-// stored as a number so its range index (see EnsureCollection) can order/filter
-// by time; every other key stays a string.
+// buildPayload assembles a point payload: text plus non-empty metadata. Numeric
+// fields stay numeric in Qdrant; every other key stays a string.
 func buildPayload(text string, meta map[string]string) map[string]any {
 	payload := map[string]any{"text": text}
 	for k, v := range meta {
 		if v == "" {
 			continue
 		}
-		if k == "ts" {
+		if k == "ts" || k == "source_tokens" || k == "memory_tokens" {
 			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 				payload[k] = n
 				continue
@@ -206,11 +207,13 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, colle
 	for _, p := range res {
 		pl := p.GetPayload()
 		out = append(out, Result{
-			ID:    p.GetId().GetNum(),
-			Score: p.GetScore(),
-			Text:  pl["text"].GetStringValue(),
-			Wing:  pl["wing"].GetStringValue(),
-			Room:  pl["room"].GetStringValue(),
+			ID:           p.GetId().GetNum(),
+			Score:        p.GetScore(),
+			Text:         pl["text"].GetStringValue(),
+			Wing:         pl["wing"].GetStringValue(),
+			Room:         pl["room"].GetStringValue(),
+			SourceTokens: pl["source_tokens"].GetIntegerValue(),
+			MemoryTokens: pl["memory_tokens"].GetIntegerValue(),
 		})
 	}
 	return out, nil

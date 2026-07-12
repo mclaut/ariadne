@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ariadne/internal/metrics"
 	"bufio"
 	"bytes"
 	"context"
@@ -83,7 +84,8 @@ func captureRun(args []string) {
 			short(*session), env("ARIADNE_SUMMARY_OLLAMA", env("ARIADNE_OLLAMA", "http://localhost:11434")))
 		return
 	}
-	summary := summarize(condense(turns), summaryURL)
+	condensed := condense(turns)
+	summary := summarize(condensed, summaryURL)
 	if summary == "" {
 		log.Printf("FAIL %s: empty summary (model down or not pulled? ollama pull %s)",
 			short(*session), env("ARIADNE_SUMMARY_MODEL", "qwen2.5:7b"))
@@ -118,7 +120,12 @@ func captureRun(args []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	meta := map[string]string{"wing": project, "room": "diary"}
+	meta := map[string]string{
+		"wing":          project,
+		"room":          "diary",
+		"source_tokens": strconv.FormatInt(metrics.EstimateTokens(condensed), 10),
+		"memory_tokens": strconv.FormatInt(metrics.EstimateTokens(text), 10),
+	}
 	if t := first; !t.IsZero() {
 		meta["ts"] = strconv.FormatInt(t.Unix(), 10) // session start, unix seconds
 	} else if !last.IsZero() {

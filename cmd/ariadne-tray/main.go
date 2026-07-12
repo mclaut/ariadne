@@ -7,6 +7,7 @@ package main
 
 import (
 	"ariadne/internal/i18n"
+	"ariadne/internal/metrics"
 	"ariadne/internal/version"
 	"bytes"
 	"context"
@@ -58,14 +59,15 @@ type coll struct {
 }
 
 type status struct {
-	reachable  bool
-	OK         bool     `json:"ok"`
-	Qdrant     svc      `json:"qdrant"`
-	Ollama     svc      `json:"ollama"`
-	Collection coll     `json:"collection"`
-	DataMB     int64    `json:"data_mb"`
-	FreeGB     int64    `json:"free_gb"`
-	Issues     []string `json:"issues"`
+	reachable    bool
+	OK           bool            `json:"ok"`
+	Qdrant       svc             `json:"qdrant"`
+	Ollama       svc             `json:"ollama"`
+	Collection   coll            `json:"collection"`
+	TokenMetrics metrics.Summary `json:"token_metrics"`
+	DataMB       int64           `json:"data_mb"`
+	FreeGB       int64           `json:"free_gb"`
+	Issues       []string        `json:"issues"`
 }
 
 var (
@@ -73,10 +75,10 @@ var (
 	lang       i18n.Lang
 	lastIssues []string
 
-	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints, rowDisk         *systray.MenuItem
-	mUpdate, mStart, mStop, mRestart, mBackup, mExport, mData, mLogs, mLang *systray.MenuItem
-	mQuit                                                                   *systray.MenuItem
-	langItems                                                               map[i18n.Lang]*systray.MenuItem
+	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints, rowTokens, rowDisk *systray.MenuItem
+	mUpdate, mStart, mStop, mRestart, mBackup, mExport, mData, mLogs, mLang    *systray.MenuItem
+	mQuit                                                                      *systray.MenuItem
+	langItems                                                                  map[i18n.Lang]*systray.MenuItem
 )
 
 func main() {
@@ -97,6 +99,7 @@ func onReady() {
 	rowQdrant = infoRow("")
 	rowOllama = infoRow("")
 	rowPoints = infoRow("")
+	rowTokens = infoRow("")
 	rowDisk = infoRow("")
 	mUpdate = systray.AddMenuItem("", "")
 	systray.AddSeparator()
@@ -226,6 +229,8 @@ func poll() {
 	rowQdrant.SetTitle(fmt.Sprintf("Qdrant: %s · %dMB", upWord(s.Qdrant.Up), s.Qdrant.RSSMB))
 	rowOllama.SetTitle(fmt.Sprintf("Ollama: %s · %dMB", upVer(s.Ollama), s.Ollama.RSSMB))
 	rowPoints.SetTitle(fmt.Sprintf("%s: %s (%s)", i18n.T(lang, "row.records"), grouped(s.Collection.Points), s.Collection.Status))
+	netTokens := s.TokenMetrics.AllTime.NetAvoidedTokens
+	rowTokens.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.context_saved"), grouped(netTokens)))
 	rowDisk.SetTitle(fmt.Sprintf("%s: %dMB · %s %dGB", i18n.T(lang, "row.data"), s.DataMB, i18n.T(lang, "row.free"), s.FreeGB))
 
 	// notify only when a NEW issue appears (or a service just dropped)

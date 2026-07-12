@@ -32,12 +32,12 @@ func TestCondenseKeepsRoleTags(t *testing.T) {
 
 func TestIsLocalEndpoint(t *testing.T) {
 	cases := map[string]bool{
-		"http://localhost:11434": true,
-		"http://127.0.0.1:11434": true,
-		"http://[::1]:11434":     true,
-		"http://10.0.0.5:11434":  false,
-		"https://ollama.lan":     false,
-		"not a url":              false,
+		"http://localhost:11434":      true,
+		"http://127.0.0.1:11434":      true,
+		"http://[::1]:11434":          true,
+		"http://ollama.example:11434": false,
+		"https://ollama.lan":          false,
+		"not a url":                   false,
 	}
 	for raw, want := range cases {
 		if got := isLocalEndpoint(raw); got != want {
@@ -47,13 +47,13 @@ func TestIsLocalEndpoint(t *testing.T) {
 }
 
 func TestSummaryOllamaURLRequiresOptInForRemote(t *testing.T) {
-	t.Setenv("ARIADNE_SUMMARY_OLLAMA", "http://10.0.0.5:11434")
+	t.Setenv("ARIADNE_SUMMARY_OLLAMA", "http://ollama.example:11434")
 	t.Setenv("ARIADNE_CAPTURE_REMOTE", "0")
 	if _, ok := summaryOllamaURL(); ok {
 		t.Fatal("remote summary endpoint should be blocked by default")
 	}
 	t.Setenv("ARIADNE_CAPTURE_REMOTE", "1")
-	if got, ok := summaryOllamaURL(); !ok || got != "http://10.0.0.5:11434" {
+	if got, ok := summaryOllamaURL(); !ok || got != "http://ollama.example:11434" {
 		t.Fatalf("summaryOllamaURL = %q/%v", got, ok)
 	}
 }

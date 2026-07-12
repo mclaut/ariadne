@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ariadne/internal/metrics"
 	"ariadne/internal/store"
 	"context"
 	"encoding/json"
@@ -66,6 +67,8 @@ func sessionStart() {
 	var b strings.Builder
 	fmt.Fprintf(&b, "🧵 Ariadne auto-recall — памʼять проекту «%s»:\n", wing)
 	total := 0
+	represented := int64(0)
+	selected := int64(0)
 	for _, h := range hits {
 		t := oneLine(store.SanitizeUTF8(h.Text), 260)
 		if total+len(t) > 1400 {
@@ -73,8 +76,25 @@ func sessionStart() {
 		}
 		fmt.Fprintf(&b, "• [%.2f%s] %s\n", h.Score, room(h.Room), t)
 		total += len(t)
+		selected++
+		represented += metrics.RepresentedShare(h.SourceTokens, h.MemoryTokens, metrics.EstimateTokens(t))
 	}
 	b.WriteString("(глибше: тул mcp__ariadne__memory_recall, параметр wing)")
+
+	eventID := metrics.UniqueEventID()
+	if in.SessionID != "" {
+		eventID = metrics.SessionEventID("auto", in.SessionID)
+	}
+	metricsCtx, metricsCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	_ = metrics.RecordRecall(metricsCtx, metrics.Event{
+		ID:                metrics.UniqueEventID(),
+		RepresentedID:     eventID,
+		Source:            "auto",
+		DeliveredTokens:   metrics.EstimateTokens(b.String()),
+		RepresentedTokens: represented,
+		Memories:          selected,
+	})
+	metricsCancel()
 
 	out := map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName":     "SessionStart",

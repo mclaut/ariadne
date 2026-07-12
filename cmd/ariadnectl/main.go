@@ -3,12 +3,14 @@
 // logic lives here in Go.
 //
 //	status [-json]   health of Qdrant + Ollama + the collection, and any issues.
+//	metrics [-json]  local estimates of context delivered and reused.
 //	start | stop | restart   manage the native services (Qdrant LaunchAgent,
 //	                         Ollama brew service).
 package main
 
 import (
 	"ariadne/internal/i18n"
+	"ariadne/internal/metrics"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -51,14 +53,15 @@ type coll struct {
 }
 
 type status struct {
-	TS         string   `json:"ts"`
-	OK         bool     `json:"ok"`
-	Qdrant     svc      `json:"qdrant"`
-	Ollama     svc      `json:"ollama"`
-	Collection coll     `json:"collection"`
-	DataMB     int64    `json:"data_mb"`
-	FreeGB     int64    `json:"free_gb"`
-	Issues     []string `json:"issues"`
+	TS           string          `json:"ts"`
+	OK           bool            `json:"ok"`
+	Qdrant       svc             `json:"qdrant"`
+	Ollama       svc             `json:"ollama"`
+	Collection   coll            `json:"collection"`
+	TokenMetrics metrics.Summary `json:"token_metrics"`
+	DataMB       int64           `json:"data_mb"`
+	FreeGB       int64           `json:"free_gb"`
+	Issues       []string        `json:"issues"`
 }
 
 func main() {
@@ -69,6 +72,8 @@ func main() {
 	switch cmd {
 	case "status":
 		printStatus(hasFlag("-json"))
+	case "metrics":
+		printMetrics(hasFlag("-json"))
 	case "start":
 		control("start")
 	case "stop":
@@ -84,7 +89,8 @@ func main() {
 	case "export":
 		os.Exit(exportCmd(arg(2)))
 	default:
-		fmt.Fprintln(os.Stderr, "usage: ariadnectl {status [-json] | start | stop | restart | backup | restore <file> | export [file]}")
+		fmt.Fprintln(os.Stderr, "usage: ariadnectl {status [-json] | metrics [-json] | "+
+			"start | stop | restart | backup | restore <file> | export [file]}")
 		os.Exit(2)
 	}
 }
@@ -134,6 +140,9 @@ func gather() status {
 	home, _ := os.UserHomeDir()
 	s.DataMB = dirSizeMB(filepath.Join(home, qdrantData))
 	s.FreeGB = freeGB(home)
+	metricsCtx, metricsCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	s.TokenMetrics, _ = metrics.Read(metricsCtx)
+	metricsCancel()
 
 	// issues (localized — the tray surfaces these verbatim)
 	lang := i18n.Current()
@@ -153,6 +162,29 @@ func gather() status {
 	}
 	s.OK = len(s.Issues) == 0
 	return s
+}
+
+func printMetrics(asJSON bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	s, err := metrics.Read(ctx)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "metrics:", err)
+		return
+	}
+	if asJSON {
+		b, _ := json.Marshal(s)
+		fmt.Println(string(b))
+		return
+	}
+	fmt.Printf("Estimated token reuse (%s)\n", s.Estimator)
+	printMetricWindow("All time", s.AllTime)
+	printMetricWindow("Last 30 days", s.Last30Days)
+}
+
+func printMetricWindow(label string, t metrics.Totals) {
+	fmt.Printf("  %-12s ~%d net avoided (%d represented - %d delivered), %d recalls / %d memories\n",
+		label+":", t.NetAvoidedTokens, t.RepresentedTokens, t.DeliveredTokens, t.Recalls, t.Memories)
 }
 
 func printStatus(asJSON bool) {

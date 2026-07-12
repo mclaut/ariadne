@@ -15,6 +15,7 @@
 package main
 
 import (
+	"ariadne/internal/metrics"
 	"ariadne/internal/store"
 	"ariadne/internal/version"
 	"context"
@@ -22,6 +23,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -111,14 +113,26 @@ func recallHandler(st *store.Store) server.ToolHandlerFunc {
 			return mcp.NewToolResultText("(no memories found)"), nil
 		}
 		var b strings.Builder
+		represented := int64(0)
 		for i, h := range hits {
 			loc := h.Wing
 			if h.Room != "" {
 				loc += "/" + h.Room
 			}
 			fmt.Fprintf(&b, "[%d] id=%d score=%.3f %s\n%s\n\n", i+1, h.ID, h.Score, loc, store.SanitizeUTF8(h.Text))
+			represented += metrics.RepresentedShare(h.SourceTokens, h.MemoryTokens, metrics.EstimateTokens(h.Text))
 		}
-		return mcp.NewToolResultText(strings.TrimSpace(b.String())), nil
+		text := strings.TrimSpace(b.String())
+		metricsCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		_ = metrics.RecordRecall(metricsCtx, metrics.Event{
+			ID:                metrics.UniqueEventID(),
+			Source:            "mcp",
+			DeliveredTokens:   metrics.EstimateTokens(text),
+			RepresentedTokens: represented,
+			Memories:          int64(len(hits)),
+		})
+		cancel()
+		return mcp.NewToolResultText(text), nil
 	}
 }
 
