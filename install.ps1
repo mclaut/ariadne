@@ -181,7 +181,7 @@ function Test-SystemRequirements {
     $info = Get-HardwareInfo
     if (-not $info) { return }
     Write-Host "`nSystem checks"
-    Write-Host "  Machine : $($info.MachineType) — $($info.Manufacturer) $($info.Model)"
+    Write-Host "  Machine : $($info.MachineType) - $($info.Manufacturer) $($info.Model)"
     Write-Host "  Windows : $($info.Windows) $($info.WindowsVersion)"
     Write-Host "  CPU     : $($info.CPU) ($($info.Cores) cores / $($info.LogicalCPUs) threads)"
     Write-Host "  RAM     : $($info.RAMGB) GB"
