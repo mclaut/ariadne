@@ -4,7 +4,6 @@ import {
   Apple,
   ArrowRight,
   ArrowUpRight,
-  Boxes,
   Check,
   CircleDot,
   Copy,
@@ -55,7 +54,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.3.1",
+  softwareVersion: "0.4.0",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -87,7 +86,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.3</a>
+          <a href="#new">New in 0.4</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -130,7 +129,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.3.1 hardens native Windows setup
+            v0.4.0 measures context reuse locally
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -168,45 +167,45 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.3.1</span>
-            <h2>Clean Windows installs now self-repair.</h2>
+            <span className="eyebrow">New in v0.4.0</span>
+            <h2>See what memory gives back.</h2>
             <p>
-              Ariadne now installs Qdrant&apos;s verified Microsoft runtime when
-              needed, reports the actual startup error, and tests the native
-              database on Windows before every release.
+              Ariadne now estimates how much original session context recall
+              represents, subtracts what it delivers, and keeps the resulting
+              counters entirely on your machine.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
-              <Monitor aria-hidden="true" />
-              <h3>Windows installer</h3>
+              <CircleDot aria-hidden="true" />
+              <h3>Measured recall</h3>
               <p>
-                Native Qdrant, its Microsoft VC++ prerequisite, signed Ollama,
-                startup tasks, Codex, Claude Code, skills, and hooks.
+                Automatic and MCP recalls count represented, delivered, and net
+                avoided context with an explicit estimate marker.
               </p>
             </article>
             <article className="new-item accent-blue">
-              <CircleDot aria-hidden="true" />
-              <h3>Consent-gated updates</h3>
+              <LockKeyhole aria-hidden="true" />
+              <h3>Content-free metrics</h3>
               <p>
-                The green tray dot shows the installed version, announces stable
-                releases, and only installs after the user approves.
+                Only numeric counters and opaque hashes are stored. Memory and
+                transcript text never enters the metrics database.
               </p>
             </article>
             <article className="new-item accent-coral">
-              <ShieldCheck aria-hidden="true" />
-              <h3>Verifiable releases</h3>
+              <Terminal aria-hidden="true" />
+              <h3>CLI and JSON</h3>
               <p>
-                Every platform archive ships with SHA-256 checksums, a CycloneDX
-                SBOM, and a keyless Sigstore bundle.
+                Inspect all-time and 30-day totals with ariadnectl metrics, or
+                consume the same stable fields as JSON.
               </p>
             </article>
             <article className="new-item accent-black">
-              <Boxes aria-hidden="true" />
-              <h3>MCP Registry package</h3>
+              <Monitor aria-hidden="true" />
+              <h3>Visible in the tray</h3>
               <p>
-                A cross-platform MCPB is built from the same release binaries and
-                published through GitHub OIDC.
+                The green tray menu shows the current estimate in all seven UI
+                languages on Windows, macOS, and Linux.
               </p>
             </article>
           </div>
@@ -342,7 +341,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.3.1"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.4.0"
               target="_blank"
               rel="noreferrer"
             >

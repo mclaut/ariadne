@@ -19,7 +19,7 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## Unreleased
+## What's New in v0.4.0
 
 - **Local token-efficiency metrics** — Ariadne now estimates represented,
   delivered, and net avoided context for automatic and MCP recalls. Totals are
@@ -366,7 +366,8 @@ hand after large note edits.
 
 ## Status
 
-v0.3.0 — working. Hybrid multilingual recall, native desktop installation,
+v0.4.0 — working. Hybrid multilingual recall, local token-efficiency metrics,
+native desktop installation,
 session hooks (auto-recall + curated auto-capture), and time-ordered diary are
 all live; several thousand memories are in daily use. Bulk import batches
 embeddings for a large backfill speedup. A

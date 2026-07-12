@@ -13,6 +13,7 @@
 - Retrieval: hybrid dense plus BM25 sparse search, fused with reciprocal rank fusion
 - MCP tools: memory_save, memory_recall, memory_delete, memory_move
 - Privacy: local endpoints by default; Qdrant binds to 127.0.0.1
+- Token efficiency: local content-free estimates of represented, delivered, and net avoided recall context
 
 ## Install
 
@@ -20,4 +21,4 @@ Windows uses install.ps1. Linux and macOS use install.sh. Both are available in 
 
 ## Current release
 
-v0.3.1 hardens native Windows setup by bootstrapping Qdrant's verified Microsoft VC++ prerequisite, surfacing startup diagnostics, and smoke-testing the pinned Qdrant binary on Windows. v0.3.0 added native Windows installation and updates, five release targets, checksums, a CycloneDX SBOM, Sigstore verification, and an MCP Registry package.
+v0.4.0 adds local token-efficiency metrics for automatic and MCP recall, all-time and 30-day CLI/JSON totals, and a tray counter in seven languages. Metrics store numeric counters and opaque hashes only, never memory or transcript text. The estimate measures context reuse rather than provider billing. v0.3.1 hardened native Windows setup and diagnostics.
