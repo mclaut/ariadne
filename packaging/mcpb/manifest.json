@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "ariadne",
   "display_name": "Ariadne",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Local-first multilingual memory for Codex, Claude Code, and MCP clients.",
   "long_description": "Ariadne provides durable local memory through hybrid dense and sparse retrieval. It uses a local Qdrant server and Ollama bge-m3 embeddings, supports 100+ languages, avoids embedded database locking under concurrent sessions, and reports local content-free estimates of context reused by recall. Install the native runtime first so Qdrant and Ollama are available, then connect this MCP server.",
   "author": {

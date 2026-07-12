@@ -19,6 +19,19 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
+## What's New in v0.5.0
+
+- **Explicit Windows client integration** — the installer detects Claude Code
+  and Codex CLI, then asks which one to configure. It never creates settings for
+  an absent client and non-interactive installs require an explicit choice.
+- **Core-only and configure-later modes** — install the local Ariadne stack with
+  `-CoreOnly`, then connect Claude or Codex later with `-ConfigureClients`.
+  Consent-gated updates preserve existing client configurations unchanged.
+- **Physical and VM preflight** — PowerShell now reports Windows, CPU, RAM, disk,
+  and machine type; enforces the default models' minimum resources; gives
+  Proxmox/KVM CPU guidance; and directly executes `qdrant.exe --version` before
+  registering the service.
+
 ## What's New in v0.4.0
 
 - **Local token-efficiency metrics** — Ariadne now estimates represented,
@@ -106,7 +119,24 @@ it against `SHA256SUMS`. If Ollama is missing, it downloads the official
 installs it without elevation. It installs the pinned native Qdrant x64 asset
 after verifying its SHA-256 digest, registers Qdrant and `ariadne-tray` as
 current-user scheduled tasks, pulls `bge-m3` and the summary model, then
-registers Ariadne with Codex and Claude Code when their CLIs/configs are found.
+offers to register Ariadne with the detected Codex and/or Claude Code CLI.
+Client configuration is always explicit: the installer never creates settings
+for software that is not installed.
+
+Choose an integration directly for unattended setup, install only the core, or
+configure clients later:
+
+```powershell
+.\install.ps1 -Yes -Integration Claude
+.\install.ps1 -Yes -Integration Codex
+.\install.ps1 -Yes -Integration Both
+.\install.ps1 -Yes -CoreOnly
+.\install.ps1 -ConfigureClients -Integration Codex
+```
+
+`-Integration None` and `-CoreOnly` leave all client configuration untouched.
+Tray-driven updates also preserve existing client settings; they do not enroll
+a newly discovered client during an update.
 
 The official Qdrant Windows binary requires Microsoft Visual C++ Runtime 14.44
 or newer. Ariadne checks it before starting Qdrant. If it is absent or outdated,
@@ -118,7 +148,11 @@ If Qdrant still cannot start, the installer prints diagnostics and the tail of
 
 Qdrant is always bound to `127.0.0.1`. Ollama remains managed by its native
 Windows app and serves `http://localhost:11434`. Requirements: Windows 10 22H2
-or newer, x64, at least 6 GiB RAM and 5 GiB free disk (12 GiB RAM recommended).
+or newer, x64, Windows PowerShell 5.1+, at least 8 GiB RAM and 15 GiB free disk
+for the default local models (16 GiB RAM recommended, 4+ CPU cores preferred).
+Virtual machines need the same guest resources; for Proxmox/KVM expose a modern
+CPU type such as `host`. The installer prints the detected hardware before any
+download and validates that `qdrant.exe` can execute on the machine.
 Use `-SkipOllama` or `-SkipModels` when those dependencies are provisioned
 separately.
 
@@ -366,7 +400,8 @@ hand after large note edits.
 
 ## Status
 
-v0.4.0 — working. Hybrid multilingual recall, local token-efficiency metrics,
+v0.5.0 — working. Hybrid multilingual recall, explicit Windows client setup,
+local token-efficiency metrics,
 native desktop installation,
 session hooks (auto-recall + curated auto-capture), and time-ordered diary are
 all live; several thousand memories are in daily use. Bulk import batches

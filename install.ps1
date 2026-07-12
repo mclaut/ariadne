@@ -4,6 +4,10 @@ param(
     [string]$Version = "latest",
     [switch]$Yes,
     [switch]$Update,
+    [ValidateSet("Auto", "Claude", "Codex", "Both", "None")]
+    [string]$Integration = "Auto",
+    [switch]$ConfigureClients,
+    [switch]$CoreOnly,
     [switch]$SkipOllama,
     [switch]$SkipModels,
     [string]$EmbeddingModel = "bge-m3",
@@ -28,6 +32,7 @@ $QdrantSHA256 = "b2b262cba6f78cf4fa794ae78d73a8f70a221c93c76c75ac8fd6fe95d809b14
 $VCRuntimeURL = "https://aka.ms/vc14/vc_redist.x64.exe"
 $VCRuntimeMinimum = [version]"14.44.0.0"
 $UserAgent = "ariadne-windows-installer"
+$IntegrationWasSpecified = $PSBoundParameters.ContainsKey("Integration")
 
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -37,6 +42,161 @@ function Confirm-Install([string]$Message) {
     if ($Yes) { return $true }
     $answer = Read-Host "$Message [y/N]"
     return $answer -match "^[Yy]$"
+}
+
+function Find-ClientCommand([string]$Name, [string[]]$Candidates) {
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    foreach ($path in $Candidates) {
+        if ($path -and (Test-Path $path)) { return $path }
+    }
+    return $null
+}
+
+function Find-Codex {
+    return Find-ClientCommand "codex" @(
+        (Join-Path $env:APPDATA "npm\codex.cmd"),
+        (Join-Path $env:APPDATA "npm\codex.ps1"),
+        (Join-Path $env:USERPROFILE ".local\bin\codex.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\codex\codex.exe")
+    )
+}
+
+function Find-Claude {
+    return Find-ClientCommand "claude" @(
+        (Join-Path $env:APPDATA "npm\claude.cmd"),
+        (Join-Path $env:APPDATA "npm\claude.ps1"),
+        (Join-Path $env:USERPROFILE ".local\bin\claude.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Claude\claude.exe")
+    )
+}
+
+function Resolve-Integration([string]$CodexPath, [string]$ClaudePath) {
+    if ($CoreOnly -and $script:IntegrationWasSpecified -and $Integration -ne "None") {
+        throw "-CoreOnly cannot be combined with -Integration $Integration."
+    }
+    if ($Update -and -not $ConfigureClients -and -not $CoreOnly -and
+        -not $script:IntegrationWasSpecified) {
+        return "Preserve"
+    }
+    if ($CoreOnly) { return "None" }
+
+    $selection = $Integration
+    if ($selection -eq "Auto") {
+        if ($ConfigureClients -and -not $ClaudePath -and -not $CodexPath) {
+            throw "No supported AI client was detected. Install Claude Code or Codex CLI before -ConfigureClients."
+        }
+        if ($Yes) {
+            throw "Non-interactive setup requires -Integration Claude, Codex, Both, or None (or -CoreOnly)."
+        }
+        Write-Host "`nAI clients detected:"
+        Write-Host "  Claude Code: $(if ($ClaudePath) { 'Yes' } else { 'No' })"
+        Write-Host "  Codex CLI  : $(if ($CodexPath) { 'Yes' } else { 'No' })"
+        if (-not $ClaudePath -and -not $CodexPath) {
+            if (Confirm-Install "No supported AI client was detected. Install Ariadne core only?") {
+                return "None"
+            }
+            throw "Installation cancelled. Install Claude Code or Codex CLI, then rerun."
+        }
+        if ($ClaudePath -and -not $CodexPath) {
+            if (Confirm-Install "Configure Ariadne for Claude Code?") { return "Claude" }
+            return "None"
+        }
+        if ($CodexPath -and -not $ClaudePath) {
+            if (Confirm-Install "Configure Ariadne for Codex CLI?") { return "Codex" }
+            return "None"
+        }
+        Write-Host "Select client integrations:"
+        Write-Host "  [1] Claude Code"
+        Write-Host "  [2] Codex CLI"
+        Write-Host "  [3] Both"
+        Write-Host "  [4] None"
+        $choice = Read-Host "Selection"
+        $selection = switch ($choice) {
+            "1" { "Claude" }
+            "2" { "Codex" }
+            "3" { "Both" }
+            "4" { "None" }
+            default { throw "Invalid integration selection: $choice" }
+        }
+    }
+
+    if (($selection -eq "Claude" -or $selection -eq "Both") -and -not $ClaudePath) {
+        throw "Claude Code was selected but its CLI was not found. Install Claude Code or choose another -Integration."
+    }
+    if (($selection -eq "Codex" -or $selection -eq "Both") -and -not $CodexPath) {
+        throw "Codex was selected but its CLI was not found. Install Codex CLI or choose another -Integration."
+    }
+    return $selection
+}
+
+function Test-VirtualMachine {
+    try {
+        $system = Get-CimInstance Win32_ComputerSystem
+        $bios = Get-CimInstance Win32_BIOS
+        $text = @($system.Manufacturer, $system.Model, $bios.Manufacturer, $bios.SMBIOSBIOSVersion) -join " "
+        return $text -match "VMware|VirtualBox|KVM|QEMU|Hyper-V|Xen|Virtual Machine|Parallels"
+    } catch {
+        return $false
+    }
+}
+
+function Get-HardwareInfo {
+    try {
+        $computer = Get-CimInstance Win32_ComputerSystem
+        $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+        $os = Get-CimInstance Win32_OperatingSystem
+        $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
+        $machineType = "Physical"
+        if (Test-VirtualMachine) { $machineType = "Virtual" }
+        return [pscustomobject]@{
+            MachineType = $machineType
+            Manufacturer = $computer.Manufacturer
+            Model = $computer.Model
+            CPU = $cpu.Name
+            Cores = [int]$cpu.NumberOfCores
+            LogicalCPUs = [int]$cpu.NumberOfLogicalProcessors
+            RAMGB = [math]::Round($computer.TotalPhysicalMemory / 1GB, 1)
+            FreeDiskGB = [math]::Round($drive.FreeSpace / 1GB, 1)
+            Windows = $os.Caption
+            WindowsVersion = $os.Version
+        }
+    } catch {
+        Write-Warning "Could not read hardware details: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Test-SystemRequirements {
+    if ($PSVersionTable.PSVersion -lt [version]"5.1") {
+        throw "Ariadne requires Windows PowerShell 5.1 or newer."
+    }
+    if (-not [Environment]::Is64BitOperatingSystem) {
+        throw "Ariadne requires 64-bit Windows."
+    }
+    if (-not (Get-Command Register-ScheduledTask -ErrorAction SilentlyContinue)) {
+        throw "Windows Scheduled Tasks are unavailable; Ariadne cannot register its local services."
+    }
+
+    $info = Get-HardwareInfo
+    if (-not $info) { return }
+    Write-Host "`nSystem checks"
+    Write-Host "  Machine : $($info.MachineType) — $($info.Manufacturer) $($info.Model)"
+    Write-Host "  Windows : $($info.Windows) $($info.WindowsVersion)"
+    Write-Host "  CPU     : $($info.CPU) ($($info.Cores) cores / $($info.LogicalCPUs) threads)"
+    Write-Host "  RAM     : $($info.RAMGB) GB"
+    Write-Host "  Free disk: $($info.FreeDiskGB) GB"
+
+    if (-not $SkipModels) {
+        if ($info.RAMGB -lt 8) { throw "Ariadne requires at least 8 GB RAM for the default local models." }
+        if ($info.FreeDiskGB -lt 15) { throw "Ariadne requires at least 15 GB free disk for the default local models." }
+        if ($info.RAMGB -lt 16) { Write-Warning "16 GB RAM is recommended for the default qwen2.5:7b summary model." }
+    }
+    if ($info.Cores -lt 4) { Write-Warning "At least 4 CPU cores are recommended." }
+    if ($info.MachineType -eq "Virtual") {
+        if ($info.LogicalCPUs -lt 4) { Write-Warning "Assign at least 4 vCPUs to this virtual machine." }
+        Write-Host "  VM note : expose a modern CPU type (for Proxmox/KVM, prefer 'host')."
+    }
 }
 
 function Invoke-Download([string]$Url, [string]$OutFile) {
@@ -225,6 +385,13 @@ function Install-Qdrant([string]$TempDir) {
         Copy-Item -Path $source.FullName -Destination $qdrantExe -Force
     }
 
+    $qdrantVersionOutput = & $qdrantExe --version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "qdrant.exe cannot run. Check Windows, Microsoft VC++ Runtime, and the VM CPU type. " +
+            "Output: $($qdrantVersionOutput -join ' ')"
+    }
+    Write-Host "Qdrant executable check: $($qdrantVersionOutput -join ' ')"
+
     Write-Step "Registering loopback-only Qdrant"
     $launcher = Join-Path $RuntimeDir "start-qdrant.ps1"
     $qdrantLog = Join-Path $LogsDir "qdrant.log"
@@ -291,16 +458,10 @@ function Install-Models {
     if ($LASTEXITCODE -ne 0) { throw "Could not pull $SummaryModel." }
 }
 
-function Register-Codex([string]$AriadneExe) {
-    $codex = Get-Command "codex" -ErrorAction SilentlyContinue
-    if (-not $codex) {
-        Write-Host "Codex CLI was not found; register $AriadneExe as a stdio MCP server when Codex is installed."
-        return
-    }
-    $codexPath = $codex.Source
+function Register-Codex([string]$AriadneExe, [string]$CodexPath) {
     Write-Step "Registering Ariadne with Codex"
-    & $codexPath mcp remove ariadne 2>$null | Out-Null
-    & $codexPath mcp add ariadne -- $AriadneExe
+    & $CodexPath mcp remove ariadne 2>$null | Out-Null
+    & $CodexPath mcp add ariadne -- $AriadneExe
     if ($LASTEXITCODE -ne 0) { throw "Codex MCP registration failed." }
 }
 
@@ -321,12 +482,13 @@ function Set-ObjectProperty($Object, [string]$Name, $Value) {
     }
 }
 
-function Register-Claude([string]$AriadneExe, [string]$PackageRoot) {
+function Register-Claude([string]$AriadneExe, [string]$PackageRoot, [string]$ClaudePath) {
     $claudeHome = Join-Path $env:USERPROFILE ".claude"
     $claudeConfig = Join-Path $env:USERPROFILE ".claude.json"
     New-Item -ItemType Directory -Path $claudeHome -Force | Out-Null
 
     Write-Step "Registering Ariadne with Claude Code"
+    Write-Host "Claude CLI: $ClaudePath"
     if (Test-Path $claudeConfig) {
         Copy-Item $claudeConfig "$claudeConfig.bak-ariadne" -Force
     }
@@ -378,10 +540,55 @@ function Register-Tray {
     Start-ScheduledTask -TaskName $TaskTray
 }
 
-if (-not [Environment]::Is64BitOperatingSystem) {
-    throw "Ariadne requires 64-bit Windows."
+function Configure-SelectedClients(
+    [string]$Selection,
+    [string]$AriadneExe,
+    [string]$PackageRoot,
+    [string]$CodexPath,
+    [string]$ClaudePath
+) {
+    switch ($Selection) {
+        "Claude" { Register-Claude $AriadneExe $PackageRoot $ClaudePath }
+        "Codex" { Register-Codex $AriadneExe $CodexPath }
+        "Both" {
+            Register-Claude $AriadneExe $PackageRoot $ClaudePath
+            Register-Codex $AriadneExe $CodexPath
+        }
+        "None" {
+            Write-Host "No AI client configuration was changed."
+            Write-Host "After installing a client, run:"
+            Write-Host "  .\install.ps1 -ConfigureClients -Integration Claude"
+            Write-Host "  .\install.ps1 -ConfigureClients -Integration Codex"
+        }
+        "Preserve" { Write-Host "Existing AI client configurations are preserved unchanged during update." }
+        default { throw "Unsupported integration selection: $Selection" }
+    }
 }
-if (-not $Update -and -not (Confirm-Install "Install Ariadne for the current Windows user?")) {
+
+if ($ConfigureClients -and $Update) {
+    throw "-ConfigureClients cannot be combined with -Update."
+}
+if ($ConfigureClients -and $CoreOnly) {
+    throw "-ConfigureClients cannot be combined with -CoreOnly."
+}
+if ($ConfigureClients) {
+    if ($PSVersionTable.PSVersion -lt [version]"5.1") {
+        throw "Ariadne requires Windows PowerShell 5.1 or newer."
+    }
+} else {
+    Test-SystemRequirements
+}
+$codexPath = Find-Codex
+$claudePath = Find-Claude
+$clientSelection = Resolve-Integration $codexPath $claudePath
+if ($ConfigureClients -and $clientSelection -eq "None") {
+    throw "-ConfigureClients requires Claude, Codex, or Both."
+}
+if ($ConfigureClients -and -not (Test-Path (Join-Path $BinDir "ariadne.exe"))) {
+    throw "Ariadne core is not installed. Run install.ps1 before -ConfigureClients."
+}
+
+if (-not $Update -and -not $ConfigureClients -and -not (Confirm-Install "Install Ariadne for the current Windows user?")) {
     Write-Host "Installation cancelled."
     exit 0
 }
@@ -408,6 +615,13 @@ try {
     if (-not $ariadneSource) { throw "The Ariadne release archive has an unexpected layout." }
     $packageRoot = Split-Path $ariadneSource.Directory.FullName
 
+    if ($ConfigureClients) {
+        $ariadneExe = Join-Path $BinDir "ariadne.exe"
+        Configure-SelectedClients $clientSelection $ariadneExe $packageRoot $codexPath $claudePath
+        Write-Host "`nAriadne client integration is configured." -ForegroundColor Green
+        exit 0
+    }
+
     Get-Process -Name "ariadne-tray", "ariadne", "ariadnectl", "import", "ariadne-hook" `
         -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     foreach ($binary in Get-ChildItem -Path (Join-Path $packageRoot "bin") -Filter "*.exe") {
@@ -420,8 +634,7 @@ try {
     Install-Models
 
     $ariadneExe = Join-Path $BinDir "ariadne.exe"
-    Register-Codex $ariadneExe
-    Register-Claude $ariadneExe $packageRoot
+    Configure-SelectedClients $clientSelection $ariadneExe $packageRoot $codexPath $claudePath
     Register-Tray
 
     Write-Host "`nAriadne $tag is installed." -ForegroundColor Green

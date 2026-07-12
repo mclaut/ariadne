@@ -31,6 +31,8 @@ body:
       options:
         - Fresh installation
         - Update from an earlier Ariadne release
+        - Configure Claude Code or Codex after core installation
+        - Core-only installation
         - Repair or repeated installation
         - Uninstallation or cleanup
     validations:
@@ -44,6 +46,20 @@ body:
         - Installed by Ariadne
         - Skipped with an installer option
         - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: integration
+    attributes:
+      label: Client integration selection
+      options:
+        - Interactive Auto
+        - Claude Code
+        - Codex CLI
+        - Both
+        - Core only or None
+        - Configure clients later
+        - Update preserving existing settings
     validations:
       required: true
   - type: textarea
@@ -81,6 +97,7 @@ body:
         - label: Ollama or model pull
         - label: Tray startup, version, or update
         - label: Codex or Claude Code registration
+        - label: Hardware or virtual-machine preflight
   - type: checkboxes
     id: checks
     attributes:

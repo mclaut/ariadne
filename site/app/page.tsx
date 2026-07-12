@@ -5,7 +5,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Check,
-  CircleDot,
   Copy,
   Database,
   Github,
@@ -28,7 +27,7 @@ const installs = {
     command:
       "irm https://raw.githubusercontent.com/mclaut/ariadne/main/install.ps1 -OutFile install.ps1\npowershell -ExecutionPolicy Bypass -File .\\install.ps1",
     note:
-      "Native x64 installer. No Docker; administrator approval is requested only when Windows needs Qdrant's Microsoft VC++ runtime.",
+      "Native x64 installer with explicit Claude, Codex, both, or core-only selection. No Docker; elevation is only for Qdrant's Microsoft VC++ runtime when needed.",
   },
   linux: {
     label: "Linux",
@@ -54,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.4.0",
+  softwareVersion: "0.5.0",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -86,7 +85,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.4</a>
+          <a href="#new">New in 0.5</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -129,7 +128,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.4.0 measures context reuse locally
+            v0.5.0 makes Windows setup explicit
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -167,45 +166,45 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.4.0</span>
-            <h2>See what memory gives back.</h2>
+            <span className="eyebrow">New in v0.5.0</span>
+            <h2>Install the core. Choose the clients.</h2>
             <p>
-              Ariadne now estimates how much original session context recall
-              represents, subtracts what it delivers, and keeps the resulting
-              counters entirely on your machine.
+              Windows setup now separates the local memory stack from optional
+              Claude Code and Codex integrations, with predictable interactive
+              and unattended choices.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
-              <CircleDot aria-hidden="true" />
-              <h3>Measured recall</h3>
+              <Check aria-hidden="true" />
+              <h3>Explicit client choice</h3>
               <p>
-                Automatic and MCP recalls count represented, delivered, and net
-                avoided context with an explicit estimate marker.
+                Detect Claude and Codex, then configure one, both, or neither.
+                Missing clients never receive surprise configuration files.
               </p>
             </article>
             <article className="new-item accent-blue">
-              <LockKeyhole aria-hidden="true" />
-              <h3>Content-free metrics</h3>
+              <Server aria-hidden="true" />
+              <h3>Core-only install</h3>
               <p>
-                Only numeric counters and opaque hashes are stored. Memory and
-                transcript text never enters the metrics database.
+                Install Ariadne, Qdrant, Ollama, models, and the tray without
+                touching any AI coding client.
               </p>
             </article>
             <article className="new-item accent-coral">
-              <Terminal aria-hidden="true" />
-              <h3>CLI and JSON</h3>
+              <Network aria-hidden="true" />
+              <h3>Configure later</h3>
               <p>
-                Inspect all-time and 30-day totals with ariadnectl metrics, or
-                consume the same stable fields as JSON.
+                Connect an existing core after installing Claude or Codex, while
+                automatic updates preserve current integrations.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Visible in the tray</h3>
+              <h3>Physical and VM checks</h3>
               <p>
-                The green tray menu shows the current estimate in all seven UI
-                languages on Windows, macOS, and Linux.
+                See CPU, RAM, disk, and machine type before download, plus direct
+                Qdrant compatibility and Proxmox/KVM guidance.
               </p>
             </article>
           </div>
@@ -341,7 +340,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.4.0"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.5.0"
               target="_blank"
               rel="noreferrer"
             >
