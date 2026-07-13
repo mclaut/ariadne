@@ -98,7 +98,31 @@ func TestRecordRecallAggregatesAndDeduplicates(t *testing.T) {
 	if got.AllTime.Recalls != 3 || got.AllTime.NetAvoidedTokens != 900 {
 		t.Fatalf("all time = %+v", got.AllTime)
 	}
+	if got.AllTime.ConfirmedSavedTokens != 1_000 || got.AllTime.RecallOverheadTokens != 100 {
+		t.Fatalf("all-time saved/overhead = %+v", got.AllTime)
+	}
 	if got.Last30Days.Recalls != 2 || got.Last30Days.NetAvoidedTokens != 700 {
 		t.Fatalf("last 30 days = %+v", got.Last30Days)
+	}
+	if got.Last30Days.ConfirmedSavedTokens != 800 || got.Last30Days.RecallOverheadTokens != 100 {
+		t.Fatalf("recent saved/overhead = %+v", got.Last30Days)
+	}
+}
+
+func TestMetricsNeverReportNegativeSavings(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "metrics.db")
+	if err := RecordRecallAt(ctx, path, Event{
+		ID: "legacy", DeliveredTokens: 120, RepresentedTokens: 0, Memories: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadAt(ctx, path, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AllTime.ConfirmedSavedTokens != 0 || got.AllTime.RecallOverheadTokens != 120 ||
+		got.AllTime.NetAvoidedTokens != -120 {
+		t.Fatalf("legacy-only metrics = %+v", got.AllTime)
 	}
 }

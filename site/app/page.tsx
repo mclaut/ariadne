@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.6.0",
+  softwareVersion: "0.7.0",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -85,7 +85,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.6</a>
+          <a href="#new">New in 0.7</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -120,15 +120,15 @@ export default function Home() {
             </div>
           </div>
           <div className="memory-terminal">
-            <span>$ memory_recall &quot;release decision&quot;</span>
-            <strong>hybrid dense + sparse</strong>
-            <span>4 memories ranked in 31ms</span>
+            <span>$ memory_recall id=2704862554782470108</span>
+            <strong>exact ID retrieval</strong>
+            <span>one durable reference returned</span>
           </div>
         </div>
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.6.0 distills diary into durable memory
+            v0.7.0 remembers verified outcomes immediately
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -166,44 +166,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.6.0</span>
-            <h2>Keep conclusions, not chronology.</h2>
+            <span className="eyebrow">New in v0.7.0</span>
+            <h2>Remember the result while it is fresh.</h2>
             <p>
-              Daily local-model maintenance turns yesterday&apos;s session diary
-              into compact decisions, verified fixes, and critical context.
+              Agents save decisions, gotchas, releases, deployments, and
+              verified reports immediately — no SessionEnd command required.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <Check aria-hidden="true" />
-              <h3>Automatic distillation</h3>
+              <h3>Immediate durable capture</h3>
               <p>
-                Group diary by project and day, then retain only knowledge that
-                remains useful across future sessions.
+                Completed outcomes go straight to decisions, gotchas, or
+                reference instead of waiting for session capture.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>Fail-safe replacement</h3>
+              <h3>Exact lookup by ID</h3>
               <p>
-                Snapshot first, save durable memories second, and retire source
-                diary only after every write succeeds.
+                Retrieve and verify one known memory without embedding,
+                approximate ranking, or unrelated search results.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Local and private</h3>
+              <h3>Room-scoped recall</h3>
               <p>
-                Use the existing local Ollama model. Remote summarization stays
-                blocked unless explicitly enabled.
+                Search only decisions, gotchas, references, or diary entries
+                while retaining project and collection scopes.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Preview before changing</h3>
+              <h3>Honest token accounting</h3>
               <p>
-                Dry-run mode shows the exact decisions, gotchas, and references
-                that would replace old diary entries.
+                See confirmed savings, recall overhead, and signed net instead
+                of calling a negative total “tokens saved.”
               </p>
             </article>
           </div>
@@ -339,7 +339,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.6.0"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.7.0"
               target="_blank"
               rel="noreferrer"
             >

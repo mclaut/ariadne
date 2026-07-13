@@ -57,13 +57,15 @@ func main() {
 		server.WithToolCapabilities(false))
 
 	s.AddTool(mcp.NewTool("memory_recall",
-		mcp.WithDescription("Semantically recall past memories (hybrid dense+keyword, "+
-			"multilingual). Use when the user asks about earlier decisions, prior context, "+
-			"project history, or 'what did we decide about X'."),
-		mcp.WithString("query", mcp.Required(),
-			mcp.Description("What to recall — keywords or a question, any language.")),
+		mcp.WithDescription("Recall memories semantically (hybrid dense+keyword, multilingual) "+
+			"or retrieve one exact memory by id. Provide query or id."),
+		mcp.WithString("query",
+			mcp.Description("What to recall — keywords or a question, any language. Omit when id is given.")),
+		mcp.WithString("id", mcp.Description("Exact memory id; bypasses semantic search.")),
 		mcp.WithNumber("limit", mcp.Description("Max results (default 5).")),
 		mcp.WithString("wing", mcp.Description("Optional: narrow to one project/namespace.")),
+		mcp.WithString("room", mcp.Description("Optional: narrow to one category, e.g. "+
+			"'decisions', 'gotchas', 'reference', or 'diary'.")),
 		mcp.WithString("collection", mcp.Description("Optional: search a non-default collection, "+
 			"e.g. 'sessions' for the raw session archive.")),
 	), recallHandler(st))
@@ -100,14 +102,32 @@ func main() {
 
 func recallHandler(st *store.Store) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		query, err := req.RequireString("query")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		limit := req.GetInt("limit", 5)
-		hits, err := st.Recall(ctx, query, limit, req.GetString("wing", ""), req.GetString("collection", ""))
-		if err != nil {
-			return mcp.NewToolResultError("recall failed: " + err.Error()), nil //nolint:nilerr // MCP tool errors go in-band
+		collection := req.GetString("collection", "")
+		var hits []store.Result
+		if rawID := strings.TrimSpace(req.GetString("id", "")); rawID != "" {
+			id, err := strconv.ParseUint(rawID, 10, 64)
+			if err != nil {
+				return mcp.NewToolResultError("bad id: " + err.Error()), nil //nolint:nilerr
+			}
+			hit, ok, err := st.GetByID(ctx, id, collection)
+			if err != nil {
+				return mcp.NewToolResultError("recall by id failed: " + err.Error()), nil //nolint:nilerr
+			}
+			if ok {
+				hits = []store.Result{hit}
+			}
+		} else {
+			query := strings.TrimSpace(req.GetString("query", ""))
+			if query == "" {
+				return mcp.NewToolResultError("query or id is required"), nil
+			}
+			limit := req.GetInt("limit", 5)
+			var err error
+			hits, err = st.Recall(ctx, query, limit, req.GetString("wing", ""),
+				req.GetString("room", ""), collection)
+			if err != nil {
+				return mcp.NewToolResultError("recall failed: " + err.Error()), nil //nolint:nilerr
+			}
 		}
 		if len(hits) == 0 {
 			return mcp.NewToolResultText("(no memories found)"), nil

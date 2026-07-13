@@ -59,3 +59,18 @@ func TestSparseVecDropsSingleRuneTokens(t *testing.T) {
 		t.Fatalf("term frequency = %v, want 2", val[0])
 	}
 }
+
+func TestRecallFilterScopesWingAndRoom(t *testing.T) {
+	if recallFilter("", "") != nil {
+		t.Fatal("empty scope should not create a filter")
+	}
+	if got := recallFilter("ariadne", ""); got == nil || len(got.Must) != 1 {
+		t.Fatalf("wing-only filter = %#v", got)
+	}
+	if got := recallFilter("", "reference"); got == nil || len(got.Must) != 1 {
+		t.Fatalf("room-only filter = %#v", got)
+	}
+	if got := recallFilter("ariadne", "reference"); got == nil || len(got.Must) != 2 {
+		t.Fatalf("wing+room filter = %#v", got)
+	}
+}

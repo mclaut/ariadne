@@ -31,8 +31,8 @@ test("server-renders the Ariadne product page and discovery metadata", async () 
   const html = await response.text();
   assert.match(html, /<title>Ariadne - Local-first memory for AI agents<\/title>/i);
   assert.match(html, /<h1>Ariadne<\/h1>/);
-  assert.match(html, /New in v0\.6\.0/);
-  assert.match(html, /Automatic distillation/);
+  assert.match(html, /New in v0\.7\.0/);
+  assert.match(html, /Immediate durable capture/);
   assert.match(html, /application\/ld\+json/);
   assert.match(html, /SoftwareApplication/);
   assert.match(html, /og:image/);

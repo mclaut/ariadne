@@ -19,7 +19,38 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.6.0
+## What's New in v0.7.0
+
+**Exact retrieval and immediate durable memory.** `memory_recall` now accepts an
+exact content-hash `id`, so agents can retrieve and verify one memory without an
+embedding call or approximate ranking. Semantic recall can also be scoped by
+both project (`wing`) and category (`room`).
+
+The shared Ariadne skill now requires agents to save completed release,
+deployment, migration, audit, incident-resolution, and verified-status reports
+to `reference` immediately when the outcome becomes known. This is proactive:
+the agent does not wait for SessionEnd, PreCompact, daily consolidation, or a
+separate “remember this” command. Decisions and hard-won gotchas follow the same
+immediate-save discipline.
+
+Token metrics now distinguish three real quantities instead of presenting a
+negative number as “tokens saved”:
+
+- **confirmed saved** — positive per-recall reuse backed by source metadata;
+- **recall overhead** — delivered context without measurable source reuse;
+- **net** — signed confirmed savings minus overhead.
+
+The tray shows non-negative confirmed savings. `ariadnectl metrics` and JSON
+retain overhead and signed net, so costs remain visible rather than being
+clamped away.
+
+```json
+{
+  "id": "2704862554782470108"
+}
+```
+
+## Previously in v0.6.0
 
 **Automatic diary distillation.** SessionEnd capture still writes one concise,
 local-model diary memory per substantive session. Daily maintenance now revisits
@@ -60,8 +91,8 @@ maintenance job on macOS and Linux. Output is written to
 
 ## What's New in v0.4.0
 
-- **Local token-efficiency metrics** — Ariadne now estimates represented,
-  delivered, and net avoided context for automatic and MCP recalls. Totals are
+- **Local token-efficiency metrics** — Ariadne estimates confirmed savings,
+  recall overhead, and signed net context benefit for automatic and MCP recalls. Totals are
   available through `ariadnectl metrics`, its JSON form, and the tray menu.
 - **Content-free accounting** — only numeric counters and opaque event hashes
   are stored locally. Repeated hook delivery counts as overhead without claiming
@@ -109,6 +140,8 @@ maintenance job on macOS and Linux. Output is written to
   de/it/pl/ro/hu/lt/lv/et/fi/fr/ar).
 - **Hybrid search** — dense (bge-m3) + BM25 sparse (pure Go tokenizer; Qdrant
   computes IDF server-side) fused with RRF. Exact terms/codes/names rank sharply.
+- **Scoped recall** — narrow searches by project (`wing`) and category (`room`),
+  including `reference` for releases, deployments, audits, and verified reports.
 - **Native** — Qdrant binary + Ollama on Windows, macOS, and Linux; supported
   NVIDIA/AMD acceleration, Metal on Apple Silicon, and a CPU fallback.
 
@@ -388,21 +421,22 @@ the whole interface stays in one language. Adding a language is one block in
 ### Estimated token savings
 
 Ariadne locally tracks how much context recall delivers and how much original
-session context each new curated diary memory represents. The tray shows the
-all-time estimated net token savings, and the full counters are available as:
+session context each new curated diary memory represents. The tray shows
+non-negative all-time confirmed savings, and the full counters are available as:
 
 ```bash
 ariadnectl metrics
 ariadnectl metrics -json
 ```
 
-The estimate is `represented source context - delivered recall context`, using
-a deterministic multilingual UTF-8 byte estimate because the exact tokenizer
-depends on the MCP client and model. The `~` prefix is intentional: this is a
-transparent context-reuse estimate, not a claim about provider billing. Legacy
-memories without source-size metadata never receive invented savings, though
-their delivered recall tokens are still counted. Metrics contain only numeric
-counters and opaque event hashes, never memory or transcript text, and stay in
+Each recall contributes either confirmed savings (`represented - delivered`,
+when positive) or recall overhead (`delivered - represented`, when positive).
+Signed net remains the difference between those totals. The deterministic
+multilingual estimate uses UTF-8 bytes because exact tokenizers vary by client
+and model; `~` explicitly marks this as context reuse, not provider billing.
+Legacy memories without source-size metadata receive no invented savings and
+their delivery is counted as overhead. Metrics contain only numeric counters
+and opaque event hashes, never memory or transcript text, and stay in
 `~/.ariadne/metrics.db` with user-only permissions. Set `ARIADNE_METRICS=0` to
 disable new records.
 
@@ -441,8 +475,9 @@ consolidation for you; run the import manually after large note edits.
 
 ## Status
 
-v0.6.0 — working. Hybrid multilingual recall, automatic daily diary
-distillation, explicit Windows client setup,
+v0.7.0 — working. Exact ID retrieval, room-scoped hybrid recall, immediate
+durable reference/report capture, honest token-efficiency accounting, automatic
+daily diary distillation, explicit Windows client setup,
 local token-efficiency metrics,
 native desktop installation,
 session hooks (auto-recall + curated auto-capture), and time-ordered diary are

@@ -37,11 +37,13 @@ type Event struct {
 
 // Totals is an aggregate over a time window.
 type Totals struct {
-	Recalls           int64 `json:"recalls"`
-	Memories          int64 `json:"memories"`
-	DeliveredTokens   int64 `json:"delivered_tokens"`
-	RepresentedTokens int64 `json:"represented_tokens"`
-	NetAvoidedTokens  int64 `json:"net_avoided_tokens"`
+	Recalls              int64 `json:"recalls"`
+	Memories             int64 `json:"memories"`
+	DeliveredTokens      int64 `json:"delivered_tokens"`
+	RepresentedTokens    int64 `json:"represented_tokens"`
+	ConfirmedSavedTokens int64 `json:"confirmed_saved_tokens"`
+	RecallOverheadTokens int64 `json:"recall_overhead_tokens"`
+	NetAvoidedTokens     int64 `json:"net_avoided_tokens"`
 }
 
 // Summary exposes both lifetime and recent token-efficiency estimates.
@@ -224,9 +226,12 @@ func secureFiles(path string) {
 func totals(ctx context.Context, db *sql.DB, since int64) (Totals, error) {
 	var out Totals
 	row := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(memories), 0),
-		COALESCE(SUM(delivered_tokens), 0), COALESCE(SUM(represented_tokens), 0)
+		COALESCE(SUM(delivered_tokens), 0), COALESCE(SUM(represented_tokens), 0),
+		COALESCE(SUM(MAX(represented_tokens - delivered_tokens, 0)), 0),
+		COALESCE(SUM(MAX(delivered_tokens - represented_tokens, 0)), 0)
 		FROM recall_events WHERE ts >= ?`, since)
-	if err := row.Scan(&out.Recalls, &out.Memories, &out.DeliveredTokens, &out.RepresentedTokens); err != nil {
+	if err := row.Scan(&out.Recalls, &out.Memories, &out.DeliveredTokens, &out.RepresentedTokens,
+		&out.ConfirmedSavedTokens, &out.RecallOverheadTokens); err != nil {
 		return out, err
 	}
 	out.NetAvoidedTokens = out.RepresentedTokens - out.DeliveredTokens

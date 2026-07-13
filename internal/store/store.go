@@ -40,6 +40,36 @@ type Result struct {
 	MemoryTokens int64   `json:"memory_tokens,omitempty"`
 }
 
+// GetByID retrieves one memory exactly, without embedding or semantic search.
+// A non-empty collection overrides the default collection.
+func (s *Store) GetByID(ctx context.Context, id uint64, collection string) (Result, bool, error) {
+	if collection == "" {
+		collection = s.collection
+	}
+	points, err := s.qc.Get(ctx, &qdrant.GetPoints{
+		CollectionName: collection,
+		Ids:            []*qdrant.PointId{qdrant.NewIDNum(id)},
+		WithPayload:    qdrant.NewWithPayload(true),
+	})
+	if err != nil {
+		return Result{}, false, err
+	}
+	if len(points) == 0 {
+		return Result{}, false, nil
+	}
+	p := points[0]
+	pl := p.GetPayload()
+	return Result{
+		ID:           p.GetId().GetNum(),
+		Score:        1,
+		Text:         pl["text"].GetStringValue(),
+		Wing:         pl["wing"].GetStringValue(),
+		Room:         pl["room"].GetStringValue(),
+		SourceTokens: pl["source_tokens"].GetIntegerValue(),
+		MemoryTokens: pl["memory_tokens"].GetIntegerValue(),
+	}, true, nil
+}
+
 // New connects to Qdrant (gRPC) and prepares the Ollama client.
 func New(qHost string, qPort int, ollamaURL, model, collection string) (*Store, error) {
 	qc, err := qdrant.NewClient(&qdrant.Config{Host: qHost, Port: qPort})
@@ -170,9 +200,9 @@ func buildPayload(text string, meta map[string]string) map[string]any {
 }
 
 // Recall runs a hybrid dense+sparse query fused with RRF, server-side.
-// A non-empty wing narrows the search to that project/namespace; a non-empty
-// collection overrides the default one (e.g. a separate "sessions" archive).
-func (s *Store) Recall(ctx context.Context, query string, limit int, wing, collection string) ([]Result, error) {
+// Non-empty wing and room values narrow the search to that project/namespace
+// and category. A non-empty collection overrides the default one.
+func (s *Store) Recall(ctx context.Context, query string, limit int, wing, room, collection string) ([]Result, error) {
 	if limit <= 0 {
 		limit = 5
 	}
@@ -185,10 +215,7 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, colle
 	}
 	sIdx, sVal := sparseVec(query)
 	pre := uint64(limit * 4)
-	var filter *qdrant.Filter
-	if wing != "" {
-		filter = &qdrant.Filter{Must: []*qdrant.Condition{qdrant.NewMatch("wing", wing)}}
-	}
+	filter := recallFilter(wing, room)
 	res, err := s.qc.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: collection,
 		Prefetch: []*qdrant.PrefetchQuery{
@@ -217,6 +244,20 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, colle
 		})
 	}
 	return out, nil
+}
+
+func recallFilter(wing, room string) *qdrant.Filter {
+	conditions := make([]*qdrant.Condition, 0, 2)
+	if wing != "" {
+		conditions = append(conditions, qdrant.NewMatch("wing", wing))
+	}
+	if room != "" {
+		conditions = append(conditions, qdrant.NewMatch("room", room))
+	}
+	if len(conditions) == 0 {
+		return nil
+	}
+	return &qdrant.Filter{Must: conditions}
 }
 
 // --- embedding + sparse ---
