@@ -170,9 +170,9 @@ func buildPayload(text string, meta map[string]string) map[string]any {
 }
 
 // Recall runs a hybrid dense+sparse query fused with RRF, server-side.
-// A non-empty wing narrows the search to that project/namespace; a non-empty
-// collection overrides the default one (e.g. a separate "sessions" archive).
-func (s *Store) Recall(ctx context.Context, query string, limit int, wing, collection string) ([]Result, error) {
+// Non-empty wing and room values narrow the search to that project/namespace
+// and category. A non-empty collection overrides the default one.
+func (s *Store) Recall(ctx context.Context, query string, limit int, wing, room, collection string) ([]Result, error) {
 	if limit <= 0 {
 		limit = 5
 	}
@@ -185,10 +185,7 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, colle
 	}
 	sIdx, sVal := sparseVec(query)
 	pre := uint64(limit * 4)
-	var filter *qdrant.Filter
-	if wing != "" {
-		filter = &qdrant.Filter{Must: []*qdrant.Condition{qdrant.NewMatch("wing", wing)}}
-	}
+	filter := recallFilter(wing, room)
 	res, err := s.qc.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: collection,
 		Prefetch: []*qdrant.PrefetchQuery{
@@ -217,6 +214,20 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, colle
 		})
 	}
 	return out, nil
+}
+
+func recallFilter(wing, room string) *qdrant.Filter {
+	conditions := make([]*qdrant.Condition, 0, 2)
+	if wing != "" {
+		conditions = append(conditions, qdrant.NewMatch("wing", wing))
+	}
+	if room != "" {
+		conditions = append(conditions, qdrant.NewMatch("room", room))
+	}
+	if len(conditions) == 0 {
+		return nil
+	}
+	return &qdrant.Filter{Must: conditions}
 }
 
 // --- embedding + sparse ---

@@ -64,6 +64,8 @@ func main() {
 			mcp.Description("What to recall — keywords or a question, any language.")),
 		mcp.WithNumber("limit", mcp.Description("Max results (default 5).")),
 		mcp.WithString("wing", mcp.Description("Optional: narrow to one project/namespace.")),
+		mcp.WithString("room", mcp.Description("Optional: narrow to one category, e.g. "+
+			"'decisions', 'gotchas', 'reference', or 'diary'.")),
 		mcp.WithString("collection", mcp.Description("Optional: search a non-default collection, "+
 			"e.g. 'sessions' for the raw session archive.")),
 	), recallHandler(st))
@@ -105,7 +107,8 @@ func recallHandler(st *store.Store) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		limit := req.GetInt("limit", 5)
-		hits, err := st.Recall(ctx, query, limit, req.GetString("wing", ""), req.GetString("collection", ""))
+		hits, err := st.Recall(ctx, query, limit, req.GetString("wing", ""),
+			req.GetString("room", ""), req.GetString("collection", ""))
 		if err != nil {
 			return mcp.NewToolResultError("recall failed: " + err.Error()), nil //nolint:nilerr // MCP tool errors go in-band
 		}

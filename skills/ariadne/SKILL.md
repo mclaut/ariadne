@@ -1,6 +1,6 @@
 ---
 name: ariadne
-description: Long-term memory for Claude Code backed by the Ariadne MCP server (Qdrant + bge-m3, local). Use when the user asks to remember/recall something across sessions, mentions past decisions ("what did we decide about X"), asks to save a fact/decision permanently, or when Ariadne itself needs ops work (status, backup, restore, export, troubleshooting).
+description: Long-term memory for Codex, Claude Code, and MCP clients backed by the local Ariadne server (Qdrant + bge-m3). Use proactively during substantive project work: recall past context and immediately save durable decisions, gotchas, completed reports, release/deployment results, verified status, and critical reference facts without waiting for session end or an explicit remember command. Also use when the user asks about earlier work, requests permanent memory, or needs Ariadne operations.
 ---
 
 # Ariadne — long-term memory
@@ -21,6 +21,9 @@ Qdrant data, backups, logs); source lives in the repo.
 - Queries are multilingual — query in ANY language, memories in any language
   will match (bge-m3 is cross-lingual; scores ≥0.6 are usually relevant).
 - Prefer 2–3 focused recalls over one vague one. `limit` default 5 is fine.
+- Use `room` to narrow retrieval when the category is known: `decisions`,
+  `gotchas`, `reference`, or `diary`. For release/deployment/status reports,
+  search `room: "reference"` first, then broaden only if needed.
 - The raw session archive lives in a separate collection — pass
   `collection: "sessions"` to dig into old transcripts; normal recall never
   sees them.
@@ -31,14 +34,23 @@ Save (verbatim, self-contained one-paragraph facts):
 - **Decisions with their why** ("chose X over Y because Z").
 - **Gotchas / hard-won lessons** (root cause + fix, not just the symptom).
 - **Durable project facts** (architecture, endpoints, constraints, owners).
+- **Completed reports and verified outcomes** (releases, deployments, migrations,
+  audits, incident resolutions, and operational status) in `room: "reference"`.
+
+Save reports and verified outcomes **immediately when they become complete**.
+Do not wait for SessionEnd, PreCompact, daily consolidation, or a separate user
+command. Save one concise self-contained reference containing the outcome,
+version/date where relevant, important verification, and stable links or IDs.
+Do this automatically even when the user did not explicitly say "remember".
 
 Do NOT save: raw transcripts, code dumps, anything derivable from the repo,
 secrets/tokens/passwords (NEVER — memories are stored in plaintext), or
 ephemeral session chatter. Identical text deduplicates automatically
 (content-hash ids), so re-saving is harmless.
 
-Metadata: `wing` = project slug (e.g. `myapp`, `backend`),
-`room` = category (`decisions`, `gotchas`, `reference`, `diary`).
+Metadata: `wing` = stable project slug (e.g. `myapp`, `backend`),
+`room` = category (`decisions`, `gotchas`, `reference`, `diary`). Use
+`reference` for reports and verified outcomes; `diary` is temporary chronology.
 
 ## Curate — delete / move (by id)
 

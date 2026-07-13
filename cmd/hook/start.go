@@ -59,7 +59,7 @@ func sessionStart() {
 	defer cancel()
 	hits, err := st.Recall(ctx,
 		"поточний стан проекту "+wing+": останні рішення, застереження, наступні кроки",
-		4, wing, "")
+		4, wing, "", "")
 	if err != nil || len(hits) == 0 {
 		return
 	}

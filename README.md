@@ -109,6 +109,8 @@ maintenance job on macOS and Linux. Output is written to
   de/it/pl/ro/hu/lt/lv/et/fi/fr/ar).
 - **Hybrid search** — dense (bge-m3) + BM25 sparse (pure Go tokenizer; Qdrant
   computes IDF server-side) fused with RRF. Exact terms/codes/names rank sharply.
+- **Scoped recall** — narrow searches by project (`wing`) and category (`room`),
+  including `reference` for releases, deployments, audits, and verified reports.
 - **Native** — Qdrant binary + Ollama on Windows, macOS, and Linux; supported
   NVIDIA/AMD acceleration, Metal on Apple Silicon, and a CPU fallback.
 
