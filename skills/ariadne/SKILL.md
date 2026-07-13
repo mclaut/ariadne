@@ -21,6 +21,10 @@ Qdrant data, backups, logs); source lives in the repo.
 - Queries are multilingual — query in ANY language, memories in any language
   will match (bge-m3 is cross-lingual; scores ≥0.6 are usually relevant).
 - Prefer 2–3 focused recalls over one vague one. `limit` default 5 is fine.
+- When an exact memory id is known, call `memory_recall` with `id` instead of a
+  semantic `query`. ID lookup is exact, skips embedding, and is the preferred
+  way to verify a memory before moving or deleting it. Use `collection` too if
+  the id belongs to the separate `sessions` archive.
 - Use `room` to narrow retrieval when the category is known: `decisions`,
   `gotchas`, `reference`, or `diary`. For release/deployment/status reports,
   search `room: "reference"` first, then broaden only if needed.
@@ -54,7 +58,9 @@ Metadata: `wing` = stable project slug (e.g. `myapp`, `backend`),
 
 ## Curate — delete / move (by id)
 
-`memory_recall` returns each hit's `id`; use it to fix the store, not only add to it.
+`memory_recall` returns each hit's `id`; retrieve it later with
+`memory_recall(id: "...")`. Use exact ID lookup to verify a memory before
+curation, not only to find it semantically.
 
 - **`memory_delete(id)`** — remove ONE memory. Irreversible. Only for something the
   user asked to forget, or a memory that is clearly wrong or superseded. Recall
@@ -78,9 +84,11 @@ always exactly one point.
 ~/.ariadne/bin/ariadnectl consolidate --before 24h  # merge old diaries → durable memories
 ```
 
-`metrics` only credits savings for diaries that carry source/memory token
-metadata (captures made after the metrics feature) — legacy memories count as
-delivery cost only, so a fresh install can show a negative number at first.
+`metrics` reports three honest values: **confirmed saved** (sum of positive
+per-recall reuse), **recall overhead** (delivery not backed by measurable source
+context, including legacy memories), and signed **net** (saved minus overhead).
+The tray shows confirmed savings, which cannot be negative; CLI/JSON preserve
+overhead and signed net instead of hiding real costs.
 
 Backup vs export: **backup** = fast 1:1 snapshot tied to the embedding model;
 **export** = portable text that any future model can re-embed. Before risky

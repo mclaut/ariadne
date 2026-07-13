@@ -10,10 +10,11 @@
 - License: MIT
 - Platforms: Windows x64, macOS Intel and Apple Silicon, Linux x64 and ARM64
 - Runtime: Go MCP server, Qdrant vector server, Ollama bge-m3 embeddings
-- Retrieval: hybrid dense plus BM25 sparse search, fused with reciprocal rank fusion
+- Retrieval: exact lookup by ID or hybrid dense plus BM25 sparse search, with wing, room, and collection scopes
 - MCP tools: memory_save, memory_recall, memory_delete, memory_move
 - Privacy: local endpoints by default; Qdrant binds to 127.0.0.1
-- Token efficiency: local content-free estimates of represented, delivered, and net avoided recall context
+- Durable capture: decisions, gotchas, releases, deployments, and verified reports are saved immediately without waiting for SessionEnd
+- Token efficiency: confirmed savings, recall overhead, and signed net are measured locally without storing content
 
 ## Install
 
@@ -21,4 +22,4 @@ Windows uses install.ps1. Linux and macOS use install.sh. Both are available in 
 
 ## Current release
 
-v0.6.0 automatically distills diary memories older than 24 hours into durable decisions, verified gotchas, and critical reference facts. It snapshots before modification, saves conclusions before deleting source diary, supports dry-run previews, and schedules local-only daily maintenance on macOS and Linux. v0.5.0 added explicit Windows client selection and core-only workflows.
+v0.7.0 adds exact memory retrieval by ID, room-scoped semantic recall, proactive immediate saving of durable decisions and completed reports, and honest token accounting split into confirmed savings, recall overhead, and signed net. v0.6.0 added automatic daily diary distillation with backup-first replacement.

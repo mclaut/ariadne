@@ -40,6 +40,36 @@ type Result struct {
 	MemoryTokens int64   `json:"memory_tokens,omitempty"`
 }
 
+// GetByID retrieves one memory exactly, without embedding or semantic search.
+// A non-empty collection overrides the default collection.
+func (s *Store) GetByID(ctx context.Context, id uint64, collection string) (Result, bool, error) {
+	if collection == "" {
+		collection = s.collection
+	}
+	points, err := s.qc.Get(ctx, &qdrant.GetPoints{
+		CollectionName: collection,
+		Ids:            []*qdrant.PointId{qdrant.NewIDNum(id)},
+		WithPayload:    qdrant.NewWithPayload(true),
+	})
+	if err != nil {
+		return Result{}, false, err
+	}
+	if len(points) == 0 {
+		return Result{}, false, nil
+	}
+	p := points[0]
+	pl := p.GetPayload()
+	return Result{
+		ID:           p.GetId().GetNum(),
+		Score:        1,
+		Text:         pl["text"].GetStringValue(),
+		Wing:         pl["wing"].GetStringValue(),
+		Room:         pl["room"].GetStringValue(),
+		SourceTokens: pl["source_tokens"].GetIntegerValue(),
+		MemoryTokens: pl["memory_tokens"].GetIntegerValue(),
+	}, true, nil
+}
+
 // New connects to Qdrant (gRPC) and prepares the Ollama client.
 func New(qHost string, qPort int, ollamaURL, model, collection string) (*Store, error) {
 	qc, err := qdrant.NewClient(&qdrant.Config{Host: qHost, Port: qPort})

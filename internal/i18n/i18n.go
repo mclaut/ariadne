@@ -38,7 +38,7 @@ var table = map[Lang]map[string]string{
 	EN: {
 		"health.ok": "OK", "health.warn": "warning", "health.down": "service down",
 		"health.unreachable": "ariadnectl unreachable",
-		"row.records":        "Records", "row.context_saved": "Tokens saved", "row.data": "Data", "row.free": "free",
+		"row.records":        "Records", "row.context_saved": "Confirmed token savings", "row.data": "Data", "row.free": "free",
 		"status.up": "up", "status.down": "DOWN", "status.ok": "ariadne OK", "status.issues": "ariadne ISSUES",
 		"menu.start": "▶ Start", "menu.stop": "■ Stop", "menu.restart": "⟳ Restart",
 		"menu.backup": "💾 Back up now", "menu.export": "⬇ Export (JSONL)",
@@ -58,7 +58,7 @@ var table = map[Lang]map[string]string{
 	UK: {
 		"health.ok": "OK", "health.warn": "увага", "health.down": "сервіс впав",
 		"health.unreachable": "ariadnectl недоступний",
-		"row.records":        "Записів", "row.context_saved": "Зекономлено токенів", "row.data": "Дані", "row.free": "вільно",
+		"row.records":        "Записів", "row.context_saved": "Підтверджено зекономлено", "row.data": "Дані", "row.free": "вільно",
 		"status.up": "працює", "status.down": "не працює", "status.ok": "ariadne OK", "status.issues": "ariadne ПРОБЛЕМИ",
 		"menu.start": "▶ Старт", "menu.stop": "■ Стоп", "menu.restart": "⟳ Рестарт",
 		"menu.backup": "💾 Бекап зараз", "menu.export": "⬇ Експорт (JSONL)",
@@ -78,7 +78,7 @@ var table = map[Lang]map[string]string{
 	DE: {
 		"health.ok": "OK", "health.warn": "Warnung", "health.down": "Dienst ausgefallen",
 		"health.unreachable": "ariadnectl nicht erreichbar",
-		"row.records":        "Einträge", "row.context_saved": "Gesparte Tokens", "row.data": "Daten", "row.free": "frei",
+		"row.records":        "Einträge", "row.context_saved": "Bestätigte Token-Einsparung", "row.data": "Daten", "row.free": "frei",
 		"status.up": "läuft", "status.down": "aus", "status.ok": "ariadne OK", "status.issues": "ariadne PROBLEME",
 		"menu.start": "▶ Start", "menu.stop": "■ Stopp", "menu.restart": "⟳ Neustart",
 		"menu.backup": "💾 Jetzt sichern", "menu.export": "⬇ Export (JSONL)",
@@ -98,7 +98,7 @@ var table = map[Lang]map[string]string{
 	IT: {
 		"health.ok": "OK", "health.warn": "attenzione", "health.down": "servizio inattivo",
 		"health.unreachable": "ariadnectl irraggiungibile",
-		"row.records":        "Record", "row.context_saved": "Token risparmiati", "row.data": "Dati", "row.free": "liberi",
+		"row.records":        "Record", "row.context_saved": "Risparmio token confermato", "row.data": "Dati", "row.free": "liberi",
 		"status.up": "attivo", "status.down": "inattivo", "status.ok": "ariadne OK", "status.issues": "ariadne PROBLEMI",
 		"menu.start": "▶ Avvia", "menu.stop": "■ Arresta", "menu.restart": "⟳ Riavvia",
 		"menu.backup": "💾 Backup ora", "menu.export": "⬇ Esporta (JSONL)",
@@ -118,7 +118,7 @@ var table = map[Lang]map[string]string{
 	ES: {
 		"health.ok": "OK", "health.warn": "advertencia", "health.down": "servicio caído",
 		"health.unreachable": "ariadnectl inaccesible",
-		"row.records":        "Registros", "row.context_saved": "Tokens ahorrados", "row.data": "Datos", "row.free": "libres",
+		"row.records":        "Registros", "row.context_saved": "Ahorro de tokens confirmado", "row.data": "Datos", "row.free": "libres",
 		"status.up": "activo", "status.down": "inactivo", "status.ok": "ariadne OK", "status.issues": "ariadne PROBLEMAS",
 		"menu.start": "▶ Iniciar", "menu.stop": "■ Detener", "menu.restart": "⟳ Reiniciar",
 		"menu.backup": "💾 Copia ahora", "menu.export": "⬇ Exportar (JSONL)",
@@ -138,7 +138,7 @@ var table = map[Lang]map[string]string{
 	FR: {
 		"health.ok": "OK", "health.warn": "avertissement", "health.down": "service arrêté",
 		"health.unreachable": "ariadnectl injoignable",
-		"row.records":        "Entrées", "row.context_saved": "Tokens économisés", "row.data": "Données", "row.free": "libre",
+		"row.records":        "Entrées", "row.context_saved": "Économie de tokens confirmée", "row.data": "Données", "row.free": "libre",
 		"status.up": "actif", "status.down": "arrêté", "status.ok": "ariadne OK", "status.issues": "ariadne PROBLÈMES",
 		"menu.start": "▶ Démarrer", "menu.stop": "■ Arrêter", "menu.restart": "⟳ Redémarrer",
 		"menu.backup": "💾 Sauvegarder", "menu.export": "⬇ Exporter (JSONL)",
@@ -158,7 +158,7 @@ var table = map[Lang]map[string]string{
 	PL: {
 		"health.ok": "OK", "health.warn": "ostrzeżenie", "health.down": "usługa nie działa",
 		"health.unreachable": "ariadnectl niedostępny",
-		"row.records":        "Wpisy", "row.context_saved": "Zaoszczędzone tokeny", "row.data": "Dane", "row.free": "wolne",
+		"row.records":        "Wpisy", "row.context_saved": "Potwierdzona oszczędność tokenów", "row.data": "Dane", "row.free": "wolne",
 		"status.up": "działa", "status.down": "nie działa", "status.ok": "ariadne OK", "status.issues": "ariadne PROBLEMY",
 		"menu.start": "▶ Start", "menu.stop": "■ Zatrzymaj", "menu.restart": "⟳ Restart",
 		"menu.backup": "💾 Kopia teraz", "menu.export": "⬇ Eksport (JSONL)",
