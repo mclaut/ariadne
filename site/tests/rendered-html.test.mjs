@@ -36,7 +36,19 @@ test("server-renders the Ariadne product page and discovery metadata", async () 
   assert.match(html, /application\/ld\+json/);
   assert.match(html, /SoftwareApplication/);
   assert.match(html, /og:image/);
+  assert.match(html, /hrefLang="uk"|hreflang="uk"/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
+});
+
+test("server-renders the Ukrainian localized route", async () => {
+  const response = await render("/uk");
+  assert.equal(response.status, 200);
+
+  const html = await response.text();
+  assert.match(html, /локальна пам’ять для AI-агентів/i);
+  assert.match(html, /Нове у v0\.7\.0/);
+  assert.match(html, /Точний пошук за ID/);
+  assert.match(html, /hrefLang="en"|hreflang="en"/i);
 });
 
 test("keeps install, hosting, and social assets in the validated source", async () => {

@@ -1,5 +1,7 @@
 # ariadne
 
+**English** · **[Українська](README.uk.md)**
+
 A **native, local-first, multilingual memory server** for
 [Codex](https://github.com/openai/codex),
 [Claude Code](https://claude.com/claude-code), and any MCP client.
