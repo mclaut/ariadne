@@ -21,4 +21,4 @@ Windows uses install.ps1. Linux and macOS use install.sh. Both are available in 
 
 ## Current release
 
-v0.5.0 separates the Windows core install from optional Claude Code and Codex integrations, adds explicit interactive and unattended client selection, supports core-only and configure-later workflows, preserves client settings during updates, and checks physical or virtual-machine resources before download. v0.4.0 added local content-free token-efficiency metrics for automatic and MCP recall, CLI/JSON totals, and a tray counter in seven languages.
+v0.6.0 automatically distills diary memories older than 24 hours into durable decisions, verified gotchas, and critical reference facts. It snapshots before modification, saves conclusions before deleting source diary, supports dry-run previews, and schedules local-only daily maintenance on macOS and Linux. v0.5.0 added explicit Windows client selection and core-only workflows.

@@ -4,12 +4,13 @@
 #   systemctl --user daemon-reload && systemctl --user enable --now ariadne-sync.timer
 # Reconciles edited/deleted memory notes into the store; needs Qdrant + Ollama up.
 [Unit]
-Description=Ariadne memfiles sync (reconcile memory notes into the store)
+Description=Ariadne daily memory maintenance
 After=ariadne-qdrant.service
 
 [Service]
 Type=oneshot
 ExecStart=%h/.ariadne/bin/import -source memfiles -sync
+ExecStart=%h/.ariadne/bin/ariadnectl consolidate --before 24h
 WorkingDirectory=%h/.ariadne
-StandardOutput=append:%h/.ariadne/logs/sync.log
-StandardError=append:%h/.ariadne/logs/sync.log
+StandardOutput=append:%h/.ariadne/logs/maintenance.log
+StandardError=append:%h/.ariadne/logs/maintenance.log
