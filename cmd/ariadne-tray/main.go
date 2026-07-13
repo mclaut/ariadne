@@ -145,17 +145,21 @@ func loop() {
 		case <-t.C:
 			poll()
 		case <-mStart.ClickedCh:
-			ctl("start", "")
+			_ = ctl("start", "")
 		case <-mStop.ClickedCh:
-			ctl("stop", "")
+			_ = ctl("stop", "")
 		case <-mRestart.ClickedCh:
-			ctl("restart", "")
+			if ctl("restart", "") == nil {
+				if err := relaunchTray(); err != nil {
+					notify("ariadne", i18n.T(lang, "notify.failed")+": "+err.Error())
+				}
+			}
 		case <-mUpdate.ClickedCh:
 			go updateClicked()
 		case <-mBackup.ClickedCh:
-			ctl("backup", i18n.T(lang, "notify.backup"))
+			_ = ctl("backup", i18n.T(lang, "notify.backup"))
 		case <-mExport.ClickedCh:
-			ctl("export", i18n.T(lang, "notify.export"))
+			_ = ctl("export", i18n.T(lang, "notify.export"))
 		case <-mData.ClickedCh:
 			openPath(runtimeDir("backups"))
 		case <-mLogs.ClickedCh:
@@ -256,7 +260,7 @@ func fetch() status {
 }
 
 // ctl runs an ariadnectl action; a non-empty banner posts a completion notice.
-func ctl(action, banner string) {
+func ctl(action, banner string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	err := exec.CommandContext(ctx, ctlPath(), action).Run() //nolint:gosec // our own binary, fixed action set
@@ -268,6 +272,26 @@ func ctl(action, banner string) {
 		notify("ariadne", banner+": "+result)
 	}
 	poll()
+	return err
+}
+
+// relaunchTray starts the installed tray binary and closes this process. This
+// matters after an update: restarting the managed services alone leaves the old
+// UI code resident in memory until the tray itself is replaced.
+func relaunchTray() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve tray executable: %w", err)
+	}
+	cmd := exec.CommandContext(context.Background(), exe) //nolint:gosec // current trusted tray executable
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start tray: %w", err)
+	}
+	if err := cmd.Process.Release(); err != nil {
+		return fmt.Errorf("detach tray: %w", err)
+	}
+	systray.Quit()
+	return nil
 }
 
 func openPath(p string) {
