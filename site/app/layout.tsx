@@ -27,7 +27,14 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Ariadne contributors" }],
   creator: "Ariadne contributors",
-  alternates: { canonical: siteUrl },
+  alternates: {
+    canonical: siteUrl,
+    languages: {
+      en: `${siteUrl}/`,
+      uk: `${siteUrl}/uk/`,
+      "x-default": `${siteUrl}/`,
+    },
+  },
   openGraph: {
     type: "website",
     title: "Ariadne - Local-first memory for AI agents",

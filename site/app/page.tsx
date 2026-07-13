@@ -18,7 +18,7 @@ import {
   Sparkles,
   Terminal,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const installs = {
   windows: {
@@ -66,6 +66,15 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const activeInstall = installs[install];
 
+  useEffect(() => {
+    document.documentElement.lang = "en";
+    const saved = window.localStorage.getItem("ariadne-language");
+    if (!saved && navigator.language.toLowerCase().startsWith("uk")) {
+      window.localStorage.setItem("ariadne-language", "uk");
+      window.location.replace("/ariadne/uk/");
+    }
+  }, []);
+
   async function copyInstall() {
     await navigator.clipboard.writeText(activeInstall.command);
     setCopied(true);
@@ -89,15 +98,26 @@ export default function Home() {
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
-        <a
-          className="nav-github"
-          href="https://github.com/mclaut/ariadne"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <Github size={17} aria-hidden="true" />
-          GitHub
-        </a>
+        <div className="nav-actions">
+          <a
+            className="language-switch"
+            href="/ariadne/uk/"
+            hrefLang="uk"
+            onClick={() => window.localStorage.setItem("ariadne-language", "uk")}
+            aria-label="Переглянути українською"
+          >
+            EN <span>/</span> <strong>UA</strong>
+          </a>
+          <a
+            className="nav-github"
+            href="https://github.com/mclaut/ariadne"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Github size={17} aria-hidden="true" />
+            GitHub
+          </a>
+        </div>
       </nav>
 
       <section className="hero" id="top">
