@@ -13,6 +13,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-11120f.svg)](LICENSE)
 
 **[Сайт проєкту українською](https://mclaut.github.io/ariadne/uk/)** ·
+**[Простір Hugging Face](https://huggingface.co/spaces/mclaut/ariadne)** ·
 **[Останній реліз](https://github.com/mclaut/ariadne/releases/latest)**
 
 Ariadne замінює вбудовані векторні бази, які падають або блокуються під час

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Ariadne is local-first multilingual memory for Codex, Claude Code, and MCP clients."
+    />
+    <meta name="theme-color" content="#8cff3f" />
+    <title>Ariadne - Local-first memory for AI agents</title>
+    <link rel="preconnect" href="https://raw.githubusercontent.com" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="Ariadne home">
+        <span class="status-dot" aria-hidden="true"></span>
+        Ariadne
+      </a>
+      <div class="nav-links">
+        <a href="#new">New in 0.7</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#install">Install</a>
+      </div>
+      <a
+        class="nav-github"
+        href="https://github.com/mclaut/ariadne"
+        target="_blank"
+        rel="noreferrer"
+      >
+        <span data-lucide="github" aria-hidden="true"></span>
+        GitHub
+      </a>
+    </nav>
+
+    <main>
+      <section class="hero" id="top">
+        <div class="hero-cover" aria-hidden="true"></div>
+        <div class="hero-content">
+          <div class="release-kicker">
+            <span data-lucide="sparkles" aria-hidden="true"></span>
+            v0.7.0 saves verified outcomes immediately
+          </div>
+          <h1>Ariadne</h1>
+          <p class="hero-lead">
+            Local-first memory for AI agents that need to remember across
+            sessions, languages, and concurrent work.
+          </p>
+          <p class="hero-detail">
+            Go, Qdrant, Ollama, and bge-m3. No Docker, cloud account, API key,
+            or embedded database lockups.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#install">
+              Install Ariadne
+              <span data-lucide="arrow-right" aria-hidden="true"></span>
+            </a>
+            <a
+              class="button button-secondary"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.7.0"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Release notes
+              <span data-lucide="external-link" aria-hidden="true"></span>
+            </a>
+          </div>
+        </div>
+        <div class="hero-foot">
+          <span>MIT licensed</span>
+          <span>100+ languages</span>
+          <span>Windows / macOS / Linux</span>
+          <span>MCP stdio</span>
+        </div>
+      </section>
+
+      <section class="new-band" id="new">
+        <div class="section-shell">
+          <div class="section-heading">
+            <span class="eyebrow">New in v0.7.0</span>
+            <h2>Remember the result while it is fresh.</h2>
+            <p>
+              Completed decisions, fixes, releases, deployments, audits, and
+              verified reports become durable memory as soon as they are known.
+            </p>
+          </div>
+          <div class="feature-grid">
+            <article class="feature feature-green">
+              <span data-lucide="check-circle-2" aria-hidden="true"></span>
+              <h3>Immediate durable capture</h3>
+              <p>
+                Agents save important outcomes directly instead of waiting for
+                SessionEnd or a separate remember command.
+              </p>
+            </article>
+            <article class="feature feature-blue">
+              <span data-lucide="scan-search" aria-hidden="true"></span>
+              <h3>Exact lookup by ID</h3>
+              <p>
+                Retrieve one known memory without embedding, approximate
+                ranking, or unrelated results.
+              </p>
+            </article>
+            <article class="feature feature-coral">
+              <span data-lucide="list-filter" aria-hidden="true"></span>
+              <h3>Room-scoped recall</h3>
+              <p>
+                Search decisions, gotchas, references, or diary entries while
+                retaining project and collection scopes.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="architecture" id="architecture">
+        <div class="section-shell architecture-shell">
+          <div class="section-heading compact-heading">
+            <span class="eyebrow">Architecture</span>
+            <h2>A server, not an embedded lock.</h2>
+            <p>
+              Multiple MCP sessions share one loopback-only Qdrant service.
+              Dense and sparse candidates are fused server-side with RRF.
+            </p>
+          </div>
+          <div class="flow" aria-label="Ariadne architecture flow">
+            <div class="flow-node flow-client">
+              <span>Clients</span>
+              <strong>Codex / Claude / MCP</strong>
+            </div>
+            <span class="flow-arrow" data-lucide="arrow-right" aria-hidden="true"></span>
+            <div class="flow-node flow-server">
+              <span>Memory server</span>
+              <strong>Go + hybrid recall</strong>
+            </div>
+            <span class="flow-arrow" data-lucide="arrow-right" aria-hidden="true"></span>
+            <div class="flow-node flow-store">
+              <span>Local services</span>
+              <strong>Qdrant + Ollama</strong>
+            </div>
+          </div>
+          <div class="architecture-visual">
+            <img
+              src="architecture.png"
+              alt="Ariadne connects AI clients to local Qdrant memory and Ollama embeddings"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section class="install-band" id="install">
+        <div class="section-shell install-shell">
+          <div class="section-heading compact-heading">
+            <span class="eyebrow">Native installation</span>
+            <h2>Run Ariadne on your machine.</h2>
+            <p>
+              Release archives are available for five targets. Installers keep
+              Qdrant loopback-only and reuse existing infrastructure.
+            </p>
+          </div>
+          <div class="install-tool">
+            <div class="platform-tabs" role="tablist" aria-label="Operating system">
+              <button
+                class="platform-tab active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                data-platform="windows"
+              >
+                Windows
+              </button>
+              <button
+                class="platform-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-platform="linux"
+              >
+                Linux
+              </button>
+              <button
+                class="platform-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-platform="macos"
+              >
+                macOS
+              </button>
+            </div>
+            <div class="command-panel" role="tabpanel">
+              <div class="command-head">
+                <span id="command-label">PowerShell</span>
+                <button class="copy-button" id="copy-command" type="button" title="Copy install command">
+                  <span data-lucide="copy" aria-hidden="true"></span>
+                  <span id="copy-label">Copy</span>
+                </button>
+              </div>
+              <pre><code id="install-command">irm https://raw.githubusercontent.com/mclaut/ariadne/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
+              <p id="install-note">
+                Explicitly choose Claude Code, Codex, both, or core-only during setup.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="trust-band">
+        <div class="section-shell trust-grid">
+          <article>
+            <span data-lucide="shield-check" aria-hidden="true"></span>
+            <h3>Local by default</h3>
+            <p>Memories stay in plaintext Qdrant payloads bound to 127.0.0.1.</p>
+          </article>
+          <article>
+            <span data-lucide="languages" aria-hidden="true"></span>
+            <h3>Cross-lingual</h3>
+            <p>bge-m3 retrieves across more than 100 languages.</p>
+          </article>
+          <article>
+            <span data-lucide="package-check" aria-hidden="true"></span>
+            <h3>Verifiable releases</h3>
+            <p>SHA-256 checksums, CycloneDX SBOM, and Sigstore bundle included.</p>
+          </article>
+          <article>
+            <span data-lucide="gauge" aria-hidden="true"></span>
+            <h3>Honest metrics</h3>
+            <p>Confirmed savings and recall overhead are reported separately.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-brand">
+        <span class="status-dot" aria-hidden="true"></span>
+        <strong>Ariadne</strong>
+        <span>Local-first memory for AI agents.</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/mclaut/ariadne">GitHub</a>
+        <a href="https://mclaut.github.io/ariadne/">Documentation</a>
+        <a href="https://github.com/mclaut/ariadne/blob/main/LICENSE">MIT License</a>
+      </div>
+    </footer>
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

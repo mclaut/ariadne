@@ -5,6 +5,7 @@
 ## Core facts
 
 - Project site: https://mclaut.github.io/ariadne/
+- Hugging Face Space: https://huggingface.co/spaces/mclaut/ariadne
 - Source and documentation: https://github.com/mclaut/ariadne
 - Latest release: https://github.com/mclaut/ariadne/releases/latest
 - License: MIT

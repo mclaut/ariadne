@@ -14,6 +14,7 @@ no Docker, no cloud, no API keys.
 [![License: MIT](https://img.shields.io/badge/license-MIT-11120f.svg)](LICENSE)
 
 **[Project site](https://mclaut.github.io/ariadne/)** ·
+**[Hugging Face Space](https://huggingface.co/spaces/mclaut/ariadne)** ·
 **[Latest release](https://github.com/mclaut/ariadne/releases/latest)**
 
 Built as a replacement for embedded vector-DB memory backends that crash or
