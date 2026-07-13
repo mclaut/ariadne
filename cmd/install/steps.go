@@ -71,8 +71,7 @@ func makePlan(r *report, o opts) []action {
 			run:   func() error { return registerHooks(home) },
 		},
 		{
-			title: "register daily memfiles-sync agent (keeps memory notes true to the store)",
-			skip:  fileExists(syncAgentPath(r)),
+			title: "register daily maintenance agent (sync notes + consolidate diary)",
 			run:   func() error { return installSyncAgent(r) },
 		},
 		{
@@ -601,7 +600,8 @@ func registerMCP(home string, o opts) error {
 }
 
 // registerHooks merges Ariadne's session hooks into ~/.claude/settings.json:
-// SessionStart (startup|resume|clear) → auto-recall, SessionEnd → auto-capture.
+// SessionStart (startup|resume|clear) → auto-recall, SessionEnd → auto-capture,
+// PreCompact (manual|auto) → mid-session capture before context is compacted.
 func registerHooks(home string) error {
 	path := filepath.Join(home, ".claude", "settings.json")
 	m := map[string]any{}
@@ -634,6 +634,12 @@ func registerHooks(home string) error {
 	}
 	add("SessionStart", "startup|resume|clear", "session-start", 15)
 	add("SessionEnd", "", "session-end", 10)
+	// PreCompact fires right before Claude Code compacts the context — the
+	// moment session detail is about to be summarized away. Capturing here keeps
+	// long sessions remembered mid-flight, not only at exit; the detached worker
+	// (same subcommand) never delays compaction, and daily `ariadnectl
+	// consolidate` merges the extra diaries into durable memories.
+	add("PreCompact", "manual|auto", "session-end", 10)
 	m["hooks"] = hooks
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {

@@ -88,9 +88,12 @@ func main() {
 		os.Exit(restoreCmd(arg(2), hasFlag("--yes")))
 	case "export":
 		os.Exit(exportCmd(arg(2)))
+	case "consolidate":
+		os.Exit(consolidateCmd(os.Args[2:]))
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ariadnectl {status [-json] | metrics [-json] | "+
-			"start | stop | restart | backup | restore <file> | export [file]}")
+			"start | stop | restart | backup | restore <file> | export [file] | "+
+			"consolidate [--before 24h] [--dry-run]}")
 		os.Exit(2)
 	}
 }

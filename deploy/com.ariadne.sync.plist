@@ -6,14 +6,15 @@
        launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ariadne.sync.plist
      Runs `import -source memfiles -sync` once a day so edited/deleted memory
      notes (~/.claude/projects/*/memory/*.md) stay true to the store without a
-     manual run. It only reconciles chunks — the curated diary hook is separate.
+     manual run. A second command consolidates diary entries older than 24h
+     into durable decisions, gotchas, and reference facts.
      Needs Qdrant + Ollama up; if they're down the run just logs and exits. -->
 <plist version="1.0"><dict>
   <key>Label</key><string>com.ariadne.sync</string>
   <key>ProgramArguments</key><array>
-    <string>__HOME__/.ariadne/bin/import</string>
-    <string>-source</string><string>memfiles</string>
-    <string>-sync</string>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>"$HOME/.ariadne/bin/import" -source memfiles -sync &amp;&amp; "$HOME/.ariadne/bin/ariadnectl" consolidate --before 24h</string>
   </array>
   <key>WorkingDirectory</key><string>__HOME__/.ariadne</string>
   <!-- daily at 04:30; RunAtLoad off so it doesn't fire on every login -->
@@ -21,6 +22,7 @@
     <key>Hour</key><integer>4</integer>
     <key>Minute</key><integer>30</integer>
   </dict>
-  <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/sync.log</string>
-  <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/sync.log</string>
+  <key>EnvironmentVariables</key><dict><key>HOME</key><string>__HOME__</string></dict>
+  <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/maintenance.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/maintenance.log</string>
 </dict></plist>

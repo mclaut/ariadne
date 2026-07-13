@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.5.0",
+  softwareVersion: "0.6.0",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -85,7 +85,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.5</a>
+          <a href="#new">New in 0.6</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -128,7 +128,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.5.0 makes Windows setup explicit
+            v0.6.0 distills diary into durable memory
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -166,45 +166,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.5.0</span>
-            <h2>Install the core. Choose the clients.</h2>
+            <span className="eyebrow">New in v0.6.0</span>
+            <h2>Keep conclusions, not chronology.</h2>
             <p>
-              Windows setup now separates the local memory stack from optional
-              Claude Code and Codex integrations, with predictable interactive
-              and unattended choices.
+              Daily local-model maintenance turns yesterday&apos;s session diary
+              into compact decisions, verified fixes, and critical context.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <Check aria-hidden="true" />
-              <h3>Explicit client choice</h3>
+              <h3>Automatic distillation</h3>
               <p>
-                Detect Claude and Codex, then configure one, both, or neither.
-                Missing clients never receive surprise configuration files.
+                Group diary by project and day, then retain only knowledge that
+                remains useful across future sessions.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>Core-only install</h3>
+              <h3>Fail-safe replacement</h3>
               <p>
-                Install Ariadne, Qdrant, Ollama, models, and the tray without
-                touching any AI coding client.
+                Snapshot first, save durable memories second, and retire source
+                diary only after every write succeeds.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Configure later</h3>
+              <h3>Local and private</h3>
               <p>
-                Connect an existing core after installing Claude or Codex, while
-                automatic updates preserve current integrations.
+                Use the existing local Ollama model. Remote summarization stays
+                blocked unless explicitly enabled.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Physical and VM checks</h3>
+              <h3>Preview before changing</h3>
               <p>
-                See CPU, RAM, disk, and machine type before download, plus direct
-                Qdrant compatibility and Proxmox/KVM guidance.
+                Dry-run mode shows the exact decisions, gotchas, and references
+                that would replace old diary entries.
               </p>
             </article>
           </div>
@@ -340,7 +339,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.5.0"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.6.0"
               target="_blank"
               rel="noreferrer"
             >

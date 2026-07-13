@@ -19,7 +19,33 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.5.0
+## What's New in v0.6.0
+
+**Automatic diary distillation.** SessionEnd capture still writes one concise,
+local-model diary memory per substantive session. Daily maintenance now revisits
+diary entries older than 24 hours, groups them by project and day, and retains
+only durable decisions with rationale, verified gotchas, critical constraints,
+and important open risks. Chronology, routine progress, duplicates, code, and
+repository-derivable details are discarded.
+
+The process is fail-safe: Ariadne creates a Qdrant snapshot before modifying
+anything, saves all distilled memories before deleting their source diary, and
+keeps the source group intact if summarization, validation, embedding, or saving
+fails. The summary endpoint remains local-only unless remote capture is
+explicitly enabled.
+
+Preview or run it manually:
+
+```bash
+ariadnectl consolidate --before 24h --dry-run
+ariadnectl consolidate --before 24h
+```
+
+The installer schedules consolidation with the existing 04:30 daily memory
+maintenance job on macOS and Linux. Output is written to
+`~/.ariadne/logs/maintenance.log`.
+
+## Previously in v0.5.0
 
 - **Explicit Windows client integration** — the installer detects Claude Code
   and Codex CLI, then asks which one to configure. It never creates settings for
@@ -329,6 +355,21 @@ The summary model is loaded only for capture and unloaded right after
 `ARIADNE_SUMMARY_MODEL=qwen2.5:3b` (~2GB vs ~4.7GB, at some summary quality) —
 or pass `-summary-model` to the installer so it pulls that one.
 
+### Daily diary consolidation
+
+`ariadnectl consolidate` turns short-lived session chronology into compact
+long-term knowledge. It selects `room=diary` entries older than 24 hours by
+default, groups them by project (`wing`) and local calendar day, then asks the
+configured local summary model to emit only validated `decisions`, `gotchas`,
+and `reference` memories. Empty groups are safely retired when they contain no
+durable information.
+
+Every non-dry run first creates a native Qdrant backup. New memories are saved
+before source diary entries are removed; any group that fails remains untouched
+for the next run. Use `--before 48h` for a longer review window or `--dry-run`
+to inspect output without changing the store. Remote summary endpoints remain
+blocked unless `ARIADNE_CAPTURE_REMOTE=1` is explicitly set.
+
 ## Monitor
 
 A tray/menu-bar monitor polls `ariadnectl status -json` every 5s and shows a
@@ -395,12 +436,13 @@ Two distinct concepts:
 All imports are idempotent (content-hash ids). For memfiles, `-sync` keeps the
 collection true to disk: edited files replace their old chunks and chunks of
 deleted files are reaped. The installer registers a daily agent
-(`com.ariadne.sync` / `ariadne-sync.timer`) that runs this for you; run it by
-hand after large note edits.
+(`com.ariadne.sync` / `ariadne-sync.timer`) that runs this plus diary
+consolidation for you; run the import manually after large note edits.
 
 ## Status
 
-v0.5.0 — working. Hybrid multilingual recall, explicit Windows client setup,
+v0.6.0 — working. Hybrid multilingual recall, automatic daily diary
+distillation, explicit Windows client setup,
 local token-efficiency metrics,
 native desktop installation,
 session hooks (auto-recall + curated auto-capture), and time-ordered diary are
