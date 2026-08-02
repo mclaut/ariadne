@@ -141,6 +141,23 @@ func TestMetricsNeverReportNegativeSavings(t *testing.T) {
 	}
 }
 
+func TestAttributionCoverageKeepsFractionalPercent(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "metrics.db")
+	if err := RecordRecallAt(ctx, path, Event{
+		ID: "fractional", DeliveredTokens: 300, AttributedTokens: 1, UnattributedTokens: 299,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadAt(ctx, path, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AllTime.AttributionPercent < 0.33 || got.AllTime.AttributionPercent > 0.34 {
+		t.Fatalf("attribution percent = %v", got.AllTime.AttributionPercent)
+	}
+}
+
 func TestRepresentationsDeduplicatePerMemory(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "metrics.db")

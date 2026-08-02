@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -34,5 +36,27 @@ func TestRotateBackupsArchivesWithoutDiscarding(t *testing.T) {
 		if body, err := os.ReadFile(path); err != nil || len(body) == 0 { //nolint:gosec // path comes from t.TempDir glob
 			t.Fatalf("archived snapshot %s: %q, %v", path, body, err)
 		}
+	}
+}
+
+func TestExportOffsetJSONNumberKeepsUint64Precision(t *testing.T) {
+	const pointID = "18446744073709551614"
+	var decoded map[string]any
+	decoder := json.NewDecoder(strings.NewReader(`{"result":{"next_page_offset":` + pointID + `}}`))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
+		t.Fatal(err)
+	}
+	result, _ := decoded["result"].(map[string]any)
+	offset, ok := result["next_page_offset"].(json.Number)
+	if !ok || offset.String() != pointID {
+		t.Fatalf("offset = %#v", result["next_page_offset"])
+	}
+	body, err := json.Marshal(map[string]any{"offset": offset})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != `{"offset":`+pointID+`}` {
+		t.Fatalf("re-encoded offset = %s", body)
 	}
 }

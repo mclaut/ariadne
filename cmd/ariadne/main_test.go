@@ -7,8 +7,8 @@ import (
 )
 
 func TestFormatMoveResultShowsKeptFields(t *testing.T) {
-	got := formatMoveResult(42, "ariadne", "")
-	want := `moved (id=42 wing="ariadne" room=<kept>)`
+	got := formatMoveResult(42, 84, "ariadne", "")
+	want := `moved (source_id=42 new_id=84 wing="ariadne" room=<kept>)`
 	if got != want {
 		t.Fatalf("formatMoveResult = %q, want %q", got, want)
 	}

@@ -6,6 +6,8 @@ package store
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -31,19 +33,28 @@ type Store struct {
 
 // Result is one recall hit.
 type Result struct {
-	ID           uint64  `json:"id"`
-	Score        float32 `json:"score"`
-	Text         string  `json:"text"`
-	Wing         string  `json:"wing,omitempty"`
-	Room         string  `json:"room,omitempty"`
-	SourceTokens int64   `json:"source_tokens,omitempty"`
-	MemoryTokens int64   `json:"memory_tokens,omitempty"`
-	Provenance   string  `json:"provenance,omitempty"`
-	SourceID     string  `json:"source_id,omitempty"`
-	Status       string  `json:"status,omitempty"`
-	MemoryType   string  `json:"memory_type,omitempty"`
-	ObservedAt   int64   `json:"observed_at,omitempty"`
-	OccurredAt   int64   `json:"occurred_at,omitempty"`
+	ID               uint64  `json:"id"`
+	Score            float32 `json:"score"`
+	Text             string  `json:"text"`
+	Wing             string  `json:"wing,omitempty"`
+	Room             string  `json:"room,omitempty"`
+	SourceTokens     int64   `json:"source_tokens,omitempty"`
+	MemoryTokens     int64   `json:"memory_tokens,omitempty"`
+	Provenance       string  `json:"provenance,omitempty"`
+	SourceID         string  `json:"source_id,omitempty"`
+	Status           string  `json:"status,omitempty"`
+	MemoryType       string  `json:"memory_type,omitempty"`
+	TS               int64   `json:"ts,omitempty"`
+	ObservedAt       int64   `json:"observed_at,omitempty"`
+	OccurredAt       int64   `json:"occurred_at,omitempty"`
+	LastSeenAt       int64   `json:"last_seen_at,omitempty"`
+	SourceModifiedAt int64   `json:"source_modified_at,omitempty"`
+	ContentHash      string  `json:"content_hash,omitempty"`
+	SourceKind       string  `json:"source_kind,omitempty"`
+	SourceKey        string  `json:"source_key,omitempty"`
+	SourceRevision   string  `json:"source_revision,omitempty"`
+	IdentityVer      string  `json:"identity_version,omitempty"`
+	SupersededBy     string  `json:"superseded_by,omitempty"`
 }
 
 const (
@@ -73,19 +84,28 @@ func (s *Store) GetByID(ctx context.Context, id uint64, collection string) (Resu
 	p := points[0]
 	pl := p.GetPayload()
 	return Result{
-		ID:           p.GetId().GetNum(),
-		Score:        1,
-		Text:         pl["text"].GetStringValue(),
-		Wing:         pl["wing"].GetStringValue(),
-		Room:         pl["room"].GetStringValue(),
-		SourceTokens: pl["source_tokens"].GetIntegerValue(),
-		MemoryTokens: pl["memory_tokens"].GetIntegerValue(),
-		Provenance:   pl["provenance"].GetStringValue(),
-		SourceID:     pl["source_id"].GetStringValue(),
-		Status:       pl["status"].GetStringValue(),
-		MemoryType:   pl["memory_type"].GetStringValue(),
-		ObservedAt:   pl["observed_at"].GetIntegerValue(),
-		OccurredAt:   pl["occurred_at"].GetIntegerValue(),
+		ID:               p.GetId().GetNum(),
+		Score:            1,
+		Text:             pl["text"].GetStringValue(),
+		Wing:             pl["wing"].GetStringValue(),
+		Room:             pl["room"].GetStringValue(),
+		SourceTokens:     pl["source_tokens"].GetIntegerValue(),
+		MemoryTokens:     pl["memory_tokens"].GetIntegerValue(),
+		Provenance:       pl["provenance"].GetStringValue(),
+		SourceID:         pl["source_id"].GetStringValue(),
+		Status:           pl["status"].GetStringValue(),
+		MemoryType:       pl["memory_type"].GetStringValue(),
+		TS:               pl["ts"].GetIntegerValue(),
+		ObservedAt:       pl["observed_at"].GetIntegerValue(),
+		OccurredAt:       pl["occurred_at"].GetIntegerValue(),
+		LastSeenAt:       pl["last_seen_at"].GetIntegerValue(),
+		SourceModifiedAt: pl["source_modified_at"].GetIntegerValue(),
+		ContentHash:      pl["content_hash"].GetStringValue(),
+		SourceKind:       pl["source_kind"].GetStringValue(),
+		SourceKey:        pl["source_key"].GetStringValue(),
+		SourceRevision:   pl["source_revision"].GetStringValue(),
+		IdentityVer:      pl["identity_version"].GetStringValue(),
+		SupersededBy:     pl["superseded_by"].GetStringValue(),
 	}, true, nil
 }
 
@@ -138,6 +158,7 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 	})
 	for _, field := range []string{
 		"room", "status", "provenance", "memory_type", "consolidation_status", "source_revision",
+		"source_kind", "source_key", "content_hash", "identity_version", "superseded_by", "superseded_reason",
 	} {
 		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collection,
@@ -145,7 +166,11 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 			FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
 		})
 	}
-	for _, field := range []string{"observed_at", "occurred_at", "consolidated_at", "superseded_at", "orphaned_at"} {
+	for _, field := range []string{
+		"observed_at", "occurred_at", "last_seen_at", "source_modified_at",
+		"consolidated_at", "consolidation_checked_at", "consolidation_first_empty_at",
+		"consolidation_attempts", "superseded_at", "orphaned_at",
+	} {
 		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collection,
 			FieldName:      field,
@@ -155,15 +180,31 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 	return nil
 }
 
-// Save embeds text (dense+sparse) and upserts one point. The id is a content
-// hash, so saving identical text twice is idempotent (natural dedup).
+// Save embeds text (dense+sparse) and upserts one point. Identity v2 scopes the
+// content hash by wing+room, so identical text can safely exist in more than
+// one project. A matching legacy text-only point is retained as superseded.
 func (s *Store) Save(ctx context.Context, text string, meta map[string]string) (uint64, error) {
-	id := contentID(text)
-	existing, err := s.sourceMetadata(ctx, []uint64{id})
+	meta = identityMetadata(text, meta)
+	id := scopedContentID(text, meta["wing"], meta["room"])
+	legacyID := contentID(text)
+	existing, err := s.sourceMetadata(ctx, uniqueIDs(id, legacyID))
 	if err != nil {
 		return 0, err
 	}
-	meta = preserveSourceMetadata(meta, existing[id])
+	base := existing[id]
+	legacyReplacement := false
+	legacy, legacyMatch := existing[legacyID]
+	legacyMatch = legacyMatch && sameScope(legacy, meta)
+	if _, ok := existing[id]; !ok {
+		if legacyMatch {
+			base = legacy
+			legacyReplacement = legacyID != id
+		}
+	}
+	meta = preserveSourceMetadata(meta, base)
+	if legacyMatch && meta["source_kind"] == "memfile" {
+		meta = preserveLegacyTimestamps(meta, legacy)
+	}
 	dense, err := s.embed(ctx, text)
 	if err != nil {
 		return 0, err
@@ -180,6 +221,15 @@ func (s *Store) Save(ctx context.Context, text string, meta map[string]string) (
 			Payload: qdrant.NewValueMap(buildPayload(text, meta)),
 		}},
 	})
+	if err != nil || !legacyReplacement {
+		return id, err
+	}
+	err = s.SetMeta(ctx, legacyID, map[string]string{
+		"status":            StatusSuperseded,
+		"superseded_at":     strconv.FormatInt(time.Now().Unix(), 10),
+		"superseded_by":     strconv.FormatUint(id, 10),
+		"superseded_reason": "scoped-identity-v2",
+	})
 	return id, err
 }
 
@@ -191,18 +241,24 @@ type SaveItem struct {
 
 // SaveBatch embeds all items in one Ollama call and upserts them in one Qdrant
 // call — far fewer round trips than looping Save, which is what makes bulk
-// import fast. Same content-hash id, so it stays idempotent.
+// import fast. Scoped identity keeps each wing+room association independently
+// addressable while remaining idempotent inside that scope.
 func (s *Store) SaveBatch(ctx context.Context, items []SaveItem) error {
 	if len(items) == 0 {
 		return nil
 	}
 	texts := make([]string, len(items))
 	ids := make([]uint64, len(items))
+	legacyIDs := make([]uint64, len(items))
+	allIDs := make([]uint64, 0, len(items)*2)
 	for i, it := range items {
+		items[i].Meta = identityMetadata(it.Text, it.Meta)
 		texts[i] = it.Text
-		ids[i] = contentID(it.Text)
+		ids[i] = scopedContentID(it.Text, items[i].Meta["wing"], items[i].Meta["room"])
+		legacyIDs[i] = contentID(it.Text)
+		allIDs = append(allIDs, ids[i], legacyIDs[i])
 	}
-	existing, err := s.sourceMetadata(ctx, ids)
+	existing, err := s.sourceMetadata(ctx, uniqueIDs(allIDs...))
 	if err != nil {
 		return err
 	}
@@ -211,9 +267,24 @@ func (s *Store) SaveBatch(ctx context.Context, items []SaveItem) error {
 		return err
 	}
 	points := make([]*qdrant.PointStruct, len(items))
+	legacyReplaced := map[uint64]bool{}
 	for i, it := range items {
 		sIdx, sVal := sparseVec(it.Text)
-		meta := preserveSourceMetadata(it.Meta, existing[ids[i]])
+		base := existing[ids[i]]
+		legacy, legacyMatch := existing[legacyIDs[i]]
+		legacyMatch = legacyMatch && sameScope(legacy, it.Meta)
+		if _, ok := existing[ids[i]]; !ok {
+			if legacyMatch {
+				base = legacy
+				if legacyIDs[i] != ids[i] {
+					legacyReplaced[legacyIDs[i]] = true
+				}
+			}
+		}
+		meta := preserveSourceMetadata(it.Meta, base)
+		if legacyMatch && meta["source_kind"] == "memfile" {
+			meta = preserveLegacyTimestamps(meta, legacy)
+		}
 		points[i] = &qdrant.PointStruct{
 			Id: qdrant.NewIDNum(ids[i]),
 			Vectors: qdrant.NewVectorsMap(map[string]*qdrant.Vector{
@@ -224,10 +295,23 @@ func (s *Store) SaveBatch(ctx context.Context, items []SaveItem) error {
 		}
 	}
 	_, err = s.qc.Upsert(ctx, &qdrant.UpsertPoints{CollectionName: s.collection, Points: points})
-	return err
+	if err != nil || len(legacyReplaced) == 0 {
+		return err
+	}
+	old := make([]uint64, 0, len(legacyReplaced))
+	for legacyID := range legacyReplaced {
+		old = append(old, legacyID)
+	}
+	return s.SetMetaByIDs(ctx, old, map[string]string{
+		"status":            StatusSuperseded,
+		"superseded_at":     strconv.FormatInt(time.Now().Unix(), 10),
+		"superseded_reason": "scoped-identity-v2",
+	})
 }
 
 type sourceMeta struct {
+	Wing         string
+	Room         string
 	SourceTokens int64
 	MemoryTokens int64
 	Provenance   string
@@ -236,6 +320,19 @@ type sourceMeta struct {
 	MemoryType   string
 	ObservedAt   int64
 	OccurredAt   int64
+	TS           int64
+	LastSeenAt   int64
+	IdentityVer  string
+}
+
+// MemfileSourceState is the active, source-keyed state of one native memory
+// file. Revisions is a set because an interrupted earlier sync can leave more
+// than one active revision; the next successful finalization resolves it.
+type MemfileSourceState struct {
+	Wing      string
+	Room      string
+	Revisions map[string]bool
+	Points    int
 }
 
 func (s *Store) sourceMetadata(ctx context.Context, ids []uint64) (map[uint64]sourceMeta, error) {
@@ -255,6 +352,8 @@ func (s *Store) sourceMetadata(ctx context.Context, ids []uint64) (map[uint64]so
 	for _, point := range points {
 		payload := point.GetPayload()
 		out[point.GetId().GetNum()] = sourceMeta{
+			Wing:         payload["wing"].GetStringValue(),
+			Room:         payload["room"].GetStringValue(),
 			SourceTokens: payload["source_tokens"].GetIntegerValue(),
 			MemoryTokens: payload["memory_tokens"].GetIntegerValue(),
 			Provenance:   payload["provenance"].GetStringValue(),
@@ -263,6 +362,9 @@ func (s *Store) sourceMetadata(ctx context.Context, ids []uint64) (map[uint64]so
 			MemoryType:   payload["memory_type"].GetStringValue(),
 			ObservedAt:   payload["observed_at"].GetIntegerValue(),
 			OccurredAt:   payload["occurred_at"].GetIntegerValue(),
+			TS:           payload["ts"].GetIntegerValue(),
+			LastSeenAt:   payload["last_seen_at"].GetIntegerValue(),
+			IdentityVer:  payload["identity_version"].GetStringValue(),
 		}
 	}
 	return out, nil
@@ -291,13 +393,55 @@ func preserveSourceMetadata(meta map[string]string, existing sourceMeta) map[str
 			out[key] = value
 		}
 	}
+	// Event/observation time is immutable for the same logical record. A sync
+	// heartbeat belongs in last_seen_at and must not make old knowledge recent.
 	for key, value := range map[string]int64{
+		"ts":          existing.TS,
 		"observed_at": existing.ObservedAt,
 		"occurred_at": existing.OccurredAt,
 	} {
-		if out[key] == "" && value > 0 {
+		if value > 0 {
 			out[key] = strconv.FormatInt(value, 10)
 		}
+	}
+	return out
+}
+
+func preserveLegacyTimestamps(meta map[string]string, legacy sourceMeta) map[string]string {
+	for key, value := range map[string]int64{
+		"ts": legacy.TS, "observed_at": legacy.ObservedAt, "occurred_at": legacy.OccurredAt,
+	} {
+		if value > 0 {
+			meta[key] = strconv.FormatInt(value, 10)
+		}
+	}
+	return meta
+}
+
+func identityMetadata(text string, meta map[string]string) map[string]string {
+	out := make(map[string]string, len(meta)+2)
+	for key, value := range meta {
+		out[key] = value
+	}
+	out["identity_version"] = "2"
+	out["content_hash"] = contentHash(text)
+	return out
+}
+
+func sameScope(existing sourceMeta, meta map[string]string) bool {
+	return existing.IdentityVer != "2" && existing.Wing == meta["wing"] &&
+		(existing.Room == meta["room"] || existing.Room == meta["_legacy_room"])
+}
+
+func uniqueIDs(ids ...uint64) []uint64 {
+	seen := make(map[uint64]bool, len(ids))
+	out := make([]uint64, 0, len(ids))
+	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
 	}
 	return out
 }
@@ -307,7 +451,7 @@ func preserveSourceMetadata(meta map[string]string, existing sourceMeta) map[str
 func buildPayload(text string, meta map[string]string) map[string]any {
 	payload := map[string]any{"text": text}
 	for k, v := range meta {
-		if v == "" {
+		if v == "" || strings.HasPrefix(k, "_") {
 			continue
 		}
 		payload[k] = metadataValue(k, v)
@@ -318,7 +462,9 @@ func buildPayload(text string, meta map[string]string) map[string]any {
 func metadataValue(key, value string) any {
 	switch key {
 	case "ts", "source_tokens", "memory_tokens", "observed_at", "occurred_at",
-		"session_started_at", "session_ended_at", "consolidated_at", "superseded_at", "orphaned_at":
+		"session_started_at", "session_ended_at", "last_seen_at", "source_modified_at",
+		"consolidated_at", "consolidation_checked_at", "consolidation_first_empty_at",
+		"superseded_at", "orphaned_at", "consolidation_attempts":
 		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
 			return n
 		}
@@ -367,19 +513,28 @@ func (s *Store) Recall(
 	for _, p := range res {
 		pl := p.GetPayload()
 		out = append(out, Result{
-			ID:           p.GetId().GetNum(),
-			Score:        p.GetScore(),
-			Text:         pl["text"].GetStringValue(),
-			Wing:         pl["wing"].GetStringValue(),
-			Room:         pl["room"].GetStringValue(),
-			SourceTokens: pl["source_tokens"].GetIntegerValue(),
-			MemoryTokens: pl["memory_tokens"].GetIntegerValue(),
-			Provenance:   pl["provenance"].GetStringValue(),
-			SourceID:     pl["source_id"].GetStringValue(),
-			Status:       pl["status"].GetStringValue(),
-			MemoryType:   pl["memory_type"].GetStringValue(),
-			ObservedAt:   pl["observed_at"].GetIntegerValue(),
-			OccurredAt:   pl["occurred_at"].GetIntegerValue(),
+			ID:               p.GetId().GetNum(),
+			Score:            p.GetScore(),
+			Text:             pl["text"].GetStringValue(),
+			Wing:             pl["wing"].GetStringValue(),
+			Room:             pl["room"].GetStringValue(),
+			SourceTokens:     pl["source_tokens"].GetIntegerValue(),
+			MemoryTokens:     pl["memory_tokens"].GetIntegerValue(),
+			Provenance:       pl["provenance"].GetStringValue(),
+			SourceID:         pl["source_id"].GetStringValue(),
+			Status:           pl["status"].GetStringValue(),
+			MemoryType:       pl["memory_type"].GetStringValue(),
+			TS:               pl["ts"].GetIntegerValue(),
+			ObservedAt:       pl["observed_at"].GetIntegerValue(),
+			OccurredAt:       pl["occurred_at"].GetIntegerValue(),
+			LastSeenAt:       pl["last_seen_at"].GetIntegerValue(),
+			SourceModifiedAt: pl["source_modified_at"].GetIntegerValue(),
+			ContentHash:      pl["content_hash"].GetStringValue(),
+			SourceKind:       pl["source_kind"].GetStringValue(),
+			SourceKey:        pl["source_key"].GetStringValue(),
+			SourceRevision:   pl["source_revision"].GetStringValue(),
+			IdentityVer:      pl["identity_version"].GetStringValue(),
+			SupersededBy:     pl["superseded_by"].GetStringValue(),
 		})
 	}
 	return Rerank(query, out, limit, time.Now()), nil
@@ -478,6 +633,16 @@ func contentID(text string) uint64 {
 	return h.Sum64()
 }
 
+func scopedContentID(text, wing, room string) uint64 {
+	sum := sha256.Sum256([]byte("ariadne-id-v2\x00" + wing + "\x00" + room + "\x00" + text))
+	return binary.BigEndian.Uint64(sum[:8])
+}
+
+func contentHash(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return fmt.Sprintf("%x", sum[:16])
+}
+
 // DeleteByWingRoom removes every point of one (wing, room) pair — i.e. all
 // chunks that came from a single source file. Used by import -sync.
 func (s *Store) DeleteByWingRoom(ctx context.Context, wing, room string) error {
@@ -519,6 +684,54 @@ func (s *Store) SetMeta(ctx context.Context, id uint64, meta map[string]string) 
 		PointsSelector: qdrant.NewPointsSelector(qdrant.NewIDNum(id)),
 	})
 	return err
+}
+
+// MoveAppendOnly re-homes one memory by creating its scoped destination record
+// first, then retaining the old record as superseded history. The returned id
+// is the destination id; no source point is deleted or rewritten in place.
+func (s *Store) MoveAppendOnly(ctx context.Context, id uint64, wing, room string) (uint64, error) {
+	hit, ok, err := s.GetByID(ctx, id, "")
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, fmt.Errorf("memory %d not found", id)
+	}
+	destinationWing, destinationRoom := hit.Wing, hit.Room
+	if wing != "" {
+		destinationWing = wing
+	}
+	if room != "" {
+		destinationRoom = room
+	}
+	if destinationWing == hit.Wing && destinationRoom == hit.Room {
+		return id, nil
+	}
+	meta := map[string]string{
+		"wing": destinationWing, "room": destinationRoom,
+		"source_tokens": strconv.FormatInt(hit.SourceTokens, 10),
+		"memory_tokens": strconv.FormatInt(hit.MemoryTokens, 10),
+		"provenance":    hit.Provenance, "source_id": hit.SourceID,
+		"status": StatusActive, "memory_type": hit.MemoryType,
+		"ts": strconv.FormatInt(hit.TS, 10), "observed_at": strconv.FormatInt(hit.ObservedAt, 10),
+		"occurred_at": strconv.FormatInt(hit.OccurredAt, 10), "last_seen_at": strconv.FormatInt(hit.LastSeenAt, 10),
+		"source_modified_at": strconv.FormatInt(hit.SourceModifiedAt, 10),
+		"source_kind":        hit.SourceKind, "source_key": hit.SourceKey, "source_revision": hit.SourceRevision,
+	}
+	newID, err := s.Save(ctx, hit.Text, meta)
+	if err != nil {
+		return 0, err
+	}
+	if newID == id {
+		return id, nil
+	}
+	if err := s.SetMeta(ctx, id, map[string]string{
+		"status": StatusSuperseded, "superseded_at": strconv.FormatInt(time.Now().Unix(), 10),
+		"superseded_by": strconv.FormatUint(newID, 10), "superseded_reason": "memory-move",
+	}); err != nil {
+		return newID, fmt.Errorf("destination saved as %d but source lifecycle update failed: %w", newID, err)
+	}
+	return newID, nil
 }
 
 // SetMetaByIDs updates metadata for several records without changing their
@@ -576,6 +789,104 @@ func (s *Store) SetMetaByWingRoom(
 		PointsSelector: qdrant.NewPointsSelectorFilter(filter),
 	})
 	return err
+}
+
+// SetMetaBySourceKey updates one imported native-memory source. A non-empty
+// exceptRevision protects the current revision while older ones are retained
+// with the supplied lifecycle status.
+func (s *Store) SetMetaBySourceKey(
+	ctx context.Context, sourceKey, exceptRevision string, meta map[string]string,
+) error {
+	filter := &qdrant.Filter{Must: []*qdrant.Condition{qdrant.NewMatch("source_key", sourceKey)}}
+	if exceptRevision != "" {
+		filter.MustNot = append(filter.MustNot, qdrant.NewMatch("source_revision", exceptRevision))
+	}
+	return s.setMetaByFilter(ctx, filter, meta)
+}
+
+// SetMetaByWingRoomLegacy updates pre-v2 records from one native memory file.
+// The v2 identity marker is deliberately excluded so current scoped records
+// are never swept into a compatibility migration.
+func (s *Store) SetMetaByWingRoomLegacy(
+	ctx context.Context, wing, room string, meta map[string]string,
+) error {
+	return s.setMetaByFilter(ctx, &qdrant.Filter{
+		Must:    []*qdrant.Condition{qdrant.NewMatch("wing", wing), qdrant.NewMatch("room", room)},
+		MustNot: []*qdrant.Condition{qdrant.NewMatch("identity_version", "2")},
+	}, meta)
+}
+
+// TouchActiveMemfiles records that a complete filesystem scan observed all
+// currently active native-memory chunks. It changes freshness metadata only,
+// never the original observation or event time.
+func (s *Store) TouchActiveMemfiles(ctx context.Context, lastSeenAt int64) error {
+	filter := &qdrant.Filter{Must: []*qdrant.Condition{qdrant.NewMatch("source_kind", "memfile")}}
+	for _, status := range []string{StatusArchived, StatusSuperseded, StatusOrphaned} {
+		filter.MustNot = append(filter.MustNot, qdrant.NewMatch("status", status))
+	}
+	return s.setMetaByFilter(ctx, filter, map[string]string{
+		"last_seen_at": strconv.FormatInt(lastSeenAt, 10),
+	})
+}
+
+func (s *Store) setMetaByFilter(ctx context.Context, filter *qdrant.Filter, meta map[string]string) error {
+	payload := map[string]any{}
+	for key, value := range meta {
+		if value != "" {
+			payload[key] = metadataValue(key, value)
+		}
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	_, err := s.qc.SetPayload(ctx, &qdrant.SetPayloadPoints{
+		CollectionName: s.collection,
+		Payload:        qdrant.NewValueMap(payload),
+		PointsSelector: qdrant.NewPointsSelectorFilter(filter),
+	})
+	return err
+}
+
+// MemfileSourceStates returns active v2 native-memory sources keyed by their
+// privacy-safe source hash. It is used to skip unchanged files before they
+// reach the embedding queue.
+func (s *Store) MemfileSourceStates(ctx context.Context) (map[string]MemfileSourceState, error) {
+	res, err := s.qc.Scroll(ctx, &qdrant.ScrollPoints{
+		CollectionName: s.collection,
+		Filter: &qdrant.Filter{
+			Must: []*qdrant.Condition{qdrant.NewMatch("source_kind", "memfile")},
+			MustNot: []*qdrant.Condition{
+				qdrant.NewMatch("status", StatusArchived),
+				qdrant.NewMatch("status", StatusSuperseded),
+				qdrant.NewMatch("status", StatusOrphaned),
+			},
+		},
+		Limit:       qdrant.PtrOf(uint32(200_000)),
+		WithPayload: qdrant.NewWithPayloadInclude("source_key", "source_revision", "wing", "room"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]MemfileSourceState{}
+	for _, point := range res {
+		payload := point.GetPayload()
+		key := payload["source_key"].GetStringValue()
+		if key == "" {
+			continue
+		}
+		state := out[key]
+		if state.Revisions == nil {
+			state.Revisions = map[string]bool{}
+		}
+		state.Wing = payload["wing"].GetStringValue()
+		state.Room = payload["room"].GetStringValue()
+		if revision := payload["source_revision"].GetStringValue(); revision != "" {
+			state.Revisions[revision] = true
+		}
+		state.Points++
+		out[key] = state
+	}
+	return out, nil
 }
 
 // WingRoomPairs returns point counts per (wing, room) pair. One payload-only

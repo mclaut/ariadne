@@ -55,6 +55,7 @@ var table = map[Lang]map[string]string{
 		"confirm.update_yes": "Update", "confirm.update_no": "Cancel",
 		"issue.qdrant_down": "Qdrant DOWN", "issue.ollama_down": "Ollama DOWN",
 		"issue.coll_status": "collection status: %s", "issue.low_disk": "low disk: %dGB free",
+		"issue.metrics_error": "metrics unavailable", "issue.activity_error": "maintenance history unavailable",
 	},
 	UK: {
 		"health.ok": "OK", "health.warn": "увага", "health.down": "сервіс впав",
@@ -76,6 +77,7 @@ var table = map[Lang]map[string]string{
 		"confirm.update_yes": "Оновити", "confirm.update_no": "Скасувати",
 		"issue.qdrant_down": "Qdrant не працює", "issue.ollama_down": "Ollama не працює",
 		"issue.coll_status": "стан колекції: %s", "issue.low_disk": "мало місця: %dГБ вільно",
+		"issue.metrics_error": "метрики недоступні", "issue.activity_error": "історія maintenance недоступна",
 	},
 	DE: {
 		"health.ok": "OK", "health.warn": "Warnung", "health.down": "Dienst ausgefallen",
@@ -97,6 +99,7 @@ var table = map[Lang]map[string]string{
 		"confirm.update_yes": "Aktualisieren", "confirm.update_no": "Abbrechen",
 		"issue.qdrant_down": "Qdrant aus", "issue.ollama_down": "Ollama aus",
 		"issue.coll_status": "Sammlungsstatus: %s", "issue.low_disk": "wenig Speicher: %dGB frei",
+		"issue.metrics_error": "Metriken nicht verfügbar", "issue.activity_error": "Wartungsverlauf nicht verfügbar",
 	},
 	IT: {
 		"health.ok": "OK", "health.warn": "attenzione", "health.down": "servizio inattivo",
@@ -118,6 +121,7 @@ var table = map[Lang]map[string]string{
 		"confirm.update_yes": "Aggiorna", "confirm.update_no": "Annulla",
 		"issue.qdrant_down": "Qdrant inattivo", "issue.ollama_down": "Ollama inattivo",
 		"issue.coll_status": "stato collezione: %s", "issue.low_disk": "spazio scarso: %dGB liberi",
+		"issue.metrics_error": "metriche non disponibili", "issue.activity_error": "cronologia manutenzione non disponibile",
 	},
 	ES: {
 		"health.ok": "OK", "health.warn": "advertencia", "health.down": "servicio caído",
@@ -139,6 +143,7 @@ var table = map[Lang]map[string]string{
 		"confirm.update_yes": "Actualizar", "confirm.update_no": "Cancelar",
 		"issue.qdrant_down": "Qdrant caído", "issue.ollama_down": "Ollama caído",
 		"issue.coll_status": "estado de colección: %s", "issue.low_disk": "poco espacio: %dGB libres",
+		"issue.metrics_error": "métricas no disponibles", "issue.activity_error": "historial de mantenimiento no disponible",
 	},
 	FR: {
 		"health.ok": "OK", "health.warn": "avertissement", "health.down": "service arrêté",
@@ -160,6 +165,7 @@ var table = map[Lang]map[string]string{
 		"confirm.update_yes": "Mettre à jour", "confirm.update_no": "Annuler",
 		"issue.qdrant_down": "Qdrant arrêté", "issue.ollama_down": "Ollama arrêté",
 		"issue.coll_status": "état collection : %s", "issue.low_disk": "disque faible : %dGo libres",
+		"issue.metrics_error": "métriques indisponibles", "issue.activity_error": "historique de maintenance indisponible",
 	},
 	PL: {
 		"health.ok": "OK", "health.warn": "ostrzeżenie", "health.down": "usługa nie działa",
@@ -181,6 +187,7 @@ var table = map[Lang]map[string]string{
 		"confirm.update_yes": "Aktualizuj", "confirm.update_no": "Anuluj",
 		"issue.qdrant_down": "Qdrant nie działa", "issue.ollama_down": "Ollama nie działa",
 		"issue.coll_status": "stan kolekcji: %s", "issue.low_disk": "mało miejsca: %dGB wolne",
+		"issue.metrics_error": "metryki niedostępne", "issue.activity_error": "historia konserwacji niedostępna",
 	},
 }
 

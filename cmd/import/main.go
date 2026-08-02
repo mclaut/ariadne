@@ -10,6 +10,7 @@
 package main
 
 import (
+	"ariadne/internal/activity"
 	"ariadne/internal/store"
 	"bufio"
 	"context"
@@ -36,12 +37,26 @@ type doc struct {
 }
 
 type memfileSyncPlan struct {
-	revisions map[[2]string]string
-	wings     map[string]bool
+	sources map[string]memfileSource
+	known   map[string]store.MemfileSourceState
+	wings   map[string]bool
+	skipped int
 }
 
+type memfileSource struct {
+	wing, room, legacyRoom, revision string
+}
+
+const (
+	nativeMemoryDir   = "memory"
+	memfileRoomPrefix = nativeMemoryDir + ":"
+)
+
 type memfileSyncStore interface {
+	SetMetaBySourceKey(context.Context, string, string, map[string]string) error
+	SetMetaByWingRoomLegacy(context.Context, string, string, map[string]string) error
 	SetMetaByWingRoom(context.Context, string, string, string, map[string]string) error
+	TouchActiveMemfiles(context.Context, int64) error
 	WingRoomPairs(context.Context) (map[[2]string]int, error)
 }
 
@@ -56,6 +71,7 @@ func main() {
 	onlyWing := flag.String("only-wing", "", "chroma only: import just this one wing")
 	syncMode := flag.Bool("sync", false,
 		"memfiles only: append new revisions, archive stale chunks, and mark vanished sources as orphaned")
+	forceMemfiles := flag.Bool("force", false, "memfiles only: re-embed unchanged revisions (migration/repair)")
 	flag.Parse()
 
 	st, err := store.New(env("ARIADNE_QDRANT_HOST", "localhost"), atoiOr(env("ARIADNE_QDRANT_PORT", "6334"), 6334),
@@ -124,10 +140,18 @@ func main() {
 	}
 
 	var feed int
+	var feedErr error
 	var syncPlan *memfileSyncPlan
 	switch *source {
 	case "memfiles":
-		feed, syncPlan = feedMemFiles(jobs, *syncMode)
+		var known map[string]store.MemfileSourceState
+		if *syncMode {
+			known, err = st.MemfileSourceStates(ctx)
+			if err != nil {
+				fatal("sync state:", err)
+			}
+		}
+		feed, syncPlan, feedErr = feedMemFiles(jobs, *syncMode, *forceMemfiles, known, time.Now())
 	case "jsonl":
 		feed = feedJSONL(jobs, *file)
 	default:
@@ -135,12 +159,26 @@ func main() {
 	}
 	close(jobs)
 	wg.Wait()
+	if feedErr != nil {
+		_ = activity.Append(activity.Event{Operation: "memfile_sync", Status: "failed", Message: feedErr.Error()})
+		fatal("memfile scan incomplete; lifecycle finalization skipped:", feedErr)
+	}
 	if syncPlan != nil {
 		if failed.Load() > 0 {
 			fmt.Fprintln(os.Stderr, "sync: import failures detected; existing revisions left active")
+			_ = activity.Append(activity.Event{Operation: "memfile_sync", Status: "failed", Counters: map[string]int64{
+				"embedded": done.Load(), "failed": failed.Load(), "unchanged": int64(syncPlan.skipped),
+			}})
 		} else if err := finalizeMemfileSync(ctx, st, syncPlan, time.Now()); err != nil {
+			_ = activity.Append(activity.Event{Operation: "memfile_sync", Status: "failed", Message: err.Error()})
 			fatal("sync finalize:", err)
+		} else {
+			_ = activity.Append(activity.Event{Operation: "memfile_sync", Status: "complete", Counters: map[string]int64{
+				"embedded": done.Load(), "failed": failed.Load(), "unchanged": int64(syncPlan.skipped),
+				"sources": int64(len(syncPlan.sources)),
+			}})
 		}
+		fmt.Printf("  unchanged=%d embedded=%d\n", syncPlan.skipped, feed)
 	}
 
 	fmt.Printf("\n=== IMPORT DONE ===\n  fed=%d saved=%d failed=%d\n  wall=%s (%.0f docs/s)\n",
@@ -233,8 +271,11 @@ func feedJSONL(jobs chan<- doc, path string) int {
 		}
 		for _, field := range []string{
 			"ts", "observed_at", "occurred_at", "session_started_at", "session_ended_at",
-			"consolidated_at", "superseded_at", "orphaned_at", "source_tokens", "memory_tokens",
-			"provenance", "source_id", "source_revision", "status", "memory_type", "consolidation_status",
+			"last_seen_at", "source_modified_at", "consolidated_at", "consolidation_checked_at",
+			"consolidation_first_empty_at", "superseded_at", "orphaned_at", "source_tokens", "memory_tokens",
+			"consolidation_attempts", "provenance", "source_id", "source_kind", "source_key", "source_revision",
+			"content_hash", "identity_version", "superseded_by", "superseded_reason", "status", "memory_type",
+			"consolidation_status",
 		} {
 			if value := jsonMetadataString(raw[field]); value != "" {
 				meta[field] = value
@@ -262,46 +303,99 @@ func jsonMetadataString(value any) string {
 // With sync, every file revision is imported first. Only after all new chunks
 // are safely stored are older revisions marked superseded and vanished source
 // files marked orphaned. No memory record is deleted.
-func feedMemFiles(jobs chan<- doc, syncMode bool) (int, *memfileSyncPlan) {
-	root := os.Getenv("HOME") + "/.claude/projects"
+func feedMemFiles(
+	jobs chan<- doc, syncMode, force bool, known map[string]store.MemfileSourceState, now time.Time,
+) (int, *memfileSyncPlan, error) {
+	root := filepath.Join(os.Getenv("HOME"), ".claude", "projects")
+	return feedMemFilesFromRoot(jobs, root, syncMode, force, known, now)
+}
+
+func feedMemFilesFromRoot(
+	jobs chan<- doc, root string, syncMode, force bool, known map[string]store.MemfileSourceState, now time.Time,
+) (int, *memfileSyncPlan, error) {
 	n := 0
 	var plan *memfileSyncPlan
 	if syncMode {
-		plan = &memfileSyncPlan{revisions: map[[2]string]string{}, wings: map[string]bool{}}
-	}
-	observedAt := strconv.FormatInt(time.Now().Unix(), 10)
-	//nolint:gosec // walks the user's own $HOME/.claude tree
-	_ = filepath.WalkDir(root, func(path string, e fs.DirEntry, err error) error {
-		if err != nil || e.IsDir() || !strings.HasSuffix(path, ".md") {
-			return nil //nolint:nilerr
+		plan = &memfileSyncPlan{
+			sources: map[string]memfileSource{}, known: known, wings: map[string]bool{},
 		}
-		if !strings.Contains(path, "/memory/") {
+	}
+	observedAt := strconv.FormatInt(now.Unix(), 10)
+	//nolint:gosec // walks the user's own $HOME/.claude tree
+	err := filepath.WalkDir(root, func(path string, e fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if e.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+		wing, room, legacyRoom, sourceKey, ok := memfileIdentity(path)
+		if !ok {
 			return nil
 		}
 		b, err := os.ReadFile(path) //nolint:gosec // under $HOME
 		if err != nil {
-			return nil //nolint:nilerr // skip unreadable files, keep walking
+			return err
 		}
-		wing := wingFromMemPath(path)
-		room := "memory:" + filepath.Base(path)
+		info, err := e.Info()
+		if err != nil {
+			return err
+		}
 		revision := memfileRevision(b)
 		if plan != nil {
-			plan.revisions[[2]string{wing, room}] = revision
+			plan.sources[sourceKey] = memfileSource{
+				wing: wing, room: room, legacyRoom: legacyRoom, revision: revision,
+			}
 			plan.wings[wing] = true
+			if state, exists := known[sourceKey]; !force && exists && state.Wing == wing && state.Room == room &&
+				state.Revisions[revision] {
+				plan.skipped++
+				return nil
+			}
 		}
 		for _, chunk := range chunkMarkdown(string(b), 1200) {
 			jobs <- doc{text: chunk, wing: wing, room: room, meta: map[string]string{
-				"source_revision": revision,
-				"status":          store.StatusActive,
-				"memory_type":     "reference",
-				"observed_at":     observedAt,
-				"ts":              observedAt,
+				"_legacy_room":       legacyRoom,
+				"source_kind":        "memfile",
+				"source_key":         sourceKey,
+				"source_revision":    revision,
+				"source_modified_at": strconv.FormatInt(info.ModTime().Unix(), 10),
+				"last_seen_at":       observedAt,
+				"status":             store.StatusActive,
+				"memory_type":        "reference",
+				"observed_at":        observedAt,
+				"ts":                 observedAt,
 			}}
 			n++
 		}
 		return nil
 	})
-	return n, plan
+	return n, plan, err
+}
+
+func memfileIdentity(path string) (wing, room, legacyRoom, sourceKey string, ok bool) {
+	normalized := filepath.ToSlash(path)
+	const marker = "/projects/"
+	i := strings.Index(normalized, marker)
+	if i < 0 {
+		return "", "", "", "", false
+	}
+	rest := normalized[i+len(marker):]
+	parts := strings.Split(rest, "/")
+	if len(parts) < 3 || parts[1] != nativeMemoryDir {
+		return "", "", "", "", false
+	}
+	projectSlug := parts[0]
+	relative := strings.Join(parts[2:], "/")
+	if relative == "" {
+		return "", "", "", "", false
+	}
+	wing = wingFromMemPath(path)
+	room = memfileRoomPrefix + relative
+	legacyRoom = memfileRoomPrefix + filepath.Base(path)
+	sum := sha256.Sum256([]byte("ariadne-memfile-v2\x00" + projectSlug + "\x00" + relative))
+	sourceKey = fmt.Sprintf("%x", sum[:16])
+	return wing, room, legacyRoom, sourceKey, true
 }
 
 func memfileRevision(body []byte) string {
@@ -311,15 +405,58 @@ func memfileRevision(body []byte) string {
 
 func finalizeMemfileSync(ctx context.Context, st memfileSyncStore, plan *memfileSyncPlan, now time.Time) error {
 	changedAt := strconv.FormatInt(now.Unix(), 10)
-	for pair, revision := range plan.revisions {
-		if err := st.SetMetaByWingRoom(ctx, pair[0], pair[1], revision, map[string]string{
+	for sourceKey, source := range plan.sources {
+		if err := st.SetMetaBySourceKey(ctx, sourceKey, source.revision, map[string]string{
 			"status":        store.StatusSuperseded,
 			"superseded_at": changedAt,
 		}); err != nil {
-			return fmt.Errorf("archive old revision %s/%s: %w", pair[0], pair[1], err)
+			return fmt.Errorf("archive old revision %s/%s: %w", source.wing, source.room, err)
+		}
+		for _, legacyRoom := range uniqueStrings(source.room, source.legacyRoom) {
+			if err := st.SetMetaByWingRoomLegacy(ctx, source.wing, legacyRoom, map[string]string{
+				"status":            store.StatusSuperseded,
+				"superseded_at":     changedAt,
+				"superseded_reason": "memfile-identity-v2",
+			}); err != nil {
+				return fmt.Errorf("archive legacy revision %s/%s: %w", source.wing, legacyRoom, err)
+			}
 		}
 	}
-	return archiveOrphans(ctx, st, plan.revisions, plan.wings, changedAt)
+	for sourceKey, state := range plan.known {
+		if _, seen := plan.sources[sourceKey]; seen {
+			continue
+		}
+		if err := st.SetMetaBySourceKey(ctx, sourceKey, "", map[string]string{
+			"status": store.StatusOrphaned, "orphaned_at": changedAt,
+		}); err != nil {
+			return fmt.Errorf("archive orphan %s/%s: %w", state.Wing, state.Room, err)
+		}
+	}
+	seenPairs := make(map[[2]string]string, len(plan.sources))
+	for _, source := range plan.sources {
+		seenPairs[[2]string{source.wing, source.room}] = source.revision
+		seenPairs[[2]string{source.wing, source.legacyRoom}] = source.revision
+	}
+	if err := archiveOrphans(ctx, st, seenPairs, plan.wings, changedAt); err != nil {
+		return err
+	}
+	if err := st.TouchActiveMemfiles(ctx, now.Unix()); err != nil {
+		return fmt.Errorf("touch active memfiles: %w", err)
+	}
+	return nil
+}
+
+func uniqueStrings(values ...string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
 }
 
 // archiveOrphans marks memory chunks whose source file vanished. Only wings
@@ -335,7 +472,7 @@ func archiveOrphans(
 	archived := 0
 	for pair, cnt := range pairs {
 		wing, room := pair[0], pair[1]
-		if !strings.HasPrefix(room, "memory:") || !wings[wing] || seen[pair] != "" {
+		if !strings.HasPrefix(room, memfileRoomPrefix) || !wings[wing] || seen[pair] != "" {
 			continue
 		}
 		if err := st.SetMetaByWingRoom(ctx, wing, room, "", map[string]string{
@@ -357,12 +494,12 @@ func archiveOrphans(
 func wingFromMemPath(path string) string {
 	i := strings.Index(path, "/projects/")
 	if i < 0 {
-		return "memory"
+		return nativeMemoryDir
 	}
 	rest := path[i+len("/projects/"):]
 	end := strings.Index(rest, "/")
 	if end < 0 {
-		return "memory"
+		return nativeMemoryDir
 	}
 	slug := rest[:end]
 	if j := strings.LastIndex(slug, "-Projects-"); j >= 0 {

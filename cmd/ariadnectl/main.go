@@ -9,6 +9,7 @@
 package main
 
 import (
+	"ariadne/internal/activity"
 	"ariadne/internal/i18n"
 	"ariadne/internal/metrics"
 	"context"
@@ -53,15 +54,21 @@ type coll struct {
 }
 
 type status struct {
-	TS           string          `json:"ts"`
-	OK           bool            `json:"ok"`
-	Qdrant       svc             `json:"qdrant"`
-	Ollama       svc             `json:"ollama"`
-	Collection   coll            `json:"collection"`
-	TokenMetrics metrics.Summary `json:"token_metrics"`
-	DataMB       int64           `json:"data_mb"`
-	FreeGB       int64           `json:"free_gb"`
-	Issues       []string        `json:"issues"`
+	TS            string                    `json:"ts"`
+	OK            bool                      `json:"ok"`
+	Qdrant        svc                       `json:"qdrant"`
+	Ollama        svc                       `json:"ollama"`
+	Collection    coll                      `json:"collection"`
+	TokenMetrics  metrics.Summary           `json:"token_metrics"`
+	MetricsError  string                    `json:"metrics_error,omitempty"`
+	Maintenance   map[string]activity.Event `json:"maintenance,omitempty"`
+	ActivityError string                    `json:"activity_error,omitempty"`
+	DataMB        int64                     `json:"data_mb"`
+	BackupsMB     int64                     `json:"backups_mb"`
+	LogsMB        int64                     `json:"logs_mb"`
+	RuntimeMB     int64                     `json:"runtime_mb"`
+	FreeGB        int64                     `json:"free_gb"`
+	Issues        []string                  `json:"issues"`
 }
 
 func main() {
@@ -90,10 +97,12 @@ func main() {
 		os.Exit(exportCmd(arg(2)))
 	case "consolidate":
 		os.Exit(consolidateCmd(os.Args[2:]))
+	case "requeue-empty":
+		os.Exit(requeueEmptyCmd(os.Args[2:]))
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ariadnectl {status [-json] | metrics [-json] | "+
 			"start | stop | restart | backup | restore <file> | export [file] | "+
-			"consolidate [--before 24h] [--dry-run]}")
+			"consolidate [--before 24h] [--dry-run] | requeue-empty [--dry-run]}")
 		os.Exit(2)
 	}
 }
@@ -142,10 +151,22 @@ func gather() status {
 
 	home, _ := os.UserHomeDir()
 	s.DataMB = dirSizeMB(filepath.Join(home, qdrantData))
+	s.BackupsMB = dirSizeMB(filepath.Join(home, backupsSub))
+	s.LogsMB = dirSizeMB(filepath.Join(home, ".ariadne", "logs"))
+	s.RuntimeMB = dirSizeMB(filepath.Join(home, ".ariadne"))
 	s.FreeGB = freeGB(home)
 	metricsCtx, metricsCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	s.TokenMetrics, _ = metrics.Read(metricsCtx)
+	var metricsErr error
+	s.TokenMetrics, metricsErr = metrics.Read(metricsCtx)
 	metricsCancel()
+	if metricsErr != nil {
+		s.MetricsError = metricsErr.Error()
+	}
+	var activityErr error
+	s.Maintenance, activityErr = activity.Latest()
+	if activityErr != nil {
+		s.ActivityError = activityErr.Error()
+	}
 
 	// issues (localized — the tray surfaces these verbatim)
 	lang := i18n.Current()
@@ -162,6 +183,12 @@ func gather() status {
 	// 0 memories until the user saves some; flagging it made the tray cry orange.
 	if s.FreeGB*1024 < diskWarnMB {
 		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.low_disk"), s.FreeGB))
+	}
+	if s.MetricsError != "" {
+		s.Issues = append(s.Issues, i18n.T(lang, "issue.metrics_error"))
+	}
+	if s.ActivityError != "" {
+		s.Issues = append(s.Issues, i18n.T(lang, "issue.activity_error"))
 	}
 	s.OK = len(s.Issues) == 0
 	return s
@@ -186,7 +213,7 @@ func printMetrics(asJSON bool) {
 }
 
 func printMetricWindow(label string, t metrics.Totals) {
-	fmt.Printf("  %-12s ~%d measured saved · %+d measured net · %d%% attributed\n",
+	fmt.Printf("  %-12s ~%d measured saved · %+d measured net · %.1f%% attributed\n",
 		label+":", t.ConfirmedSavedTokens, t.NetAvoidedTokens, t.AttributionPercent)
 	fmt.Printf("                %d observed recall tokens · %d unattributed · %d attributed overhead, %d recalls / %d memories\n",
 		t.DeliveredTokens, t.UnattributedTokens, t.RecallOverheadTokens, t.Recalls, t.Memories)
@@ -208,7 +235,13 @@ func printStatus(asJSON bool) {
 	fmt.Printf("  Qdrant : %s  (%dMB RSS)\n", upStr(lang, s.Qdrant.Up), s.Qdrant.RSSMB)
 	fmt.Printf("  Ollama : %s  %s  (%dMB RSS)\n", upStr(lang, s.Ollama.Up), s.Ollama.Version, s.Ollama.RSSMB)
 	fmt.Printf("  %s : %d  (%s)\n", i18n.T(lang, "row.records"), s.Collection.Points, s.Collection.Status)
-	fmt.Printf("  %s : %dMB · %s %dGB\n", i18n.T(lang, "row.data"), s.DataMB, i18n.T(lang, "row.free"), s.FreeGB)
+	fmt.Printf("  %s : qdrant %dMB · backups %dMB · logs %dMB · runtime %dMB · %s %dGB\n",
+		i18n.T(lang, "row.data"), s.DataMB, s.BackupsMB, s.LogsMB, s.RuntimeMB, i18n.T(lang, "row.free"), s.FreeGB)
+	for _, operation := range []string{"memfile_sync", "consolidate", "backup"} {
+		if event, ok := s.Maintenance[operation]; ok {
+			fmt.Printf("  %s : %s · %s\n", operation, event.At.Local().Format("2006-01-02 15:04"), event.Status)
+		}
+	}
 	for _, i := range s.Issues {
 		fmt.Printf("  ! %s\n", i)
 	}

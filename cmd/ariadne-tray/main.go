@@ -37,6 +37,9 @@ const (
 )
 
 func ctlPath() string {
+	if configured := os.Getenv("ARIADNE_CTL_PATH"); configured != "" {
+		return configured
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".ariadne", "bin", "ariadnectl")
 }
@@ -66,6 +69,9 @@ type status struct {
 	Collection   coll            `json:"collection"`
 	TokenMetrics metrics.Summary `json:"token_metrics"`
 	DataMB       int64           `json:"data_mb"`
+	BackupsMB    int64           `json:"backups_mb"`
+	LogsMB       int64           `json:"logs_mb"`
+	RuntimeMB    int64           `json:"runtime_mb"`
 	FreeGB       int64           `json:"free_gb"`
 	Issues       []string        `json:"issues"`
 }
@@ -237,10 +243,11 @@ func poll() {
 	rowPoints.SetTitle(fmt.Sprintf("%s: %s (%s)", i18n.T(lang, "row.records"), grouped(s.Collection.Points), s.Collection.Status))
 	totals := s.TokenMetrics.AllTime
 	rowTokens.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.context_saved"), grouped(totals.ConfirmedSavedTokens)))
-	rowCoverage.SetTitle(fmt.Sprintf("%s: %d%% · %s: %s", i18n.T(lang, "row.metrics_coverage"),
+	rowCoverage.SetTitle(fmt.Sprintf("%s: %.1f%% · %s: %s", i18n.T(lang, "row.metrics_coverage"),
 		totals.AttributionPercent, i18n.T(lang, "row.recalls"), grouped(totals.Recalls)))
 	rowUnattributed.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.unattributed"), grouped(totals.UnattributedTokens)))
-	rowDisk.SetTitle(fmt.Sprintf("%s: %dMB · %s %dGB", i18n.T(lang, "row.data"), s.DataMB, i18n.T(lang, "row.free"), s.FreeGB))
+	rowDisk.SetTitle(fmt.Sprintf("%s: %dMB · backups %dMB · logs %dMB · %s %dGB",
+		i18n.T(lang, "row.data"), s.DataMB, s.BackupsMB, s.LogsMB, i18n.T(lang, "row.free"), s.FreeGB))
 
 	// notify only when a NEW issue appears (or a service just dropped)
 	if s.reachable && len(s.Issues) > 0 && !slices.Equal(s.Issues, lastIssues) {

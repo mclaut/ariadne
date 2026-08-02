@@ -52,18 +52,18 @@ type Event struct {
 
 // Totals is an aggregate over a time window.
 type Totals struct {
-	Recalls              int64 `json:"recalls"`
-	Memories             int64 `json:"memories"`
-	AttributedMemories   int64 `json:"attributed_memories"`
-	UnattributedMemories int64 `json:"unattributed_memories"`
-	DeliveredTokens      int64 `json:"delivered_tokens"`
-	RepresentedTokens    int64 `json:"represented_tokens"`
-	AttributedTokens     int64 `json:"attributed_tokens"`
-	UnattributedTokens   int64 `json:"unattributed_tokens"`
-	ConfirmedSavedTokens int64 `json:"confirmed_saved_tokens"`
-	RecallOverheadTokens int64 `json:"recall_overhead_tokens"`
-	NetAvoidedTokens     int64 `json:"net_avoided_tokens"`
-	AttributionPercent   int64 `json:"attribution_percent"`
+	Recalls              int64   `json:"recalls"`
+	Memories             int64   `json:"memories"`
+	AttributedMemories   int64   `json:"attributed_memories"`
+	UnattributedMemories int64   `json:"unattributed_memories"`
+	DeliveredTokens      int64   `json:"delivered_tokens"`
+	RepresentedTokens    int64   `json:"represented_tokens"`
+	AttributedTokens     int64   `json:"attributed_tokens"`
+	UnattributedTokens   int64   `json:"unattributed_tokens"`
+	ConfirmedSavedTokens int64   `json:"confirmed_saved_tokens"`
+	RecallOverheadTokens int64   `json:"recall_overhead_tokens"`
+	NetAvoidedTokens     int64   `json:"net_avoided_tokens"`
+	AttributionPercent   float64 `json:"attribution_percent"`
 }
 
 // Summary exposes both lifetime and recent token-efficiency estimates.
@@ -475,7 +475,7 @@ func totals(ctx context.Context, db *sql.DB, since int64) (Totals, error) {
 	}
 	out.NetAvoidedTokens = out.RepresentedTokens - out.AttributedTokens
 	if out.DeliveredTokens > 0 {
-		out.AttributionPercent = (out.AttributedTokens*100 + out.DeliveredTokens/2) / out.DeliveredTokens
+		out.AttributionPercent = float64(out.AttributedTokens) * 100 / float64(out.DeliveredTokens)
 	}
 	return out, nil
 }

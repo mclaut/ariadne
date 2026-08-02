@@ -81,6 +81,8 @@ func main() {
 		mcp.WithString("room", mcp.Description("Aspect, e.g. 'decisions', 'diary'.")),
 		mcp.WithNumber("source_tokens", mcp.Description("Optional measured or conservative size of the bounded "+
 			"source context condensed into this memory. Omit rather than guess; never send the raw source.")),
+		mcp.WithNumber("occurred_at", mcp.Description("Optional Unix timestamp for when a historical fact or event occurred. "+
+			"Observation time remains the current save time.")),
 	), saveHandler(st))
 
 	s.AddTool(mcp.NewTool("memory_delete",
@@ -219,12 +221,17 @@ func saveHandler(st *store.Store) server.ToolHandlerFunc {
 		}
 		text = store.SanitizeUTF8(text)
 		now := strconv.FormatInt(time.Now().Unix(), 10)
+		eventTime := now
+		if occurredAt := req.GetInt("occurred_at", 0); occurredAt > 0 {
+			eventTime = strconv.Itoa(occurredAt)
+		}
 		room := req.GetString("room", "")
 		meta := map[string]string{
 			"wing":          req.GetString("wing", ""),
 			"room":          room,
-			"ts":            now,
+			"ts":            eventTime,
 			"observed_at":   now,
+			"occurred_at":   eventTime,
 			"memory_tokens": strconv.FormatInt(metrics.EstimateTokens(text), 10),
 			"provenance":    "manual",
 			"status":        store.StatusActive,
@@ -288,19 +295,20 @@ func moveHandler(st *store.Store) server.ToolHandlerFunc {
 		if wing == "" && room == "" {
 			return mcp.NewToolResultError("nothing to change: give a new wing and/or room"), nil
 		}
-		if err := st.SetMeta(ctx, id, map[string]string{"wing": wing, "room": room}); err != nil {
+		newID, err := st.MoveAppendOnly(ctx, id, wing, room)
+		if err != nil {
 			return mcp.NewToolResultError("move failed: " + err.Error()), nil //nolint:nilerr // MCP tool errors go in-band
 		}
-		return mcp.NewToolResultText(formatMoveResult(id, wing, room)), nil
+		return mcp.NewToolResultText(formatMoveResult(id, newID, wing, room)), nil
 	}
 }
 
-func formatMoveResult(id uint64, wing, room string) string {
+func formatMoveResult(id, newID uint64, wing, room string) string {
 	part := func(name, value string) string {
 		if value == "" {
 			return name + "=<kept>"
 		}
 		return fmt.Sprintf("%s=%q", name, value)
 	}
-	return fmt.Sprintf("moved (id=%d %s %s)", id, part("wing", wing), part("room", room))
+	return fmt.Sprintf("moved (source_id=%d new_id=%d %s %s)", id, newID, part("wing", wing), part("room", room))
 }

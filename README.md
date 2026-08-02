@@ -31,8 +31,9 @@ lock-starvation class simply doesn't exist.
 **Append-only memory lifecycle.** Session capture now records the actual capture
 time separately from transcript start/end and assigns a stable opaque source
 lineage. Daily consolidation saves durable memories first, then archives source
-diaries by metadata; it never deletes them, including groups that yield zero
-durable output. Normal recall hides archived/superseded records, while exact-id
+diaries by metadata; it never deletes them. A first zero-output review remains
+active as `candidate_empty` and needs a later confirming pass after a grace
+period before archival. Normal recall hides archived/superseded records, while exact-id
 lookup or `include_archived: true` provides an explicit audit path.
 
 **Conservative historical ranking.** Qdrant still supplies the dense+BM25 RRF
@@ -42,9 +43,10 @@ decay merely because they are old; recency applies only when the query asks for
 the latest/current/history-aware answer, and metadata cannot override a
 material semantic lead.
 
-**Non-destructive maintenance and evaluation.** Memfile sync imports the new
-revision before marking older chunks `superseded`; vanished sources become
-`orphaned`, not deleted. Backup rotation moves older snapshots into
+**Non-destructive maintenance and evaluation.** Memfile sync skips unchanged
+source revisions before embedding, imports changed revisions before marking
+older chunks `superseded`, and preserves original observation timestamps;
+vanished sources become `orphaned`, not deleted. Backup rotation moves older snapshots into
 `backups/archive`. `go run ./cmd/eval` executes the deterministic multilingual
 coding-memory ranking suite in `evaluation/coding-memory.json` without touching
 Qdrant or Ollama.
@@ -52,7 +54,7 @@ Qdrant or Ollama.
 ## What's New in v0.7.0
 
 **Exact retrieval and immediate durable memory.** `memory_recall` now accepts an
-exact content-hash `id`, so agents can retrieve and verify one memory without an
+exact scoped-content `id`, so agents can retrieve and verify one memory without an
 embedding call or approximate ranking. Semantic recall can also be scoped by
 both project (`wing`) and category (`room`).
 
@@ -88,9 +90,10 @@ durable decisions with rationale, verified gotchas, critical constraints, and
 important open risks. Source chronology remains archived for audit instead of
 being discarded.
 
-The process is fail-safe and append-only: Ariadne creates a Qdrant snapshot,
-saves every distilled memory, then marks the source group archived. A failure
-leaves the source group active for retry. The summary endpoint remains
+The process is fail-safe and append-only: Ariadne creates a due weekly Qdrant
+snapshot before archival, saves every distilled memory, then marks the source
+group archived. A first empty pass stays active for later confirmation, and a
+failure leaves the source group active for retry. The summary endpoint remains
 local-only unless remote capture is explicitly enabled.
 
 Preview or run it manually:
@@ -98,6 +101,7 @@ Preview or run it manually:
 ```bash
 ariadnectl consolidate --before 24h --dry-run
 ariadnectl consolidate --before 24h
+ariadnectl requeue-empty --dry-run  # inspect records archived by the legacy one-pass empty policy
 ```
 
 The installer schedules consolidation with the existing 04:30 daily memory
@@ -425,12 +429,16 @@ or pass `-summary-model` to the installer so it pulls that one.
 long-term knowledge. It selects `room=diary` entries older than 24 hours by
 default, groups them by project (`wing`) and local calendar day, then asks the
 configured local summary model to emit only validated `decisions`, `gotchas`,
-and `reference` memories. Empty groups are archived with an explicit reviewed-
-empty status when they contain no durable information.
+and `reference` memories. Requests are split to a bounded source-token budget.
+An empty result first marks the source `candidate_empty`; only a later empty
+pass after the default seven-day grace period may archive it as
+`empty_confirmed`.
 
-Every non-dry run first creates a native Qdrant backup. New memories are saved
-before source diary entries are marked archived; source text and vectors remain
-intact. Any group that fails remains active for the next run. Use `--before 48h`
+Automatic consolidation creates a native Qdrant backup only when archival is
+needed and the latest backup is older than seven days (override with
+`ARIADNE_BACKUP_MIN_INTERVAL`); manual `ariadnectl backup` is unconditional.
+New memories are saved before source diary entries are marked archived; source
+text and vectors remain intact. Any group that fails remains active for the next run. Use `--before 48h`
 for a longer review window or `--dry-run` to inspect output without changing the
 store. Search history with `include_archived: true`. Remote summary endpoints
 remain blocked unless `ARIADNE_CAPTURE_REMOTE=1` is explicitly set.
@@ -482,7 +490,8 @@ the same memory twice in one client session credits its source only once while
 counting both deliveries. Legacy/manual memories without source-size metadata
 receive no invented benefit: their cost is reported separately as
 `unattributed`, not as negative overhead. `memory_save` accepts optional
-`source_tokens` for integrations that know a bounded source size; capture and
+`source_tokens` for integrations that know a bounded source size and
+`occurred_at` for historical facts; capture and
 consolidation populate provenance automatically. The deterministic multilingual
 estimate uses UTF-8 bytes because exact tokenizers vary by client and model; `~`
 marks a conservative context-reuse estimate, not provider billing or an A/B
@@ -518,18 +527,24 @@ Two distinct concepts:
 
 `import` also backfills from an archived chromadb sqlite
 (`-source chroma -db <file>`) or markdown memory files (`-source memfiles`).
-All imports are idempotent (content-hash ids). For memfiles, `-sync` imports the
-current file revision first, marks prior chunks `superseded`, and marks chunks
-from vanished sources `orphaned`; it does not delete their history. The
+All imports are idempotent within a `(wing, room, text)` scope; identical text
+may intentionally exist in different projects or rooms. For memfiles, `-sync`
+uses a privacy-safe source key and relative source path, skips unchanged files
+before embedding, imports a changed revision first, preserves original event
+time, marks prior chunks `superseded`, and marks chunks from vanished sources
+`orphaned`; it does not delete their history. The
 installer registers a daily agent
 (`com.ariadne.sync` / `ariadne-sync.timer`) that runs this plus diary
-consolidation for you; run the import manually after large note edits.
+consolidation for you; run the import manually after large note edits. The
+`-force` flag is reserved for an explicit migration/repair pass; routine sync
+must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
 v0.7.0 plus local post-release development — working. Exact ID retrieval,
 room-scoped hybrid recall, append-only source history, conservative temporal
-ranking, immediate
+ranking, scoped identities, incremental timestamp-safe memfile sync, two-pass
+empty consolidation, maintenance history/storage observability, immediate
 durable reference/report capture, honest token-efficiency accounting, automatic
 daily diary distillation, explicit Windows client setup,
 local token-efficiency metrics,

@@ -14,6 +14,7 @@
   <key>EnvironmentVariables</key><dict>
     <!-- loopback-only: Qdrant has no auth by default; never expose it on the LAN -->
     <key>QDRANT__SERVICE__HOST</key><string>127.0.0.1</string>
+    <key>QDRANT__LOG_LEVEL</key><string>WARN</string>
     <key>QDRANT__STORAGE__STORAGE_PATH</key><string>__HOME__/.ariadne/qdrant-data</string>
     <key>QDRANT__STORAGE__SNAPSHOTS_PATH</key><string>__HOME__/.ariadne/qdrant-data/snapshots</string>
   </dict>

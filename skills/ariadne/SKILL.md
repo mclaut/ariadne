@@ -52,8 +52,9 @@ Do this automatically even when the user did not explicitly say "remember".
 
 Do NOT save: raw transcripts, code dumps, anything derivable from the repo,
 secrets/tokens/passwords (NEVER — memories are stored in plaintext), or
-ephemeral session chatter. Identical text deduplicates automatically
-(content-hash ids), so re-saving is harmless.
+ephemeral session chatter. Identical text deduplicates automatically within its
+wing and room (scoped-content ids), so re-saving in the same scope is harmless
+while another scope remains independently addressable.
 
 Metadata: `wing` = stable project slug (e.g. `myapp`, `backend`),
 `room` = category (`decisions`, `gotchas`, `reference`, `diary`). Use
@@ -73,22 +74,23 @@ curation, not only to find it semantically.
   user asked to forget, or a memory that is clearly wrong or superseded. Recall
   first, confirm the id is the right one, and say what you're removing.
 - **`memory_move(id, wing?, room?)`** — re-home (change project) or re-tag (change
-  room) a memory without touching its text; the id stays the same. Use it when a
-  memory landed in the wrong wing/room.
+  room) a memory without touching its text. It returns a new scoped id and keeps
+  the original record as superseded history.
 
-There is no copy tool: ids are a content-hash of the text, so identical text is
-always exactly one point.
+There is no dedicated copy tool: save the same text in another wing or room
+when both scoped associations are intentionally useful.
 
 ## Ops (via ~/.ariadne/bin/ariadnectl)
 
 ```bash
-~/.ariadne/bin/ariadnectl status        # health: Qdrant, Ollama, points, disk
+~/.ariadne/bin/ariadnectl status        # health, points, storage, maintenance freshness
 ~/.ariadne/bin/ariadnectl metrics       # estimated tokens saved by recalls (net avoided)
 ~/.ariadne/bin/ariadnectl start|stop|restart
 ~/.ariadne/bin/ariadnectl backup        # 10 recent snapshots; older ones → backups/archive
 ~/.ariadne/bin/ariadnectl restore <f>   # DESTRUCTIVE: replace collection from snapshot
 ~/.ariadne/bin/ariadnectl export [f]    # portable JSONL (no vectors, re-embeddable)
 ~/.ariadne/bin/ariadnectl consolidate --before 24h  # merge old diaries → durable memories
+~/.ariadne/bin/ariadnectl requeue-empty --dry-run   # inspect legacy one-pass empty archives
 ```
 
 `metrics` v2 separates **measured saved/net** from **unattributed** delivery.
@@ -118,7 +120,8 @@ operations (restore, migration, bulk import) run a backup first.
   right room). Capture records use the actual capture time plus separate session
   start/end metadata. Daily consolidation is append-only: it saves durable
   outputs and archives source diaries by metadata, never deleting their text or
-  vectors. Capture log: `~/.ariadne/logs/capture.log`;
+  vectors. A first empty result remains active and requires a later confirming
+  pass after the grace period. Capture log: `~/.ariadne/logs/capture.log`;
   disable with `ARIADNE_CAPTURE=0`. Capture summaries use
   `ARIADNE_SUMMARY_OLLAMA` (default: local Ollama); remote summary endpoints are
   blocked unless `ARIADNE_CAPTURE_REMOTE=1` is set, because condensed transcript
