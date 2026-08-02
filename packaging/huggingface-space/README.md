@@ -35,9 +35,9 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.7.0 adds exact memory lookup by content-hash ID, project and room
-scopes for semantic recall, immediate durable capture of verified outcomes,
-and honest token metrics that separate confirmed savings from recall overhead.
+Version 0.8.0 adds scoped append-only memory identity, incremental
+non-destructive memfile sync, conservative historical reranking, guarded diary
+consolidation, and retry-bounded maintenance with append-only health activity.
 
 ## Links
 

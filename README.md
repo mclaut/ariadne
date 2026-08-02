@@ -26,15 +26,17 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## In development after v0.7.0
+## What's New in v0.8.0
 
-**Append-only memory lifecycle.** Session capture now records the actual capture
-time separately from transcript start/end and assigns a stable opaque source
-lineage. Daily consolidation saves durable memories first, then archives source
-diaries by metadata; it never deletes them. A first zero-output review remains
-active as `candidate_empty` and needs a later confirming pass after a grace
-period before archival. Normal recall hides archived/superseded records, while exact-id
-lookup or `include_archived: true` provides an explicit audit path.
+**Scoped append-only memory lifecycle.** Identical text may exist independently
+in different projects and rooms. A move writes the destination record first and
+retains the original as superseded history. Session capture records actual event
+and capture times separately and assigns stable opaque source lineage. Daily
+consolidation saves durable memories first, then archives source diaries by
+metadata; it never deletes them. A first zero-output review remains active as
+`candidate_empty` and needs a later confirming pass after a grace period before
+archival. Normal recall hides archived/superseded records, while exact-ID lookup
+or `include_archived: true` provides an explicit audit path.
 
 **Conservative historical ranking.** Qdrant still supplies the dense+BM25 RRF
 candidate set. A small bounded second pass adds source quality, explicit
@@ -43,15 +45,20 @@ decay merely because they are old; recency applies only when the query asks for
 the latest/current/history-aware answer, and metadata cannot override a
 material semantic lead.
 
-**Non-destructive maintenance and evaluation.** Memfile sync skips unchanged
-source revisions before embedding, imports changed revisions before marking
-older chunks `superseded`, and preserves original observation timestamps;
-vanished sources become `orphaned`, not deleted. Backup rotation moves older snapshots into
-`backups/archive`. `go run ./cmd/eval` executes the deterministic multilingual
-coding-memory ranking suite in `evaluation/coding-memory.json` without touching
-Qdrant or Ollama.
+**Non-destructive, observable maintenance.** Memfile sync skips unchanged source
+revisions before embedding, imports changed revisions before marking older
+chunks `superseded`, and preserves original observation timestamps; vanished
+sources become `orphaned`, not deleted. Consolidation is batch- and
+context-bounded, validates model output, and retains source diaries when any
+promotion fails. The runner retries transient failures with capped backoff,
+records append-only activity, and exposes failed, partial, stuck, or stale state
+in status and the tray. Backup rotation archives older snapshots.
 
-## What's New in v0.7.0
+**Deterministic regression evaluation.** `go run ./cmd/eval` executes the
+multilingual coding-memory ranking suite in `evaluation/coding-memory.json`
+without touching Qdrant or Ollama.
+
+## Previously in v0.7.0
 
 **Exact retrieval and immediate durable memory.** `memory_recall` now accepts an
 exact scoped-content `id`, so agents can retrieve and verify one memory without an
@@ -105,13 +112,14 @@ ariadnectl consolidate --before 24h  # consolidation only
 ariadnectl requeue-empty --dry-run  # inspect records archived by the legacy one-pass empty policy
 ```
 
-The installer schedules consolidation with the existing 04:30 daily memory
-maintenance job on macOS and Linux. A failed stage is retried up to three times
-with bounded exponential backoff; partial import failures return non-zero and
-block consolidation. Sleep-missed timers catch up through launchd/systemd. The
-tray shows the latest outcome, warns when maintenance failed, remains partial,
-is stuck, or is older than 36 hours, and offers **Run maintenance now**. Output
-is written to `~/.ariadne/logs/maintenance.log`; append-only outcomes live in
+The installer schedules the 04:30 daily memory maintenance job on macOS and
+Linux. A failed stage is retried up to three times with bounded exponential
+backoff; partial import failures return non-zero and block consolidation.
+systemd uses `Persistent=true`; a loaded launchd calendar agent receives one
+catch-up start after the Mac wakes when a scheduled time was missed. The tray
+shows the latest outcome, warns when maintenance failed, remains partial, is
+stuck, or is older than 36 hours, and offers **Run maintenance now**. Output is
+written to `~/.ariadne/logs/maintenance.log`; append-only outcomes live in
 `~/.ariadne/state/activity.jsonl`.
 
 ## Previously in v0.5.0
@@ -548,10 +556,10 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.7.0 plus local post-release development — working. Exact ID retrieval,
-room-scoped hybrid recall, append-only source history, conservative temporal
-ranking, scoped identities, incremental timestamp-safe memfile sync, two-pass
-empty consolidation, maintenance history/storage observability, immediate
+v0.8.0 — working. Exact ID retrieval, room-scoped hybrid recall, append-only
+source history, conservative temporal ranking, scoped identities, incremental
+timestamp-safe memfile sync, two-pass empty consolidation, retry-bounded
+maintenance with history/storage observability, immediate
 durable reference/report capture, honest token-efficiency accounting, automatic
 daily diary distillation, explicit Windows client setup,
 local token-efficiency metrics,

@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.7</a>
+          <a href="#new">Нове у 0.8</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -61,13 +61,13 @@ export default function UkrainianHome() {
             <div className="memory-spine"><div className="memory-hub"><Database size={22} /><strong>Ariadne</strong><span>локально</span></div></div>
           </div>
           <div className="memory-terminal">
-            <span>$ memory_recall id=2704862554782470108</span>
-            <strong>точне отримання за ID</strong>
-            <span>повернуто один надійний референс</span>
+            <span>$ memory_move id=2704862554782470108 room=reference</span>
+            <strong>новий scoped ID записано першим</strong>
+            <span>оригінал збережено як superseded</span>
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.7.0 зберігає перевірені результати одразу</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.0 зберігає аудит кожної зміни пам’яті</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й блокувань вбудованої бази.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.7.0</span><h2>Збережіть результат, поки він свіжий.</h2><p>Агенти одразу записують рішення, проблеми, релізи, деплої та перевірені звіти — чекати завершення сесії не потрібно.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.0</span><h2>Пам’ять розвивається, не стираючи минуле.</h2><p>Scoped identity, incremental sync і retry-bounded maintenance підтримують пам’ять актуальною, прозорою та безпечною.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><Check /><h3>Негайне надійне збереження</h3><p>Завершені результати відразу потрапляють у decisions, gotchas або reference.</p></article>
-            <article className="new-item accent-blue"><Server /><h3>Точний пошук за ID</h3><p>Отримайте конкретний запис без embedding, приблизного ранжування й сторонніх результатів.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Пошук у межах кімнати</h3><p>Шукайте лише серед рішень, проблем, референсів або щоденника.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Чесний облік токенів</h3><p>Окремо видно підтверджену економію, накладні витрати recall і signed net.</p></article>
+            <article className="new-item accent-green"><Check /><h3>Scoped identity пам’яті</h3><p>Однаковий текст може існувати в різних проєктах і кімнатах; move зберігає superseded history.</p></article>
+            <article className="new-item accent-blue"><Server /><h3>Incremental append-only sync</h3><p>Незмінені файли не потребують embedding, а нова ревізія записується раніше за supersede старої.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Безпечніша консолідація</h3><p>Обмежені batch і context та quality gates лишають source diary активним після помилки.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Observable maintenance</h3><p>Capped retries, append-only activity, health alerts і ручний запуск контролюють задачу о 04:30.</p></article>
           </div>
         </div>
       </section>
@@ -108,7 +108,7 @@ export default function UkrainianHome() {
           <div className="install-tool">
             <div className="command-window"><div className="command-title"><span>macOS / Linux</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh</code></pre></div>
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.7.0">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.0">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>

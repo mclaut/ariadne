@@ -24,23 +24,30 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## У розробці після v0.7.0
+## Нове у v0.8.0
 
-- **Append-only історія.** Capture зберігає фактичний час запису окремо від меж
-  transcript. Consolidate спершу створює durable memories, а потім лише позначає
-  вихідні diary як `archived`; навіть результат `0 durable memories` нічого не
-  видаляє.
+- **Scoped append-only історія.** Однаковий текст може незалежно існувати в
+  різних проєктах і кімнатах. Move спершу створює цільовий запис і залишає
+  оригінал як superseded history. Capture окремо зберігає час події та запису;
+  consolidate спершу створює durable memories, а джерельні diary лише позначає
+  як `archived`.
 - **Історичні ваги.** Після dense+BM25 RRF застосовується невеликий обмежений
   rerank за temporal intent, provenance і розміром контексту. Старі рішення не
   втрачають вагу лише через вік; recency діє, коли сам запит просить останній або
   поточний стан.
 - **Аудит і безпечний sync.** `include_archived: true` повертає архівні та
-  superseded записи. Memfile sync додає нову ревізію перед архівацією старої, а
-  старі backup-и переміщуються до `backups/archive`.
+  superseded записи. Memfile sync пропускає незмінені файли без embedding,
+  додає нову ревізію перед supersede старої, а зниклі джерела позначає
+  `orphaned`, не видаляючи історію.
+- **Надійний maintenance.** Обмежена за batch і context консолідація перевіряє
+  структуру та якість відповіді, а source diary лишається активним після
+  помилки. Runner робить до трьох спроб із capped backoff; status і tray
+  показують failed, partial, stuck та stale стани й дозволяють запустити процес
+  негайно.
 - **Regression evaluation.** `go run ./cmd/eval` запускає read-only набір
   багатомовних coding-memory сценаріїв без Qdrant та Ollama.
 
-## Нове у v0.7.0
+## Раніше у v0.7.0
 
 - **Точне отримання за ID.** `memory_recall` приймає content-hash `id` і повертає
   конкретний запис без embedding та приблизного ранжування.
@@ -92,7 +99,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 - прив’язує Qdrant лише до `127.0.0.1`;
 - реєструє Ariadne для Codex, Claude Code або обох;
 - встановлює skill негайного збереження довготривалої пам’яті;
-- налаштовує резервні копії та щоденну консолідацію diary.
+- налаштовує резервні копії та retry-bounded maintenance щодня о 04:30.
 
 ## Використання MCP
 
