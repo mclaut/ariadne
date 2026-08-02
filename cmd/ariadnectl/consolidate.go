@@ -49,6 +49,7 @@ const consolidatePrompt = "You curate long-term software-project memory. " +
 	"Use decisions only for an explicit choice and its rationale; use gotchas for a verified root cause, failure mode, or fix; " +
 	"use reference for verified reports, releases, measurements, and current status. " +
 	"Drop chronology, routine progress, code/log dumps, repository-derivable details, social chatter, and duplicates. " +
+	"Drop local filesystem and ephemeral artifact paths; retain the verified outcome instead. " +
 	"Write one concern per memory and never merge unrelated facts. " +
 	"Each text must name its subject, be self-contained rather than a fragment, contain 80-1200 characters, " +
 	"and use the diary's language. Never invent a resolution for an explicitly unknown cause. " +
@@ -568,7 +569,8 @@ func trivialConsolidatedSummary(text string) bool {
 func unstableArtifactReference(text string) bool {
 	lower := strings.ToLower(text)
 	return containsAny(lower, []string{
-		"/users/", "c:\\users\\", "~/.codex/", "~/.claude/", "outputs/",
+		"/users/", "/home/", "/data/", "/tmp/", "/var/", "/mnt/", "/private/", "/volumes/", "/workspace/",
+		"c:\\users\\", "~/.codex/", "~/.claude/", "outputs/",
 	})
 }
 

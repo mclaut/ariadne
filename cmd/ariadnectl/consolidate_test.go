@@ -202,7 +202,7 @@ func TestQualityGateRejectsUnstableLocalArtifactPath(t *testing.T) {
 		[]diaryPoint{{Text: "The verified financial analysis completed with all reconciliation checks passing."}},
 		[]consolidatedMemory{{
 			Room: roomReference,
-			Text: "The verified financial analysis completed with all checks passing; workbook is outputs/run/report.xlsx.",
+			Text: "The verified financial analysis completed with all checks passing; workbook is /data/runs/report.xlsx.",
 		}},
 	)
 	if err == nil {
