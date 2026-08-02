@@ -59,7 +59,7 @@ func sessionStart() {
 	defer cancel()
 	hits, err := st.Recall(ctx,
 		"поточний стан проекту "+wing+": останні рішення, застереження, наступні кроки",
-		4, wing, "", "")
+		4, wing, "", "", false)
 	if err != nil || len(hits) == 0 {
 		return
 	}
@@ -67,8 +67,15 @@ func sessionStart() {
 	var b strings.Builder
 	fmt.Fprintf(&b, "🧵 Ariadne auto-recall — памʼять проекту «%s»:\n", wing)
 	total := 0
-	represented := int64(0)
 	selected := int64(0)
+	totalMemoryTokens := int64(0)
+	attributedMemoryTokens := int64(0)
+	attributedMemories := int64(0)
+	representations := make([]metrics.Representation, 0, len(hits))
+	metricsSession := in.SessionID
+	if metricsSession == "" {
+		metricsSession = metrics.UniqueEventID()
+	}
 	for _, h := range hits {
 		t := oneLine(store.SanitizeUTF8(h.Text), 260)
 		if total+len(t) > 1400 {
@@ -77,22 +84,36 @@ func sessionStart() {
 		fmt.Fprintf(&b, "• [%.2f%s] %s\n", h.Score, room(h.Room), t)
 		total += len(t)
 		selected++
-		represented += metrics.RepresentedShare(h.SourceTokens, h.MemoryTokens, metrics.EstimateTokens(t))
+		delivered := metrics.EstimateTokens(t)
+		totalMemoryTokens += delivered
+		represented := metrics.RepresentedShare(h.SourceTokens, h.MemoryTokens, delivered)
+		if represented > 0 {
+			attributedMemoryTokens += delivered
+			attributedMemories++
+			representationID := metrics.SessionMemoryID("auto", metricsSession, h.ID)
+			if h.SourceID != "" {
+				representationID = metrics.SessionSourceID("auto", metricsSession, h.SourceID)
+			}
+			representations = append(representations, metrics.Representation{
+				ID: representationID, Tokens: represented,
+			})
+		}
 	}
 	b.WriteString("(глибше: тул mcp__ariadne__memory_recall, параметр wing)")
 
-	eventID := metrics.UniqueEventID()
-	if in.SessionID != "" {
-		eventID = metrics.SessionEventID("auto", in.SessionID)
-	}
+	delivered := metrics.EstimateTokens(b.String())
+	attributed, unknown := metrics.SplitAttribution(delivered, totalMemoryTokens, attributedMemoryTokens)
 	metricsCtx, metricsCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	_ = metrics.RecordRecall(metricsCtx, metrics.Event{
-		ID:                metrics.UniqueEventID(),
-		RepresentedID:     eventID,
-		Source:            "auto",
-		DeliveredTokens:   metrics.EstimateTokens(b.String()),
-		RepresentedTokens: represented,
-		Memories:          selected,
+		ID:                   metrics.UniqueEventID(),
+		Source:               "auto",
+		DeliveredTokens:      delivered,
+		AttributedTokens:     attributed,
+		UnattributedTokens:   unknown,
+		Memories:             selected,
+		AttributedMemories:   attributedMemories,
+		UnattributedMemories: selected - attributedMemories,
+		Representations:      representations,
 	})
 	metricsCancel()
 

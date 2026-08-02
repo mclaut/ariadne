@@ -53,21 +53,35 @@ func backupCmd() int {
 	}
 	// 3. drop the in-engine snapshot (keep qdrant-data lean)
 	_ = httpDo(http.MethodDelete, qdrantREST+"/collections/"+collection+"/snapshots/"+name, nil, nil)
-	// 4. rotate
-	n := rotateBackups(dir)
+	// 4. keep a small recent set in the root and move older snapshots into an
+	// append-only archive. Nothing is discarded.
+	n, archived := rotateBackups(dir)
 	fi, _ := os.Stat(dest)
-	fmt.Printf("backup ok: %s (%dMB) · %d kept\n", filepath.Base(dest), fi.Size()/(1024*1024), n)
+	fmt.Printf("backup ok: %s (%dMB) · %d recent · %d archived now\n",
+		filepath.Base(dest), fi.Size()/(1024*1024), n, archived)
 	return 0
 }
 
-func rotateBackups(dir string) int {
+func rotateBackups(dir string) (recent, archived int) {
 	m, _ := filepath.Glob(filepath.Join(dir, collection+"-*.snapshot"))
 	sort.Strings(m)
-	for len(m) > keepBackup {
-		_ = os.Remove(m[0])
-		m = m[1:]
+	archiveDir := filepath.Join(dir, "archive")
+	if len(m) <= keepBackup {
+		return len(m), 0
 	}
-	return len(m)
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil { //nolint:gosec // user-owned backup archive
+		return len(m), 0
+	}
+	for _, source := range m[:len(m)-keepBackup] {
+		destination := filepath.Join(archiveDir, filepath.Base(source))
+		if _, err := os.Stat(destination); err == nil {
+			continue // preserve both copies rather than overwrite either one
+		}
+		if err := os.Rename(source, destination); err == nil {
+			archived++
+		}
+	}
+	return len(m) - archived, archived
 }
 
 // restoreCmd uploads a snapshot file and recovers the collection from it
@@ -105,7 +119,7 @@ func exportCmd(path string) int {
 		path = filepath.Join(backupsDir(), collection+"-"+time.Now().Format("20060102-150405")+".jsonl")
 		_ = os.MkdirAll(backupsDir(), 0o755) //nolint:gosec // user-owned
 	}
-	f, err := os.Create(path) //nolint:gosec // user-provided path
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600) //nolint:gosec // user-provided path
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create:", err)
 		return 1
@@ -133,6 +147,15 @@ func exportCmd(path string) int {
 			pl, _ := pm["payload"].(map[string]any)
 			line := map[string]any{
 				"text": strOf(pl["text"]), "wing": strOf(pl["wing"]), "room": strOf(pl["room"]),
+			}
+			for _, field := range []string{
+				"ts", "observed_at", "occurred_at", "session_started_at", "session_ended_at",
+				"consolidated_at", "superseded_at", "orphaned_at", "source_tokens", "memory_tokens",
+				"provenance", "source_id", "source_revision", "status", "memory_type", "consolidation_status",
+			} {
+				if value, exists := pl[field]; exists {
+					line[field] = value
+				}
 			}
 			b, _ := json.Marshal(line)
 			_, _ = w.Write(append(b, '\n'))
@@ -199,7 +222,7 @@ func download(url, dest string) error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	f, err := os.Create(dest) //nolint:gosec // user-owned backups path
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600) //nolint:gosec // user-owned backups path
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,131 @@
+[
+  {
+    "name": "latest incident prefers recent comparable evidence",
+    "query": "What caused the latest deployment failure?",
+    "now": "2026-07-21T12:00:00Z",
+    "limit": 3,
+    "want_first": 2,
+    "candidates": [
+      {
+        "id": 1,
+        "score": 0.5,
+        "text": "An old deployment failed because the signing certificate expired.",
+        "room": "gotchas",
+        "provenance": "manual",
+        "occurred_at": 1742212800,
+        "memory_tokens": 20
+      },
+      {
+        "id": 2,
+        "score": 0.495,
+        "text": "The current deployment failed because the release manifest had a stale version.",
+        "room": "gotchas",
+        "provenance": "capture",
+        "occurred_at": 1784631600,
+        "memory_tokens": 24
+      }
+    ]
+  },
+  {
+    "name": "durable decision does not decay without temporal intent",
+    "query": "Why is Qdrant bound to loopback?",
+    "now": "2026-07-21T12:00:00Z",
+    "limit": 3,
+    "want_first": 10,
+    "candidates": [
+      {
+        "id": 10,
+        "score": 0.61,
+        "text": "Qdrant is loopback-only because it has no authentication and stores plaintext payloads.",
+        "room": "decisions",
+        "occurred_at": 1689940800,
+        "memory_tokens": 25
+      },
+      {
+        "id": 11,
+        "score": 0.56,
+        "text": "Qdrant is currently healthy.",
+        "room": "reference",
+        "provenance": "capture",
+        "occurred_at": 1784631600,
+        "memory_tokens": 8
+      }
+    ]
+  },
+  {
+    "name": "concise source-backed memory beats oversized legacy tie",
+    "query": "metrics attribution coverage",
+    "now": "2026-07-21T12:00:00Z",
+    "limit": 3,
+    "want_first": 21,
+    "candidates": [
+      {
+        "id": 20,
+        "score": 0.5,
+        "text": "Large legacy project transcript.",
+        "room": "memory:project.md",
+        "memory_tokens": 3000
+      },
+      {
+        "id": 21,
+        "score": 0.495,
+        "text": "Metrics separate measured savings from unattributed delivery.",
+        "room": "reference",
+        "provenance": "manual-measured",
+        "memory_tokens": 16
+      }
+    ]
+  },
+  {
+    "name": "metadata cannot override a material relevance lead",
+    "query": "latest release signing decision",
+    "now": "2026-07-21T12:00:00Z",
+    "limit": 3,
+    "want_first": 30,
+    "candidates": [
+      {
+        "id": 30,
+        "score": 0.72,
+        "text": "Release artifacts use Sigstore signing.",
+        "room": "decisions",
+        "occurred_at": 1721563200,
+        "memory_tokens": 12
+      },
+      {
+        "id": 31,
+        "score": 0.6,
+        "text": "A recent unrelated release note.",
+        "room": "reference",
+        "provenance": "capture",
+        "occurred_at": 1784631600,
+        "memory_tokens": 10
+      }
+    ]
+  },
+  {
+    "name": "ukrainian temporal intent uses the event time",
+    "query": "яке останнє рішення щодо консолідації?",
+    "now": "2026-07-21T12:00:00Z",
+    "limit": 3,
+    "want_first": 41,
+    "candidates": [
+      {
+        "id": 40,
+        "score": 0.5,
+        "text": "Старе рішення дозволяло видаляти diary після консолідації.",
+        "room": "decisions",
+        "occurred_at": 1742212800,
+        "memory_tokens": 18
+      },
+      {
+        "id": 41,
+        "score": 0.494,
+        "text": "Нове рішення робить консолідацію append-only та архівує джерела.",
+        "room": "decisions",
+        "provenance": "manual-measured",
+        "occurred_at": 1784631600,
+        "memory_tokens": 20
+      }
+    ]
+  }
+]

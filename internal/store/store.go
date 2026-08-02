@@ -38,7 +38,20 @@ type Result struct {
 	Room         string  `json:"room,omitempty"`
 	SourceTokens int64   `json:"source_tokens,omitempty"`
 	MemoryTokens int64   `json:"memory_tokens,omitempty"`
+	Provenance   string  `json:"provenance,omitempty"`
+	SourceID     string  `json:"source_id,omitempty"`
+	Status       string  `json:"status,omitempty"`
+	MemoryType   string  `json:"memory_type,omitempty"`
+	ObservedAt   int64   `json:"observed_at,omitempty"`
+	OccurredAt   int64   `json:"occurred_at,omitempty"`
 }
+
+const (
+	StatusActive     = "active"
+	StatusArchived   = "archived"
+	StatusSuperseded = "superseded"
+	StatusOrphaned   = "orphaned"
+)
 
 // GetByID retrieves one memory exactly, without embedding or semantic search.
 // A non-empty collection overrides the default collection.
@@ -67,6 +80,12 @@ func (s *Store) GetByID(ctx context.Context, id uint64, collection string) (Resu
 		Room:         pl["room"].GetStringValue(),
 		SourceTokens: pl["source_tokens"].GetIntegerValue(),
 		MemoryTokens: pl["memory_tokens"].GetIntegerValue(),
+		Provenance:   pl["provenance"].GetStringValue(),
+		SourceID:     pl["source_id"].GetStringValue(),
+		Status:       pl["status"].GetStringValue(),
+		MemoryType:   pl["memory_type"].GetStringValue(),
+		ObservedAt:   pl["observed_at"].GetIntegerValue(),
+		OccurredAt:   pl["occurred_at"].GetIntegerValue(),
 	}, true, nil
 }
 
@@ -117,18 +136,39 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 		FieldName:      "ts",
 		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
 	})
+	for _, field := range []string{
+		"room", "status", "provenance", "memory_type", "consolidation_status", "source_revision",
+	} {
+		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+			CollectionName: s.collection,
+			FieldName:      field,
+			FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
+		})
+	}
+	for _, field := range []string{"observed_at", "occurred_at", "consolidated_at", "superseded_at", "orphaned_at"} {
+		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+			CollectionName: s.collection,
+			FieldName:      field,
+			FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
+		})
+	}
 	return nil
 }
 
 // Save embeds text (dense+sparse) and upserts one point. The id is a content
 // hash, so saving identical text twice is idempotent (natural dedup).
 func (s *Store) Save(ctx context.Context, text string, meta map[string]string) (uint64, error) {
+	id := contentID(text)
+	existing, err := s.sourceMetadata(ctx, []uint64{id})
+	if err != nil {
+		return 0, err
+	}
+	meta = preserveSourceMetadata(meta, existing[id])
 	dense, err := s.embed(ctx, text)
 	if err != nil {
 		return 0, err
 	}
 	sIdx, sVal := sparseVec(text)
-	id := contentID(text)
 	_, err = s.qc.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collection,
 		Points: []*qdrant.PointStruct{{
@@ -157,8 +197,14 @@ func (s *Store) SaveBatch(ctx context.Context, items []SaveItem) error {
 		return nil
 	}
 	texts := make([]string, len(items))
+	ids := make([]uint64, len(items))
 	for i, it := range items {
 		texts[i] = it.Text
+		ids[i] = contentID(it.Text)
+	}
+	existing, err := s.sourceMetadata(ctx, ids)
+	if err != nil {
+		return err
 	}
 	dense, err := s.embedBatch(ctx, texts)
 	if err != nil {
@@ -167,17 +213,93 @@ func (s *Store) SaveBatch(ctx context.Context, items []SaveItem) error {
 	points := make([]*qdrant.PointStruct, len(items))
 	for i, it := range items {
 		sIdx, sVal := sparseVec(it.Text)
+		meta := preserveSourceMetadata(it.Meta, existing[ids[i]])
 		points[i] = &qdrant.PointStruct{
-			Id: qdrant.NewIDNum(contentID(it.Text)),
+			Id: qdrant.NewIDNum(ids[i]),
 			Vectors: qdrant.NewVectorsMap(map[string]*qdrant.Vector{
 				"dense":  qdrant.NewVectorDense(dense[i]),
 				"sparse": qdrant.NewVectorSparse(sIdx, sVal),
 			}),
-			Payload: qdrant.NewValueMap(buildPayload(it.Text, it.Meta)),
+			Payload: qdrant.NewValueMap(buildPayload(it.Text, meta)),
 		}
 	}
 	_, err = s.qc.Upsert(ctx, &qdrant.UpsertPoints{CollectionName: s.collection, Points: points})
 	return err
+}
+
+type sourceMeta struct {
+	SourceTokens int64
+	MemoryTokens int64
+	Provenance   string
+	SourceID     string
+	Status       string
+	MemoryType   string
+	ObservedAt   int64
+	OccurredAt   int64
+}
+
+func (s *Store) sourceMetadata(ctx context.Context, ids []uint64) (map[uint64]sourceMeta, error) {
+	pointIDs := make([]*qdrant.PointId, len(ids))
+	for i, id := range ids {
+		pointIDs[i] = qdrant.NewIDNum(id)
+	}
+	points, err := s.qc.Get(ctx, &qdrant.GetPoints{
+		CollectionName: s.collection,
+		Ids:            pointIDs,
+		WithPayload:    qdrant.NewWithPayload(true),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uint64]sourceMeta, len(points))
+	for _, point := range points {
+		payload := point.GetPayload()
+		out[point.GetId().GetNum()] = sourceMeta{
+			SourceTokens: payload["source_tokens"].GetIntegerValue(),
+			MemoryTokens: payload["memory_tokens"].GetIntegerValue(),
+			Provenance:   payload["provenance"].GetStringValue(),
+			SourceID:     payload["source_id"].GetStringValue(),
+			Status:       payload["status"].GetStringValue(),
+			MemoryType:   payload["memory_type"].GetStringValue(),
+			ObservedAt:   payload["observed_at"].GetIntegerValue(),
+			OccurredAt:   payload["occurred_at"].GetIntegerValue(),
+		}
+	}
+	return out, nil
+}
+
+func preserveSourceMetadata(meta map[string]string, existing sourceMeta) map[string]string {
+	out := make(map[string]string, len(meta)+8)
+	for key, value := range meta {
+		out[key] = value
+	}
+	if out["source_tokens"] == "" && existing.SourceTokens > 0 {
+		out["source_tokens"] = strconv.FormatInt(existing.SourceTokens, 10)
+		if existing.MemoryTokens > 0 {
+			out["memory_tokens"] = strconv.FormatInt(existing.MemoryTokens, 10)
+		}
+		if existing.Provenance != "" {
+			out["provenance"] = existing.Provenance
+		}
+	}
+	for key, value := range map[string]string{
+		"source_id":   existing.SourceID,
+		"status":      existing.Status,
+		"memory_type": existing.MemoryType,
+	} {
+		if out[key] == "" && value != "" {
+			out[key] = value
+		}
+	}
+	for key, value := range map[string]int64{
+		"observed_at": existing.ObservedAt,
+		"occurred_at": existing.OccurredAt,
+	} {
+		if out[key] == "" && value > 0 {
+			out[key] = strconv.FormatInt(value, 10)
+		}
+	}
+	return out
 }
 
 // buildPayload assembles a point payload: text plus non-empty metadata. Numeric
@@ -188,21 +310,28 @@ func buildPayload(text string, meta map[string]string) map[string]any {
 		if v == "" {
 			continue
 		}
-		if k == "ts" || k == "source_tokens" || k == "memory_tokens" {
-			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-				payload[k] = n
-				continue
-			}
-		}
-		payload[k] = v
+		payload[k] = metadataValue(k, v)
 	}
 	return payload
+}
+
+func metadataValue(key, value string) any {
+	switch key {
+	case "ts", "source_tokens", "memory_tokens", "observed_at", "occurred_at",
+		"session_started_at", "session_ended_at", "consolidated_at", "superseded_at", "orphaned_at":
+		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return n
+		}
+	}
+	return value
 }
 
 // Recall runs a hybrid dense+sparse query fused with RRF, server-side.
 // Non-empty wing and room values narrow the search to that project/namespace
 // and category. A non-empty collection overrides the default one.
-func (s *Store) Recall(ctx context.Context, query string, limit int, wing, room, collection string) ([]Result, error) {
+func (s *Store) Recall(
+	ctx context.Context, query string, limit int, wing, room, collection string, includeArchived bool,
+) ([]Result, error) {
 	if limit <= 0 {
 		limit = 5
 	}
@@ -214,8 +343,12 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, room,
 		return nil, err
 	}
 	sIdx, sVal := sparseVec(query)
-	pre := uint64(limit * 4)
-	filter := recallFilter(wing, room)
+	candidateLimit := limit * 4
+	if candidateLimit < 20 {
+		candidateLimit = 20
+	}
+	pre := uint64(candidateLimit * 2)
+	filter := recallFilter(wing, room, includeArchived)
 	res, err := s.qc.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: collection,
 		Prefetch: []*qdrant.PrefetchQuery{
@@ -224,7 +357,7 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, room,
 		},
 		Query:       qdrant.NewQueryFusion(qdrant.Fusion_RRF),
 		Filter:      filter,
-		Limit:       qdrant.PtrOf(uint64(limit)),
+		Limit:       qdrant.PtrOf(uint64(candidateLimit)),
 		WithPayload: qdrant.NewWithPayload(true),
 	})
 	if err != nil {
@@ -241,12 +374,18 @@ func (s *Store) Recall(ctx context.Context, query string, limit int, wing, room,
 			Room:         pl["room"].GetStringValue(),
 			SourceTokens: pl["source_tokens"].GetIntegerValue(),
 			MemoryTokens: pl["memory_tokens"].GetIntegerValue(),
+			Provenance:   pl["provenance"].GetStringValue(),
+			SourceID:     pl["source_id"].GetStringValue(),
+			Status:       pl["status"].GetStringValue(),
+			MemoryType:   pl["memory_type"].GetStringValue(),
+			ObservedAt:   pl["observed_at"].GetIntegerValue(),
+			OccurredAt:   pl["occurred_at"].GetIntegerValue(),
 		})
 	}
-	return out, nil
+	return Rerank(query, out, limit, time.Now()), nil
 }
 
-func recallFilter(wing, room string) *qdrant.Filter {
+func recallFilter(wing, room string, includeArchived bool) *qdrant.Filter {
 	conditions := make([]*qdrant.Condition, 0, 2)
 	if wing != "" {
 		conditions = append(conditions, qdrant.NewMatch("wing", wing))
@@ -254,10 +393,19 @@ func recallFilter(wing, room string) *qdrant.Filter {
 	if room != "" {
 		conditions = append(conditions, qdrant.NewMatch("room", room))
 	}
-	if len(conditions) == 0 {
+	if includeArchived && len(conditions) == 0 {
 		return nil
 	}
-	return &qdrant.Filter{Must: conditions}
+	filter := &qdrant.Filter{Must: conditions}
+	// Consolidated and superseded records remain stored and are available by
+	// exact id or an explicit includeArchived recall. Normal recall only sees
+	// active or legacy records.
+	if !includeArchived {
+		for _, status := range []string{StatusArchived, StatusSuperseded, StatusOrphaned} {
+			filter.MustNot = append(filter.MustNot, qdrant.NewMatch("status", status))
+		}
+	}
+	return filter
 }
 
 // --- embedding + sparse ---
@@ -359,7 +507,7 @@ func (s *Store) SetMeta(ctx context.Context, id uint64, meta map[string]string) 
 	payload := map[string]any{}
 	for k, v := range meta {
 		if v != "" {
-			payload[k] = v
+			payload[k] = metadataValue(k, v)
 		}
 	}
 	if len(payload) == 0 {
@@ -373,6 +521,63 @@ func (s *Store) SetMeta(ctx context.Context, id uint64, meta map[string]string) 
 	return err
 }
 
+// SetMetaByIDs updates metadata for several records without changing their
+// text or vectors. It is used to archive source diary records after an
+// append-only consolidation pass.
+func (s *Store) SetMetaByIDs(ctx context.Context, ids []uint64, meta map[string]string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	payload := map[string]any{}
+	for key, value := range meta {
+		if value != "" {
+			payload[key] = metadataValue(key, value)
+		}
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	pointIDs := make([]*qdrant.PointId, len(ids))
+	for i, id := range ids {
+		pointIDs[i] = qdrant.NewIDNum(id)
+	}
+	_, err := s.qc.SetPayload(ctx, &qdrant.SetPayloadPoints{
+		CollectionName: s.collection,
+		Payload:        qdrant.NewValueMap(payload),
+		PointsSelector: qdrant.NewPointsSelector(pointIDs...),
+	})
+	return err
+}
+
+// SetMetaByWingRoom updates every record from one imported source. When
+// exceptRevision is non-empty, records from that current revision are left
+// active while older revisions receive the supplied archival metadata.
+func (s *Store) SetMetaByWingRoom(
+	ctx context.Context, wing, room, exceptRevision string, meta map[string]string,
+) error {
+	payload := map[string]any{}
+	for key, value := range meta {
+		if value != "" {
+			payload[key] = metadataValue(key, value)
+		}
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	filter := &qdrant.Filter{Must: []*qdrant.Condition{
+		qdrant.NewMatch("wing", wing), qdrant.NewMatch("room", room),
+	}}
+	if exceptRevision != "" {
+		filter.MustNot = append(filter.MustNot, qdrant.NewMatch("source_revision", exceptRevision))
+	}
+	_, err := s.qc.SetPayload(ctx, &qdrant.SetPayloadPoints{
+		CollectionName: s.collection,
+		Payload:        qdrant.NewValueMap(payload),
+		PointsSelector: qdrant.NewPointsSelectorFilter(filter),
+	})
+	return err
+}
+
 // WingRoomPairs returns point counts per (wing, room) pair. One payload-only
 // scroll — fine at local scale (revisit past ~100k points); used by
 // import -sync to find orphaned chunks of deleted/renamed files.
@@ -380,7 +585,7 @@ func (s *Store) WingRoomPairs(ctx context.Context) (map[[2]string]int, error) {
 	res, err := s.qc.Scroll(ctx, &qdrant.ScrollPoints{
 		CollectionName: s.collection,
 		Limit:          qdrant.PtrOf(uint32(200_000)),
-		WithPayload:    qdrant.NewWithPayloadInclude("wing", "room"),
+		WithPayload:    qdrant.NewWithPayloadInclude("wing", "room", "status"),
 	})
 	if err != nil {
 		return nil, err
@@ -388,6 +593,10 @@ func (s *Store) WingRoomPairs(ctx context.Context) (map[[2]string]int, error) {
 	out := map[[2]string]int{}
 	for _, p := range res {
 		pl := p.GetPayload()
+		switch pl["status"].GetStringValue() {
+		case StatusArchived, StatusSuperseded, StatusOrphaned:
+			continue
+		}
 		out[[2]string{pl["wing"].GetStringValue(), pl["room"].GetStringValue()}]++
 	}
 	return out, nil

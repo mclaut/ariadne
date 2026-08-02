@@ -28,6 +28,9 @@ Qdrant data, backups, logs); source lives in the repo.
 - Use `room` to narrow retrieval when the category is known: `decisions`,
   `gotchas`, `reference`, or `diary`. For release/deployment/status reports,
   search `room: "reference"` first, then broaden only if needed.
+- Normal semantic recall hides records marked `archived`, `superseded`, or
+  `orphaned`. Pass `include_archived: true` only for an explicit history/audit
+  query; exact id retrieval always remains available.
 - The raw session archive lives in a separate collection — pass
   `collection: "sessions"` to dig into old transcripts; normal recall never
   sees them.
@@ -55,6 +58,10 @@ ephemeral session chatter. Identical text deduplicates automatically
 Metadata: `wing` = stable project slug (e.g. `myapp`, `backend`),
 `room` = category (`decisions`, `gotchas`, `reference`, `diary`). Use
 `reference` for reports and verified outcomes; `diary` is temporary chronology.
+`memory_save` also accepts optional `source_tokens`: pass it only when a hook or
+integration has a measured or conservative count for the bounded source that
+was condensed into this memory. Omit it rather than guessing from the whole
+session, and never send raw source text merely to obtain a count.
 
 ## Curate — delete / move (by id)
 
@@ -78,17 +85,20 @@ always exactly one point.
 ~/.ariadne/bin/ariadnectl status        # health: Qdrant, Ollama, points, disk
 ~/.ariadne/bin/ariadnectl metrics       # estimated tokens saved by recalls (net avoided)
 ~/.ariadne/bin/ariadnectl start|stop|restart
-~/.ariadne/bin/ariadnectl backup        # Qdrant snapshot → ~/.ariadne/backups (keeps 10)
+~/.ariadne/bin/ariadnectl backup        # 10 recent snapshots; older ones → backups/archive
 ~/.ariadne/bin/ariadnectl restore <f>   # DESTRUCTIVE: replace collection from snapshot
 ~/.ariadne/bin/ariadnectl export [f]    # portable JSONL (no vectors, re-embeddable)
 ~/.ariadne/bin/ariadnectl consolidate --before 24h  # merge old diaries → durable memories
 ```
 
-`metrics` reports three honest values: **confirmed saved** (sum of positive
-per-recall reuse), **recall overhead** (delivery not backed by measurable source
-context, including legacy memories), and signed **net** (saved minus overhead).
-The tray shows confirmed savings, which cannot be negative; CLI/JSON preserve
-overhead and signed net instead of hiding real costs.
+`metrics` v2 separates **measured saved/net** from **unattributed** delivery.
+Source-backed memories contribute represented context once per memory per
+client session; every query/result delivery still contributes observed recall
+cost. Legacy/manual memories without source metadata remain visible as
+unattributed instead of being mislabelled as negative overhead. The tray shows
+measured savings, attribution coverage, recall count, and unattributed cost;
+CLI/JSON expose the complete counters. These are conservative context-reuse
+estimates, not provider billing or a counterfactual A/B result.
 
 Backup vs export: **backup** = fast 1:1 snapshot tied to the embedding model;
 **export** = portable text that any future model can re-embed. Before risky
@@ -105,7 +115,10 @@ operations (restore, migration, bulk import) run a backup first.
   would otherwise be lost). The daily `consolidate` run merges accumulated
   diaries into durable memories. Don't duplicate this by saving your own session
   summary; DO still save important decisions/gotchas explicitly (better wording,
-  right room). Capture log: `~/.ariadne/logs/capture.log`;
+  right room). Capture records use the actual capture time plus separate session
+  start/end metadata. Daily consolidation is append-only: it saves durable
+  outputs and archives source diaries by metadata, never deleting their text or
+  vectors. Capture log: `~/.ariadne/logs/capture.log`;
   disable with `ARIADNE_CAPTURE=0`. Capture summaries use
   `ARIADNE_SUMMARY_OLLAMA` (default: local Ollama); remote summary endpoints are
   blocked unless `ARIADNE_CAPTURE_REMOTE=1` is set, because condensed transcript

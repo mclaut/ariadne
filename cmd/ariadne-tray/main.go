@@ -75,10 +75,10 @@ var (
 	lang       i18n.Lang
 	lastIssues []string
 
-	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints, rowTokens, rowDisk *systray.MenuItem
-	mUpdate, mStart, mStop, mRestart, mBackup, mExport, mData, mLogs, mLang    *systray.MenuItem
-	mQuit                                                                      *systray.MenuItem
-	langItems                                                                  map[i18n.Lang]*systray.MenuItem
+	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints                         *systray.MenuItem
+	rowTokens, rowCoverage, rowUnattributed, rowDisk                               *systray.MenuItem
+	mUpdate, mStart, mStop, mRestart, mBackup, mExport, mData, mLogs, mLang, mQuit *systray.MenuItem
+	langItems                                                                      map[i18n.Lang]*systray.MenuItem
 )
 
 func main() {
@@ -100,6 +100,8 @@ func onReady() {
 	rowOllama = infoRow("")
 	rowPoints = infoRow("")
 	rowTokens = infoRow("")
+	rowCoverage = infoRow("")
+	rowUnattributed = infoRow("")
 	rowDisk = infoRow("")
 	mUpdate = systray.AddMenuItem("", "")
 	systray.AddSeparator()
@@ -233,8 +235,11 @@ func poll() {
 	rowQdrant.SetTitle(fmt.Sprintf("Qdrant: %s · %dMB", upWord(s.Qdrant.Up), s.Qdrant.RSSMB))
 	rowOllama.SetTitle(fmt.Sprintf("Ollama: %s · %dMB", upVer(s.Ollama), s.Ollama.RSSMB))
 	rowPoints.SetTitle(fmt.Sprintf("%s: %s (%s)", i18n.T(lang, "row.records"), grouped(s.Collection.Points), s.Collection.Status))
-	savedTokens := s.TokenMetrics.AllTime.ConfirmedSavedTokens
-	rowTokens.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.context_saved"), grouped(savedTokens)))
+	totals := s.TokenMetrics.AllTime
+	rowTokens.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.context_saved"), grouped(totals.ConfirmedSavedTokens)))
+	rowCoverage.SetTitle(fmt.Sprintf("%s: %d%% · %s: %s", i18n.T(lang, "row.metrics_coverage"),
+		totals.AttributionPercent, i18n.T(lang, "row.recalls"), grouped(totals.Recalls)))
+	rowUnattributed.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.unattributed"), grouped(totals.UnattributedTokens)))
 	rowDisk.SetTitle(fmt.Sprintf("%s: %dMB · %s %dGB", i18n.T(lang, "row.data"), s.DataMB, i18n.T(lang, "row.free"), s.FreeGB))
 
 	// notify only when a NEW issue appears (or a service just dropped)

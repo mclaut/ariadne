@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ariadne/internal/metrics"
 	"ariadne/internal/store"
 	"bytes"
 	"context"
@@ -17,15 +18,23 @@ import (
 )
 
 type diaryPoint struct {
-	ID   uint64
-	Text string
-	Wing string
-	TS   int64
+	ID           uint64
+	Text         string
+	Wing         string
+	TS           int64
+	OccurredAt   int64
+	SourceTokens int64
+	SourceID     string
 }
 
 type consolidatedMemory struct {
 	Room string `json:"room"`
 	Text string `json:"text"`
+}
+
+type consolidationWriter interface {
+	Save(context.Context, string, map[string]string) (uint64, error)
+	SetMetaByIDs(context.Context, []uint64, map[string]string) error
 }
 
 const consolidatePrompt = "You curate long-term software-project memory. " +
@@ -39,7 +48,7 @@ const consolidatePrompt = "You curate long-term software-project memory. " +
 func consolidateCmd(args []string) int {
 	fs := flag.NewFlagSet("consolidate", flag.ContinueOnError)
 	before := fs.Duration("before", 24*time.Hour, "only consolidate diary entries older than this age")
-	dryRun := fs.Bool("dry-run", false, "show the plan without saving or deleting")
+	dryRun := fs.Bool("dry-run", false, "show the plan without saving or changing metadata")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -60,7 +69,7 @@ func consolidateCmd(args []string) int {
 		return 0
 	}
 	if !*dryRun && backupCmd() != 0 {
-		fmt.Fprintln(os.Stderr, "consolidate: backup failed; refusing to modify diary")
+		fmt.Fprintln(os.Stderr, "consolidate: backup failed; refusing to modify diary metadata")
 		return 1
 	}
 	st, err := consolidationStore()
@@ -81,7 +90,7 @@ func consolidateCmd(args []string) int {
 		if *dryRun {
 			continue
 		}
-		if err := replaceDiaryGroup(ctx, st, groups[key], memories); err != nil {
+		if err := saveConsolidatedGroup(ctx, st, groups[key], memories, time.Now()); err != nil {
 			fmt.Fprintf(os.Stderr, "consolidate: %s: %v; source diary kept\n", key, err)
 		}
 	}
@@ -103,6 +112,10 @@ func loadDiary(ctx context.Context, cutoff int64) ([]diaryPoint, error) {
 		"filter": map[string]any{"must": []any{
 			map[string]any{"key": "room", "match": map[string]any{"value": "diary"}},
 			map[string]any{"key": "ts", "range": map[string]any{"lte": cutoff}},
+		}, "must_not": []any{
+			map[string]any{"key": "status", "match": map[string]any{"value": store.StatusArchived}},
+			map[string]any{"key": "consolidation_status", "match": map[string]any{"value": "completed"}},
+			map[string]any{"key": "consolidation_status", "match": map[string]any{"value": "empty"}},
 		}},
 		"limit": 10000, "with_payload": true, "with_vector": false,
 	})
@@ -137,8 +150,14 @@ func loadDiary(ctx context.Context, cutoff int64) ([]diaryPoint, error) {
 		text, _ := p.Payload["text"].(string)
 		wing, _ := p.Payload["wing"].(string)
 		ts, _ := p.Payload["ts"].(float64)
+		occurredAt, _ := p.Payload["occurred_at"].(float64)
+		sourceTokens, _ := p.Payload["source_tokens"].(float64)
+		sourceID, _ := p.Payload["source_id"].(string)
 		if text != "" && wing != "" && ts > 0 {
-			points = append(points, diaryPoint{ID: p.ID, Text: text, Wing: wing, TS: int64(ts)})
+			points = append(points, diaryPoint{
+				ID: p.ID, Text: text, Wing: wing, TS: int64(ts), OccurredAt: int64(occurredAt),
+				SourceTokens: int64(sourceTokens), SourceID: sourceID,
+			})
 		}
 	}
 	return points, nil
@@ -230,24 +249,119 @@ func localSummaryEndpoint(raw string) bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
-func replaceDiaryGroup(ctx context.Context, st *store.Store, points []diaryPoint, memories []consolidatedMemory) error {
-	wing := points[0].Wing
-	latest := points[0].TS
-	for _, point := range points[1:] {
-		if point.TS > latest {
-			latest = point.TS
-		}
+func saveConsolidatedGroup(
+	ctx context.Context, st consolidationWriter, points []diaryPoint, memories []consolidatedMemory, now time.Time,
+) error {
+	if len(points) == 0 {
+		return nil
 	}
-	ts := strconv.FormatInt(latest, 10)
-	for _, memory := range memories {
-		if _, err := st.Save(ctx, memory.Text, map[string]string{"wing": wing, "room": memory.Room, "ts": ts}); err != nil {
-			return fmt.Errorf("save %s: %w", memory.Room, err)
+	if now.IsZero() {
+		now = time.Now()
+	}
+	wing := points[0].Wing
+	latest := pointEventTime(points[0])
+	sourceTokens := int64(0)
+	for _, point := range points[1:] {
+		if eventTime := pointEventTime(point); eventTime > latest {
+			latest = eventTime
 		}
 	}
 	for _, point := range points {
-		if err := st.DeleteByID(ctx, point.ID); err != nil {
-			return fmt.Errorf("delete diary %d: %w", point.ID, err)
+		sourceTokens += point.SourceTokens
+	}
+	ts := strconv.FormatInt(latest, 10)
+	observedAt := strconv.FormatInt(now.Unix(), 10)
+	sourceGroup := consolidationSourceGroup(points)
+	shares := distributeSourceTokens(sourceTokens, memories)
+	for i, memory := range memories {
+		meta := map[string]string{
+			"wing":          wing,
+			"room":          memory.Room,
+			"ts":            ts,
+			"observed_at":   observedAt,
+			"occurred_at":   ts,
+			"memory_tokens": strconv.FormatInt(metrics.EstimateTokens(memory.Text), 10),
+			"provenance":    "consolidate",
+			"source_id":     sourceGroup + ":" + strconv.Itoa(i+1),
+			"status":        store.StatusActive,
+			"memory_type":   memoryTypeForRoom(memory.Room),
+		}
+		if shares[i] > 0 {
+			meta["source_tokens"] = strconv.FormatInt(shares[i], 10)
+		}
+		if _, err := st.Save(ctx, memory.Text, meta); err != nil {
+			return fmt.Errorf("save %s: %w", memory.Room, err)
 		}
 	}
+	ids := make([]uint64, len(points))
+	for i, point := range points {
+		ids[i] = point.ID
+	}
+	consolidationStatus := "completed"
+	if len(memories) == 0 {
+		consolidationStatus = "empty"
+	}
+	if err := st.SetMetaByIDs(ctx, ids, map[string]string{
+		"status":               store.StatusArchived,
+		"consolidation_status": consolidationStatus,
+		"consolidated_at":      observedAt,
+	}); err != nil {
+		return fmt.Errorf("archive source diary: %w", err)
+	}
 	return nil
+}
+
+func pointEventTime(point diaryPoint) int64 {
+	if point.OccurredAt > 0 {
+		return point.OccurredAt
+	}
+	return point.TS
+}
+
+func consolidationSourceGroup(points []diaryPoint) string {
+	parts := make([]string, len(points))
+	for i, point := range points {
+		if point.SourceID != "" {
+			parts[i] = point.SourceID
+		} else {
+			parts[i] = strconv.FormatUint(point.ID, 10)
+		}
+	}
+	sort.Strings(parts)
+	return metrics.SessionEventID("consolidation-source", strings.Join(parts, "\x00"))
+}
+
+func memoryTypeForRoom(room string) string {
+	switch room {
+	case "decisions":
+		return "decision"
+	case "gotchas":
+		return "gotcha"
+	default:
+		return "reference"
+	}
+}
+
+func distributeSourceTokens(sourceTokens int64, memories []consolidatedMemory) []int64 {
+	shares := make([]int64, len(memories))
+	if sourceTokens <= 0 || len(memories) == 0 {
+		return shares
+	}
+	totalMemoryTokens := int64(0)
+	for _, memory := range memories {
+		totalMemoryTokens += metrics.EstimateTokens(memory.Text)
+	}
+	if totalMemoryTokens == 0 {
+		return shares
+	}
+	remaining := sourceTokens
+	for i, memory := range memories {
+		if i == len(memories)-1 {
+			shares[i] = remaining
+			break
+		}
+		shares[i] = sourceTokens * metrics.EstimateTokens(memory.Text) / totalMemoryTokens
+		remaining -= shares[i]
+	}
+	return shares
 }

@@ -13,6 +13,7 @@ import (
 	"ariadne/internal/store"
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"flag"
@@ -31,6 +32,17 @@ import (
 
 type doc struct {
 	text, wing, room string
+	meta             map[string]string
+}
+
+type memfileSyncPlan struct {
+	revisions map[[2]string]string
+	wings     map[string]bool
+}
+
+type memfileSyncStore interface {
+	SetMetaByWingRoom(context.Context, string, string, string, map[string]string) error
+	WingRoomPairs(context.Context) (map[[2]string]int, error)
 }
 
 func main() {
@@ -43,7 +55,7 @@ func main() {
 	skipSessions := flag.Bool("skip-sessions", false, "skip the raw-transcript 'sessions' wing")
 	onlyWing := flag.String("only-wing", "", "chroma only: import just this one wing")
 	syncMode := flag.Bool("sync", false,
-		"memfiles only: refresh edited files (delete old chunks first) and remove orphans of deleted files")
+		"memfiles only: append new revisions, archive stale chunks, and mark vanished sources as orphaned")
 	flag.Parse()
 
 	st, err := store.New(env("ARIADNE_QDRANT_HOST", "localhost"), atoiOr(env("ARIADNE_QDRANT_PORT", "6334"), 6334),
@@ -66,9 +78,13 @@ func main() {
 	go func() {
 		buf := make([]store.SaveItem, 0, *batchSize)
 		for d := range jobs {
+			meta := map[string]string{"wing": d.wing, "room": d.room, "provenance": "import"}
+			for key, value := range d.meta {
+				meta[key] = value
+			}
 			buf = append(buf, store.SaveItem{
 				Text: store.SanitizeUTF8(d.text),
-				Meta: map[string]string{"wing": d.wing, "room": d.room},
+				Meta: meta,
 			})
 			if len(buf) == *batchSize {
 				batches <- buf
@@ -108,9 +124,10 @@ func main() {
 	}
 
 	var feed int
+	var syncPlan *memfileSyncPlan
 	switch *source {
 	case "memfiles":
-		feed = feedMemFiles(ctx, st, jobs, *syncMode)
+		feed, syncPlan = feedMemFiles(jobs, *syncMode)
 	case "jsonl":
 		feed = feedJSONL(jobs, *file)
 	default:
@@ -118,6 +135,13 @@ func main() {
 	}
 	close(jobs)
 	wg.Wait()
+	if syncPlan != nil {
+		if failed.Load() > 0 {
+			fmt.Fprintln(os.Stderr, "sync: import failures detected; existing revisions left active")
+		} else if err := finalizeMemfileSync(ctx, st, syncPlan, time.Now()); err != nil {
+			fatal("sync finalize:", err)
+		}
+	}
 
 	fmt.Printf("\n=== IMPORT DONE ===\n  fed=%d saved=%d failed=%d\n  wall=%s (%.0f docs/s)\n",
 		feed, done.Load(), failed.Load(), time.Since(start).Round(time.Second),
@@ -185,31 +209,67 @@ func feedJSONL(jobs chan<- doc, path string) int {
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1024*1024), 16*1024*1024)
 	n := 0
+	observedAt := strconv.FormatInt(time.Now().Unix(), 10)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if line == "" {
 			continue
 		}
-		var d struct{ Text, Wing, Room string }
-		if err := json.Unmarshal([]byte(line), &d); err != nil || d.Text == "" {
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
 			continue
 		}
-		jobs <- doc{text: d.Text, wing: d.Wing, room: d.Room}
+		text, _ := raw["text"].(string)
+		if text == "" {
+			continue
+		}
+		wing, _ := raw["wing"].(string)
+		room, _ := raw["room"].(string)
+		meta := map[string]string{
+			"status":      store.StatusActive,
+			"memory_type": "reference",
+			"observed_at": observedAt,
+			"ts":          observedAt,
+		}
+		for _, field := range []string{
+			"ts", "observed_at", "occurred_at", "session_started_at", "session_ended_at",
+			"consolidated_at", "superseded_at", "orphaned_at", "source_tokens", "memory_tokens",
+			"provenance", "source_id", "source_revision", "status", "memory_type", "consolidation_status",
+		} {
+			if value := jsonMetadataString(raw[field]); value != "" {
+				meta[field] = value
+			}
+		}
+		jobs <- doc{text: text, wing: wing, room: room, meta: meta}
 		n++
 	}
 	return n
 }
 
+func jsonMetadataString(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case float64:
+		return strconv.FormatInt(int64(typed), 10)
+	default:
+		return ""
+	}
+}
+
 // feedMemFiles walks ~/.claude/projects/*/memory/*.md — the user's curated
 // per-project native memory — chunking each file on paragraph boundaries.
-// With sync, each file's previous chunks are deleted before re-import (so
-// edited notes replace their stale copies), and afterwards chunks of files
-// that no longer exist are removed too.
-func feedMemFiles(ctx context.Context, st *store.Store, jobs chan<- doc, syncMode bool) int {
+// With sync, every file revision is imported first. Only after all new chunks
+// are safely stored are older revisions marked superseded and vanished source
+// files marked orphaned. No memory record is deleted.
+func feedMemFiles(jobs chan<- doc, syncMode bool) (int, *memfileSyncPlan) {
 	root := os.Getenv("HOME") + "/.claude/projects"
 	n := 0
-	seen := map[[2]string]bool{}
-	wings := map[string]bool{}
+	var plan *memfileSyncPlan
+	if syncMode {
+		plan = &memfileSyncPlan{revisions: map[[2]string]string{}, wings: map[string]bool{}}
+	}
+	observedAt := strconv.FormatInt(time.Now().Unix(), 10)
 	//nolint:gosec // walks the user's own $HOME/.claude tree
 	_ = filepath.WalkDir(root, func(path string, e fs.DirEntry, err error) error {
 		if err != nil || e.IsDir() || !strings.HasSuffix(path, ".md") {
@@ -224,50 +284,73 @@ func feedMemFiles(ctx context.Context, st *store.Store, jobs chan<- doc, syncMod
 		}
 		wing := wingFromMemPath(path)
 		room := "memory:" + filepath.Base(path)
-		if syncMode && !seen[[2]string{wing, room}] {
-			if err := st.DeleteByWingRoom(ctx, wing, room); err != nil {
-				fatal("sync delete", wing, room, ":", err)
-			}
+		revision := memfileRevision(b)
+		if plan != nil {
+			plan.revisions[[2]string{wing, room}] = revision
+			plan.wings[wing] = true
 		}
-		seen[[2]string{wing, room}] = true
-		wings[wing] = true
 		for _, chunk := range chunkMarkdown(string(b), 1200) {
-			jobs <- doc{text: chunk, wing: wing, room: room}
+			jobs <- doc{text: chunk, wing: wing, room: room, meta: map[string]string{
+				"source_revision": revision,
+				"status":          store.StatusActive,
+				"memory_type":     "reference",
+				"observed_at":     observedAt,
+				"ts":              observedAt,
+			}}
 			n++
 		}
 		return nil
 	})
-	if syncMode {
-		reapOrphans(ctx, st, seen, wings)
-	}
-	return n
+	return n, plan
 }
 
-// reapOrphans deletes "memory:*" chunks whose source file vanished. Only wings
-// that still have a live memory dir are touched — a space deleted wholesale is
-// left alone (conservative).
-func reapOrphans(ctx context.Context, st *store.Store, seen map[[2]string]bool, wings map[string]bool) {
+func memfileRevision(body []byte) string {
+	sum := sha256.Sum256(body)
+	return fmt.Sprintf("%x", sum[:16])
+}
+
+func finalizeMemfileSync(ctx context.Context, st memfileSyncStore, plan *memfileSyncPlan, now time.Time) error {
+	changedAt := strconv.FormatInt(now.Unix(), 10)
+	for pair, revision := range plan.revisions {
+		if err := st.SetMetaByWingRoom(ctx, pair[0], pair[1], revision, map[string]string{
+			"status":        store.StatusSuperseded,
+			"superseded_at": changedAt,
+		}); err != nil {
+			return fmt.Errorf("archive old revision %s/%s: %w", pair[0], pair[1], err)
+		}
+	}
+	return archiveOrphans(ctx, st, plan.revisions, plan.wings, changedAt)
+}
+
+// archiveOrphans marks memory chunks whose source file vanished. Only wings
+// that still have a live memory directory are touched; the records remain
+// available through include_archived recall.
+func archiveOrphans(
+	ctx context.Context, st memfileSyncStore, seen map[[2]string]string, wings map[string]bool, changedAt string,
+) error {
 	pairs, err := st.WingRoomPairs(ctx)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "sync: orphan scan failed:", err)
-		return
+		return fmt.Errorf("orphan scan: %w", err)
 	}
-	removed := 0
+	archived := 0
 	for pair, cnt := range pairs {
 		wing, room := pair[0], pair[1]
-		if !strings.HasPrefix(room, "memory:") || !wings[wing] || seen[pair] {
+		if !strings.HasPrefix(room, "memory:") || !wings[wing] || seen[pair] != "" {
 			continue
 		}
-		if err := st.DeleteByWingRoom(ctx, wing, room); err != nil {
-			fmt.Fprintln(os.Stderr, "sync: orphan delete", wing, room, ":", err)
-			continue
+		if err := st.SetMetaByWingRoom(ctx, wing, room, "", map[string]string{
+			"status":      store.StatusOrphaned,
+			"orphaned_at": changedAt,
+		}); err != nil {
+			return fmt.Errorf("archive orphan %s/%s: %w", wing, room, err)
 		}
-		fmt.Printf("  orphan removed: %s/%s (%d chunks)\n", wing, room, cnt)
-		removed += cnt
+		fmt.Printf("  orphan archived: %s/%s (%d chunks)\n", wing, room, cnt)
+		archived += cnt
 	}
-	if removed > 0 {
-		fmt.Printf("  orphans total: %d chunks\n", removed)
+	if archived > 0 {
+		fmt.Printf("  archived orphans total: %d chunks\n", archived)
 	}
+	return nil
 }
 
 // wingFromMemPath turns …/projects/-Users-…-Projects-MyApp/memory/x.md → "MyApp".

@@ -186,8 +186,10 @@ func printMetrics(asJSON bool) {
 }
 
 func printMetricWindow(label string, t metrics.Totals) {
-	fmt.Printf("  %-12s ~%d confirmed saved · %d recall overhead · %+d net, %d recalls / %d memories\n",
-		label+":", t.ConfirmedSavedTokens, t.RecallOverheadTokens, t.NetAvoidedTokens, t.Recalls, t.Memories)
+	fmt.Printf("  %-12s ~%d measured saved · %+d measured net · %d%% attributed\n",
+		label+":", t.ConfirmedSavedTokens, t.NetAvoidedTokens, t.AttributionPercent)
+	fmt.Printf("                %d observed recall tokens · %d unattributed · %d attributed overhead, %d recalls / %d memories\n",
+		t.DeliveredTokens, t.UnattributedTokens, t.RecallOverheadTokens, t.Recalls, t.Memories)
 }
 
 func printStatus(asJSON bool) {
