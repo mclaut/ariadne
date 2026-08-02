@@ -100,13 +100,19 @@ Preview or run it manually:
 
 ```bash
 ariadnectl consolidate --before 24h --dry-run
-ariadnectl consolidate --before 24h
+ariadnectl maintenance  # memfile sync + consolidation, with bounded retries
+ariadnectl consolidate --before 24h  # consolidation only
 ariadnectl requeue-empty --dry-run  # inspect records archived by the legacy one-pass empty policy
 ```
 
 The installer schedules consolidation with the existing 04:30 daily memory
-maintenance job on macOS and Linux. Output is written to
-`~/.ariadne/logs/maintenance.log`.
+maintenance job on macOS and Linux. A failed stage is retried up to three times
+with bounded exponential backoff; partial import failures return non-zero and
+block consolidation. Sleep-missed timers catch up through launchd/systemd. The
+tray shows the latest outcome, warns when maintenance failed, remains partial,
+is stuck, or is older than 36 hours, and offers **Run maintenance now**. Output
+is written to `~/.ariadne/logs/maintenance.log`; append-only outcomes live in
+`~/.ariadne/state/activity.jsonl`.
 
 ## Previously in v0.5.0
 
@@ -534,8 +540,9 @@ before embedding, imports a changed revision first, preserves original event
 time, marks prior chunks `superseded`, and marks chunks from vanished sources
 `orphaned`; it does not delete their history. The
 installer registers a daily agent
-(`com.ariadne.sync` / `ariadne-sync.timer`) that runs this plus diary
-consolidation for you; run the import manually after large note edits. The
+(`com.ariadne.sync` / `ariadne-sync.timer`) that runs retry-bounded memfile sync
+plus diary consolidation for you; use `ariadnectl maintenance` or the tray
+button after large note edits. The
 `-force` flag is reserved for an explicit migration/repair pass; routine sync
 must omit it so unchanged revisions stay out of the embedding queue.
 

@@ -4,6 +4,7 @@
 //
 //	status [-json]   health of Qdrant + Ollama + the collection, and any issues.
 //	metrics [-json]  local estimates of context delivered and reused.
+//	maintenance      retry-bounded memfile sync plus diary consolidation.
 //	start | stop | restart   manage the native services (Qdrant LaunchAgent,
 //	                         Ollama brew service).
 package main
@@ -97,12 +98,15 @@ func main() {
 		os.Exit(exportCmd(arg(2)))
 	case "consolidate":
 		os.Exit(consolidateCmd(os.Args[2:]))
+	case "maintenance":
+		os.Exit(maintenanceCmd(os.Args[2:]))
 	case "requeue-empty":
 		os.Exit(requeueEmptyCmd(os.Args[2:]))
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ariadnectl {status [-json] | metrics [-json] | "+
 			"start | stop | restart | backup | restore <file> | export [file] | "+
-			"consolidate [--before 24h] [--dry-run] | requeue-empty [--dry-run]}")
+			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
+			"requeue-empty [--dry-run]}")
 		os.Exit(2)
 	}
 }
@@ -190,6 +194,9 @@ func gather() status {
 	if s.ActivityError != "" {
 		s.Issues = append(s.Issues, i18n.T(lang, "issue.activity_error"))
 	}
+	if issue := maintenanceHealthIssue(time.Now(), s.Maintenance, lang); issue != "" {
+		s.Issues = append(s.Issues, issue)
+	}
 	s.OK = len(s.Issues) == 0
 	return s
 }
@@ -237,7 +244,7 @@ func printStatus(asJSON bool) {
 	fmt.Printf("  %s : %d  (%s)\n", i18n.T(lang, "row.records"), s.Collection.Points, s.Collection.Status)
 	fmt.Printf("  %s : qdrant %dMB · backups %dMB · logs %dMB · runtime %dMB · %s %dGB\n",
 		i18n.T(lang, "row.data"), s.DataMB, s.BackupsMB, s.LogsMB, s.RuntimeMB, i18n.T(lang, "row.free"), s.FreeGB)
-	for _, operation := range []string{"memfile_sync", "consolidate", "backup"} {
+	for _, operation := range []string{"maintenance", "memfile_sync", "consolidate", "backup"} {
 		if event, ok := s.Maintenance[operation]; ok {
 			fmt.Printf("  %s : %s · %s\n", operation, event.At.Local().Format("2006-01-02 15:04"), event.Status)
 		}

@@ -184,6 +184,16 @@ func main() {
 	fmt.Printf("\n=== IMPORT DONE ===\n  fed=%d saved=%d failed=%d\n  wall=%s (%.0f docs/s)\n",
 		feed, done.Load(), failed.Load(), time.Since(start).Round(time.Second),
 		float64(done.Load())/time.Since(start).Seconds())
+	if importResultCode(failed.Load()) != 0 {
+		os.Exit(1)
+	}
+}
+
+func importResultCode(failed int64) int {
+	if failed > 0 {
+		return 1
+	}
+	return 0
 }
 
 // feedChroma reads documents from the archived chromadb sqlite.

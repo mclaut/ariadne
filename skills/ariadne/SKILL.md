@@ -89,9 +89,18 @@ when both scoped associations are intentionally useful.
 ~/.ariadne/bin/ariadnectl backup        # 10 recent snapshots; older ones → backups/archive
 ~/.ariadne/bin/ariadnectl restore <f>   # DESTRUCTIVE: replace collection from snapshot
 ~/.ariadne/bin/ariadnectl export [f]    # portable JSONL (no vectors, re-embeddable)
+~/.ariadne/bin/ariadnectl maintenance  # sync + consolidate, bounded retries
 ~/.ariadne/bin/ariadnectl consolidate --before 24h  # merge old diaries → durable memories
 ~/.ariadne/bin/ariadnectl requeue-empty --dry-run   # inspect legacy one-pass empty archives
 ```
+
+Daily maintenance retries each failed stage up to three times with bounded
+exponential backoff. Any partial import returns non-zero and blocks
+consolidation; failed consolidation groups remain active for the next retry.
+The tray shows the latest outcome, warns on failed/partial/stuck/stale state,
+and provides **Run maintenance now**. Scheduled and manual output is appended to
+`~/.ariadne/logs/maintenance.log`; structured outcomes are appended to
+`~/.ariadne/state/activity.jsonl`.
 
 `metrics` v2 separates **measured saved/net** from **unattributed** delivery.
 Source-backed memories contribute represented context once per memory per

@@ -138,6 +138,15 @@ func TestJSONMetadataStringPreservesPortableTypes(t *testing.T) {
 	}
 }
 
+func TestImportResultCodeFailsPartialImports(t *testing.T) {
+	if got := importResultCode(0); got != 0 {
+		t.Fatalf("successful import code = %d", got)
+	}
+	if got := importResultCode(1); got != 1 {
+		t.Fatalf("partial import code = %d", got)
+	}
+}
+
 func TestFinalizeMemfileSyncArchivesOldRevisionsAndOrphans(t *testing.T) {
 	fake := &fakeMemfileSyncStore{pairs: map[[2]string]int{
 		{"ariadne", "memory:live.md"}:  4,
