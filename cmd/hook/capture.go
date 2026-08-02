@@ -2,6 +2,7 @@ package main
 
 import (
 	"ariadne/internal/metrics"
+	"ariadne/internal/store"
 	"bufio"
 	"bytes"
 	"context"
@@ -120,23 +121,49 @@ func captureRun(args []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	meta := map[string]string{
-		"wing":          project,
-		"room":          "diary",
-		"source_tokens": strconv.FormatInt(metrics.EstimateTokens(condensed), 10),
-		"memory_tokens": strconv.FormatInt(metrics.EstimateTokens(text), 10),
-	}
-	if t := first; !t.IsZero() {
-		meta["ts"] = strconv.FormatInt(t.Unix(), 10) // session start, unix seconds
-	} else if !last.IsZero() {
-		meta["ts"] = strconv.FormatInt(last.Unix(), 10)
-	}
+	meta := captureMetadata(time.Now(), first, last, *session, condensed, text)
+	meta["wing"] = project
 	id, err := st.Save(ctx, text, meta)
 	if err != nil {
 		log.Printf("FAIL %s: save: %v", short(*session), err)
 		return
 	}
 	log.Printf("captured %s → %s/diary, %d chars, id=%d", short(*session), project, len(text), id)
+}
+
+func captureMetadata(now, first, last time.Time, sessionID, condensed, text string) map[string]string {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	occurred := last
+	if occurred.IsZero() {
+		occurred = now
+	}
+	sourceKey := sessionID
+	if sourceKey == "" {
+		sourceKey = condensed
+	}
+	sourceID := metrics.SessionEventID("capture-source", sourceKey+"\x00"+
+		strconv.FormatInt(occurred.Unix(), 10)+"\x00"+strconv.FormatInt(metrics.EstimateTokens(condensed), 10)+"\x00"+condensed)
+	meta := map[string]string{
+		"room":          "diary",
+		"ts":            strconv.FormatInt(now.Unix(), 10),
+		"observed_at":   strconv.FormatInt(now.Unix(), 10),
+		"occurred_at":   strconv.FormatInt(occurred.Unix(), 10),
+		"source_tokens": strconv.FormatInt(metrics.EstimateTokens(condensed), 10),
+		"memory_tokens": strconv.FormatInt(metrics.EstimateTokens(text), 10),
+		"provenance":    "capture",
+		"source_id":     sourceID,
+		"status":        store.StatusActive,
+		"memory_type":   "event",
+	}
+	if !first.IsZero() {
+		meta["session_started_at"] = strconv.FormatInt(first.Unix(), 10)
+	}
+	if !last.IsZero() {
+		meta["session_ended_at"] = strconv.FormatInt(last.Unix(), 10)
+	}
+	return meta
 }
 
 // --- transcript ---

@@ -4,7 +4,7 @@ import "./globals.css";
 const description =
   "Ariadne is a local-first multilingual memory server for Codex, Claude Code, and MCP clients, powered by Qdrant, Ollama, and bge-m3 hybrid search.";
 const siteUrl = "https://mclaut.github.io/ariadne";
-const socialImage = `${siteUrl}/og.png`;
+const socialImage = `${siteUrl}/og-v0.8.0.png`;
 const favicon = `${siteUrl}/favicon.svg`;
 
 export const metadata: Metadata = {

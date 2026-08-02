@@ -6,6 +6,7 @@
 package main
 
 import (
+	"ariadne/internal/activity"
 	"ariadne/internal/i18n"
 	"ariadne/internal/metrics"
 	"ariadne/internal/version"
@@ -30,13 +31,17 @@ import (
 )
 
 const (
-	pollEvery = 5 * time.Second
-	osDarwin  = "darwin"
-	osLinux   = "linux"
-	osWindows = "windows"
+	pollEvery                = 5 * time.Second
+	manualMaintenanceTimeout = 4 * time.Hour
+	osDarwin                 = "darwin"
+	osLinux                  = "linux"
+	osWindows                = "windows"
 )
 
 func ctlPath() string {
+	if configured := os.Getenv("ARIADNE_CTL_PATH"); configured != "" {
+		return configured
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".ariadne", "bin", "ariadnectl")
 }
@@ -60,14 +65,18 @@ type coll struct {
 
 type status struct {
 	reachable    bool
-	OK           bool            `json:"ok"`
-	Qdrant       svc             `json:"qdrant"`
-	Ollama       svc             `json:"ollama"`
-	Collection   coll            `json:"collection"`
-	TokenMetrics metrics.Summary `json:"token_metrics"`
-	DataMB       int64           `json:"data_mb"`
-	FreeGB       int64           `json:"free_gb"`
-	Issues       []string        `json:"issues"`
+	OK           bool                      `json:"ok"`
+	Qdrant       svc                       `json:"qdrant"`
+	Ollama       svc                       `json:"ollama"`
+	Collection   coll                      `json:"collection"`
+	TokenMetrics metrics.Summary           `json:"token_metrics"`
+	Maintenance  map[string]activity.Event `json:"maintenance"`
+	DataMB       int64                     `json:"data_mb"`
+	BackupsMB    int64                     `json:"backups_mb"`
+	LogsMB       int64                     `json:"logs_mb"`
+	RuntimeMB    int64                     `json:"runtime_mb"`
+	FreeGB       int64                     `json:"free_gb"`
+	Issues       []string                  `json:"issues"`
 }
 
 var (
@@ -75,10 +84,11 @@ var (
 	lang       i18n.Lang
 	lastIssues []string
 
-	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints, rowTokens, rowDisk *systray.MenuItem
-	mUpdate, mStart, mStop, mRestart, mBackup, mExport, mData, mLogs, mLang    *systray.MenuItem
-	mQuit                                                                      *systray.MenuItem
-	langItems                                                                  map[i18n.Lang]*systray.MenuItem
+	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints                                       *systray.MenuItem
+	rowTokens, rowCoverage, rowUnattributed, rowDisk, rowMaintenance                             *systray.MenuItem
+	mUpdate, mStart, mStop, mRestart, mMaintenance, mBackup, mExport, mData, mLogs, mLang, mQuit *systray.MenuItem
+	langItems                                                                                    map[i18n.Lang]*systray.MenuItem
+	maintenanceRunning                                                                           bool
 )
 
 func main() {
@@ -100,12 +110,16 @@ func onReady() {
 	rowOllama = infoRow("")
 	rowPoints = infoRow("")
 	rowTokens = infoRow("")
+	rowCoverage = infoRow("")
+	rowUnattributed = infoRow("")
 	rowDisk = infoRow("")
+	rowMaintenance = infoRow("")
 	mUpdate = systray.AddMenuItem("", "")
 	systray.AddSeparator()
 	mStart = systray.AddMenuItem("", "")
 	mStop = systray.AddMenuItem("", "")
 	mRestart = systray.AddMenuItem("", "")
+	mMaintenance = systray.AddMenuItem("", "")
 	systray.AddSeparator()
 	mBackup = systray.AddMenuItem("", "")
 	mExport = systray.AddMenuItem("", "")
@@ -154,6 +168,8 @@ func loop() {
 					notify("ariadne", i18n.T(lang, "notify.failed")+": "+err.Error())
 				}
 			}
+		case <-mMaintenance.ClickedCh:
+			go maintenanceClicked()
 		case <-mUpdate.ClickedCh:
 			go updateClicked()
 		case <-mBackup.ClickedCh:
@@ -188,6 +204,7 @@ func relabel() {
 	mStart.SetTitle(i18n.T(lang, "menu.start"))
 	mStop.SetTitle(i18n.T(lang, "menu.stop"))
 	mRestart.SetTitle(i18n.T(lang, "menu.restart"))
+	refreshMaintenanceMenuLocked()
 	mBackup.SetTitle(i18n.T(lang, "menu.backup"))
 	mExport.SetTitle(i18n.T(lang, "menu.export"))
 	mData.SetTitle(i18n.T(lang, "menu.data"))
@@ -233,15 +250,101 @@ func poll() {
 	rowQdrant.SetTitle(fmt.Sprintf("Qdrant: %s · %dMB", upWord(s.Qdrant.Up), s.Qdrant.RSSMB))
 	rowOllama.SetTitle(fmt.Sprintf("Ollama: %s · %dMB", upVer(s.Ollama), s.Ollama.RSSMB))
 	rowPoints.SetTitle(fmt.Sprintf("%s: %s (%s)", i18n.T(lang, "row.records"), grouped(s.Collection.Points), s.Collection.Status))
-	savedTokens := s.TokenMetrics.AllTime.ConfirmedSavedTokens
-	rowTokens.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.context_saved"), grouped(savedTokens)))
-	rowDisk.SetTitle(fmt.Sprintf("%s: %dMB · %s %dGB", i18n.T(lang, "row.data"), s.DataMB, i18n.T(lang, "row.free"), s.FreeGB))
+	totals := s.TokenMetrics.AllTime
+	rowTokens.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.context_saved"), grouped(totals.ConfirmedSavedTokens)))
+	rowCoverage.SetTitle(fmt.Sprintf("%s: %.1f%% · %s: %s", i18n.T(lang, "row.metrics_coverage"),
+		totals.AttributionPercent, i18n.T(lang, "row.recalls"), grouped(totals.Recalls)))
+	rowUnattributed.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.unattributed"), grouped(totals.UnattributedTokens)))
+	rowDisk.SetTitle(fmt.Sprintf("%s: %dMB · backups %dMB · logs %dMB · %s %dGB",
+		i18n.T(lang, "row.data"), s.DataMB, s.BackupsMB, s.LogsMB, i18n.T(lang, "row.free"), s.FreeGB))
+	if event, ok := latestTrayMaintenanceEvent(s.Maintenance); ok {
+		rowMaintenance.SetTitle(fmt.Sprintf("%s: %s · %s", i18n.T(lang, "row.maintenance"),
+			event.At.Local().Format("2006-01-02 15:04"), event.Status))
+	} else {
+		rowMaintenance.SetTitle(fmt.Sprintf("%s: %s", i18n.T(lang, "row.maintenance"), i18n.T(lang, "row.never")))
+	}
 
 	// notify only when a NEW issue appears (or a service just dropped)
 	if s.reachable && len(s.Issues) > 0 && !slices.Equal(s.Issues, lastIssues) {
 		notify("⚠️ ariadne", strings.Join(s.Issues, " · "))
 	}
 	lastIssues = s.Issues
+}
+
+func latestTrayMaintenanceEvent(events map[string]activity.Event) (activity.Event, bool) {
+	var latest activity.Event
+	found := false
+	for _, operation := range []string{"maintenance", "memfile_sync", "consolidate"} {
+		event, ok := events[operation]
+		if !ok || event.At.IsZero() {
+			continue
+		}
+		if !found || event.At.After(latest.At) {
+			latest = event
+			found = true
+		}
+	}
+	return latest, found
+}
+
+func refreshMaintenanceMenuLocked() {
+	if mMaintenance == nil {
+		return
+	}
+	if maintenanceRunning {
+		mMaintenance.SetTitle(i18n.T(lang, "menu.maintenance_running"))
+		mMaintenance.Disable()
+		return
+	}
+	mMaintenance.SetTitle(i18n.T(lang, "menu.maintenance"))
+	mMaintenance.Enable()
+}
+
+func maintenanceClicked() {
+	mu.Lock()
+	if maintenanceRunning {
+		mu.Unlock()
+		return
+	}
+	maintenanceRunning = true
+	activeLang := lang
+	refreshMaintenanceMenuLocked()
+	mu.Unlock()
+
+	notify("ariadne", i18n.T(activeLang, "notify.maintenance")+": "+i18n.T(activeLang, "notify.started"))
+	ctx, cancel := context.WithTimeout(context.Background(), manualMaintenanceTimeout)
+	err := runTrayMaintenance(ctx)
+	cancel()
+
+	mu.Lock()
+	maintenanceRunning = false
+	activeLang = lang
+	refreshMaintenanceMenuLocked()
+	mu.Unlock()
+	result := i18n.T(activeLang, "notify.done")
+	if err != nil {
+		result = i18n.T(activeLang, "notify.failed")
+	}
+	notify("ariadne", i18n.T(activeLang, "notify.maintenance")+": "+result)
+	poll()
+}
+
+func runTrayMaintenance(ctx context.Context) error {
+	logDir := runtimeDir("logs")
+	if err := os.MkdirAll(logDir, 0o700); err != nil { //nolint:gosec // user-owned runtime directory
+		return err
+	}
+	logFile, err := os.OpenFile( //nolint:gosec // fixed user-owned runtime log
+		filepath.Join(logDir, "maintenance.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600,
+	)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = logFile.Close() }()
+	cmd := exec.CommandContext(ctx, ctlPath(), "maintenance") //nolint:gosec // our own binary, fixed action
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	return cmd.Run()
 }
 
 func fetch() status {

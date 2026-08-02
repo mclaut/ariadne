@@ -55,6 +55,7 @@ func main() {
 
 	s := server.NewMCPServer("ariadne", version.Current,
 		server.WithToolCapabilities(false))
+	metricsSession := metrics.UniqueEventID()
 
 	s.AddTool(mcp.NewTool("memory_recall",
 		mcp.WithDescription("Recall memories semantically (hybrid dense+keyword, multilingual) "+
@@ -66,9 +67,11 @@ func main() {
 		mcp.WithString("wing", mcp.Description("Optional: narrow to one project/namespace.")),
 		mcp.WithString("room", mcp.Description("Optional: narrow to one category, e.g. "+
 			"'decisions', 'gotchas', 'reference', or 'diary'.")),
+		mcp.WithBoolean("include_archived", mcp.Description("Include archived, superseded, and orphaned "+
+			"records for history/audit searches (default false).")),
 		mcp.WithString("collection", mcp.Description("Optional: search a non-default collection, "+
 			"e.g. 'sessions' for the raw session archive.")),
-	), recallHandler(st))
+	), recallHandler(st, metricsSession))
 
 	s.AddTool(mcp.NewTool("memory_save",
 		mcp.WithDescription("Save a memory (verbatim fact, decision, or context) for future recall. "+
@@ -76,6 +79,10 @@ func main() {
 		mcp.WithString("text", mcp.Required(), mcp.Description("The memory content, verbatim.")),
 		mcp.WithString("wing", mcp.Description("Project/namespace, e.g. 'myapp'.")),
 		mcp.WithString("room", mcp.Description("Aspect, e.g. 'decisions', 'diary'.")),
+		mcp.WithNumber("source_tokens", mcp.Description("Optional measured or conservative size of the bounded "+
+			"source context condensed into this memory. Omit rather than guess; never send the raw source.")),
+		mcp.WithNumber("occurred_at", mcp.Description("Optional Unix timestamp for when a historical fact or event occurred. "+
+			"Observation time remains the current save time.")),
 	), saveHandler(st))
 
 	s.AddTool(mcp.NewTool("memory_delete",
@@ -100,11 +107,13 @@ func main() {
 	}
 }
 
-func recallHandler(st *store.Store) server.ToolHandlerFunc {
+func recallHandler(st *store.Store, metricsSession string) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		collection := req.GetString("collection", "")
+		requestParts := make([]string, 0, 4)
 		var hits []store.Result
 		if rawID := strings.TrimSpace(req.GetString("id", "")); rawID != "" {
+			requestParts = append(requestParts, "id="+rawID)
 			id, err := strconv.ParseUint(rawID, 10, 64)
 			if err != nil {
 				return mcp.NewToolResultError("bad id: " + err.Error()), nil //nolint:nilerr
@@ -122,37 +131,85 @@ func recallHandler(st *store.Store) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("query or id is required"), nil
 			}
 			limit := req.GetInt("limit", 5)
+			requestParts = append(requestParts, "query="+query, fmt.Sprintf("limit=%d", limit))
 			var err error
 			hits, err = st.Recall(ctx, query, limit, req.GetString("wing", ""),
-				req.GetString("room", ""), collection)
+				req.GetString("room", ""), collection, req.GetBool("include_archived", false))
 			if err != nil {
 				return mcp.NewToolResultError("recall failed: " + err.Error()), nil //nolint:nilerr
+			}
+		}
+		if req.GetBool("include_archived", false) {
+			requestParts = append(requestParts, "include_archived=true")
+		}
+		for _, scope := range []struct{ name, value string }{
+			{"wing", req.GetString("wing", "")},
+			{"room", req.GetString("room", "")},
+			{"collection", collection},
+		} {
+			if scope.value != "" {
+				requestParts = append(requestParts, scope.name+"="+scope.value)
 			}
 		}
 		if len(hits) == 0 {
 			return mcp.NewToolResultText("(no memories found)"), nil
 		}
 		var b strings.Builder
-		represented := int64(0)
 		for i, h := range hits {
 			loc := h.Wing
 			if h.Room != "" {
 				loc += "/" + h.Room
 			}
 			fmt.Fprintf(&b, "[%d] id=%d score=%.3f %s\n%s\n\n", i+1, h.ID, h.Score, loc, store.SanitizeUTF8(h.Text))
-			represented += metrics.RepresentedShare(h.SourceTokens, h.MemoryTokens, metrics.EstimateTokens(h.Text))
 		}
 		text := strings.TrimSpace(b.String())
+		event := recallMetricsEvent(hits, strings.Join(requestParts, " "), text, metricsSession, collection)
 		metricsCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		_ = metrics.RecordRecall(metricsCtx, metrics.Event{
-			ID:                metrics.UniqueEventID(),
-			Source:            "mcp",
-			DeliveredTokens:   metrics.EstimateTokens(text),
-			RepresentedTokens: represented,
-			Memories:          int64(len(hits)),
-		})
+		_ = metrics.RecordRecall(metricsCtx, event)
 		cancel()
 		return mcp.NewToolResultText(text), nil
+	}
+}
+
+func recallMetricsEvent(hits []store.Result, requestText, responseText, sessionID, collection string) metrics.Event {
+	totalMemoryTokens := int64(0)
+	attributedMemoryTokens := int64(0)
+	attributedMemories := int64(0)
+	representations := make([]metrics.Representation, 0, len(hits))
+	for _, hit := range hits {
+		delivered := metrics.EstimateTokens(hit.Text)
+		totalMemoryTokens += delivered
+		if hit.Status == store.StatusArchived || hit.Status == store.StatusSuperseded ||
+			hit.Status == store.StatusOrphaned {
+			continue // history/audit delivery must not claim source reuse twice
+		}
+		represented := metrics.RepresentedShare(hit.SourceTokens, hit.MemoryTokens, delivered)
+		if represented <= 0 {
+			continue
+		}
+		attributedMemoryTokens += delivered
+		attributedMemories++
+		representationID := metrics.SessionMemoryID("mcp:"+collection, sessionID, hit.ID)
+		if hit.SourceID != "" {
+			representationID = metrics.SessionSourceID("mcp:"+collection, sessionID, hit.SourceID)
+		}
+		representations = append(representations, metrics.Representation{
+			ID:     representationID,
+			Tokens: represented,
+		})
+	}
+	cost := metrics.EstimateTokens(requestText) + metrics.EstimateTokens(responseText)
+	attributed, unknown := metrics.SplitAttribution(cost, totalMemoryTokens, attributedMemoryTokens)
+	return metrics.Event{
+		ID:                   metrics.UniqueEventID(),
+		Source:               "mcp",
+		DeliveredTokens:      cost,
+		AttributedTokens:     attributed,
+		UnattributedTokens:   unknown,
+		Memories:             int64(len(hits)),
+		AttributedMemories:   attributedMemories,
+		UnattributedMemories: int64(len(hits)) - attributedMemories,
+		Representations:      representations,
 	}
 }
 
@@ -162,14 +219,47 @@ func saveHandler(st *store.Store) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		id, err := st.Save(ctx, store.SanitizeUTF8(text), map[string]string{
-			"wing": req.GetString("wing", ""),
-			"room": req.GetString("room", ""),
-		})
+		text = store.SanitizeUTF8(text)
+		now := strconv.FormatInt(time.Now().Unix(), 10)
+		eventTime := now
+		if occurredAt := req.GetInt("occurred_at", 0); occurredAt > 0 {
+			eventTime = strconv.Itoa(occurredAt)
+		}
+		room := req.GetString("room", "")
+		meta := map[string]string{
+			"wing":          req.GetString("wing", ""),
+			"room":          room,
+			"ts":            eventTime,
+			"observed_at":   now,
+			"occurred_at":   eventTime,
+			"memory_tokens": strconv.FormatInt(metrics.EstimateTokens(text), 10),
+			"provenance":    "manual",
+			"status":        store.StatusActive,
+			"memory_type":   manualMemoryType(room),
+		}
+		if sourceTokens := req.GetInt("source_tokens", 0); sourceTokens > 0 {
+			meta["source_tokens"] = strconv.Itoa(sourceTokens)
+			meta["provenance"] = "manual-measured"
+			meta["source_id"] = metrics.SessionEventID("manual-source", text)
+		}
+		id, err := st.Save(ctx, text, meta)
 		if err != nil {
 			return mcp.NewToolResultError("save failed: " + err.Error()), nil //nolint:nilerr // MCP tool errors go in-band
 		}
 		return mcp.NewToolResultText(fmt.Sprintf("saved (id=%d)", id)), nil
+	}
+}
+
+func manualMemoryType(room string) string {
+	switch room {
+	case "decisions":
+		return "decision"
+	case "gotchas":
+		return "gotcha"
+	case "diary":
+		return "event"
+	default:
+		return "reference"
 	}
 }
 
@@ -205,19 +295,20 @@ func moveHandler(st *store.Store) server.ToolHandlerFunc {
 		if wing == "" && room == "" {
 			return mcp.NewToolResultError("nothing to change: give a new wing and/or room"), nil
 		}
-		if err := st.SetMeta(ctx, id, map[string]string{"wing": wing, "room": room}); err != nil {
+		newID, err := st.MoveAppendOnly(ctx, id, wing, room)
+		if err != nil {
 			return mcp.NewToolResultError("move failed: " + err.Error()), nil //nolint:nilerr // MCP tool errors go in-band
 		}
-		return mcp.NewToolResultText(formatMoveResult(id, wing, room)), nil
+		return mcp.NewToolResultText(formatMoveResult(id, newID, wing, room)), nil
 	}
 }
 
-func formatMoveResult(id uint64, wing, room string) string {
+func formatMoveResult(id, newID uint64, wing, room string) string {
 	part := func(name, value string) string {
 		if value == "" {
 			return name + "=<kept>"
 		}
 		return fmt.Sprintf("%s=%q", name, value)
 	}
-	return fmt.Sprintf("moved (id=%d %s %s)", id, part("wing", wing), part("room", room))
+	return fmt.Sprintf("moved (source_id=%d new_id=%d %s %s)", id, newID, part("wing", wing), part("room", room))
 }

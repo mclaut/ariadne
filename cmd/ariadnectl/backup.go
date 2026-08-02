@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ariadne/internal/activity"
 	"bufio"
 	"bytes"
 	"context"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -25,23 +27,38 @@ func backupsDir() string {
 	return filepath.Join(home, backupsSub)
 }
 
-// backupCmd creates a Qdrant snapshot, downloads it OUTSIDE qdrant-data (so it
-// survives loss of the data dir), removes the in-engine copy, and rotates.
-func backupCmd() int {
+// backupCmd creates a Qdrant snapshot and downloads it OUTSIDE qdrant-data so
+// it survives loss of the data dir. Both copies are preserved; older downloaded
+// snapshots move into an append-only archive rather than being discarded.
+func backupCmd() (code int) {
+	status, message := "failed", ""
+	var sizeMB int64
+	defer func() {
+		counters := map[string]int64{}
+		if sizeMB > 0 {
+			counters["snapshot_mb"] = sizeMB
+		}
+		_ = activity.Append(activity.Event{
+			Operation: "backup", Status: status, Message: message, Counters: counters,
+		})
+	}()
 	dir := backupsDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // user-owned backups dir
 		fmt.Fprintln(os.Stderr, "mkdir backups:", err)
+		message = err.Error()
 		return 1
 	}
 	// 1. create snapshot
 	body, ok := postJSON(qdrantREST+"/collections/"+collection+"/snapshots", nil)
 	if !ok {
 		fmt.Fprintln(os.Stderr, "snapshot create failed (is Qdrant up?)")
+		message = "snapshot create failed"
 		return 1
 	}
 	name, _ := mapPath(body, "result", "name")
 	if name == "" {
 		fmt.Fprintln(os.Stderr, "snapshot: no name in response")
+		message = "snapshot response had no name"
 		return 1
 	}
 	// 2. download it
@@ -49,25 +66,84 @@ func backupCmd() int {
 	dest := filepath.Join(dir, collection+"-"+ts+".snapshot")
 	if err := download(qdrantREST+"/collections/"+collection+"/snapshots/"+name, dest); err != nil {
 		fmt.Fprintln(os.Stderr, "download snapshot:", err)
+		message = err.Error()
 		return 1
 	}
-	// 3. drop the in-engine snapshot (keep qdrant-data lean)
-	_ = httpDo(http.MethodDelete, qdrantREST+"/collections/"+collection+"/snapshots/"+name, nil, nil)
-	// 4. rotate
-	n := rotateBackups(dir)
+	// 3. keep a small recent set in the root and move older snapshots into an
+	// append-only archive. Nothing is discarded.
+	n, archived := rotateBackups(dir)
 	fi, _ := os.Stat(dest)
-	fmt.Printf("backup ok: %s (%dMB) · %d kept\n", filepath.Base(dest), fi.Size()/(1024*1024), n)
+	if fi != nil {
+		sizeMB = fi.Size() / (1024 * 1024)
+	}
+	fmt.Printf("backup ok: %s (%dMB) · %d recent · %d archived now\n",
+		filepath.Base(dest), sizeMB, n, archived)
+	status = "complete"
 	return 0
 }
 
-func rotateBackups(dir string) int {
+// backupIfDue runs the automatic snapshot path at most once per interval.
+// Manual `ariadnectl backup` remains unconditional.
+func backupIfDue(now time.Time, interval time.Duration) int {
+	if interval <= 0 {
+		interval = 7 * 24 * time.Hour
+	}
+	latest, err := latestBackupTime(backupsDir())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "backup cadence:", err)
+		return 1
+	}
+	if !latest.IsZero() && now.Sub(latest) < interval {
+		return 0
+	}
+	return backupCmd()
+}
+
+func latestBackupTime(dir string) (time.Time, error) {
+	var latest time.Time
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			if os.IsNotExist(walkErr) {
+				return nil
+			}
+			return walkErr
+		}
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), collection+"-") ||
+			!strings.HasSuffix(entry.Name(), ".snapshot") {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+		return nil
+	})
+	return latest, err
+}
+
+func rotateBackups(dir string) (recent, archived int) {
 	m, _ := filepath.Glob(filepath.Join(dir, collection+"-*.snapshot"))
 	sort.Strings(m)
-	for len(m) > keepBackup {
-		_ = os.Remove(m[0])
-		m = m[1:]
+	archiveDir := filepath.Join(dir, "archive")
+	if len(m) <= keepBackup {
+		return len(m), 0
 	}
-	return len(m)
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil { //nolint:gosec // user-owned backup archive
+		return len(m), 0
+	}
+	for _, source := range m[:len(m)-keepBackup] {
+		destination := filepath.Join(archiveDir, filepath.Base(source))
+		if _, err := os.Stat(destination); err == nil {
+			continue // preserve both copies rather than overwrite either one
+		}
+		if err := os.Rename(source, destination); err == nil {
+			archived++
+		}
+	}
+	return len(m) - archived, archived
 }
 
 // restoreCmd uploads a snapshot file and recovers the collection from it
@@ -105,7 +181,7 @@ func exportCmd(path string) int {
 		path = filepath.Join(backupsDir(), collection+"-"+time.Now().Format("20060102-150405")+".jsonl")
 		_ = os.MkdirAll(backupsDir(), 0o755) //nolint:gosec // user-owned
 	}
-	f, err := os.Create(path) //nolint:gosec // user-provided path
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600) //nolint:gosec // user-provided path
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "create:", err)
 		return 1
@@ -133,6 +209,18 @@ func exportCmd(path string) int {
 			pl, _ := pm["payload"].(map[string]any)
 			line := map[string]any{
 				"text": strOf(pl["text"]), "wing": strOf(pl["wing"]), "room": strOf(pl["room"]),
+			}
+			for _, field := range []string{
+				"ts", "observed_at", "occurred_at", "session_started_at", "session_ended_at",
+				"last_seen_at", "source_modified_at", "consolidated_at", "consolidation_checked_at",
+				"consolidation_first_empty_at", "superseded_at", "orphaned_at", "source_tokens", "memory_tokens",
+				"consolidation_attempts", "provenance", "source_id", "source_kind", "source_key", "source_revision",
+				"content_hash", "identity_version", "superseded_by", "superseded_reason", "status", "memory_type",
+				"consolidation_status",
+			} {
+				if value, exists := pl[field]; exists {
+					line[field] = value
+				}
 			}
 			b, _ := json.Marshal(line)
 			_, _ = w.Write(append(b, '\n'))
@@ -182,7 +270,9 @@ func httpDo(method, url string, body io.Reader, out any) error {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(b))
 	}
 	if out != nil {
-		return json.NewDecoder(resp.Body).Decode(out)
+		decoder := json.NewDecoder(resp.Body)
+		decoder.UseNumber() // preserve uint64 point offsets across paginated exports
+		return decoder.Decode(out)
 	}
 	return nil
 }
@@ -199,7 +289,7 @@ func download(url, dest string) error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	f, err := os.Create(dest) //nolint:gosec // user-owned backups path
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600) //nolint:gosec // user-owned backups path
 	if err != nil {
 		return err
 	}

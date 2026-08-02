@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestContentTextString(t *testing.T) {
@@ -55,5 +57,32 @@ func TestSummaryOllamaURLRequiresOptInForRemote(t *testing.T) {
 	t.Setenv("ARIADNE_CAPTURE_REMOTE", "1")
 	if got, ok := summaryOllamaURL(); !ok || got != "http://ollama.example:11434" {
 		t.Fatalf("summaryOllamaURL = %q/%v", got, ok)
+	}
+}
+
+func TestCaptureMetadataUsesCaptureTimeNotTranscriptStart(t *testing.T) {
+	first := time.Date(2026, 7, 3, 9, 0, 0, 0, time.UTC)
+	last := time.Date(2026, 7, 20, 18, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 7, 20, 18, 1, 0, 0, time.UTC)
+	got := captureMetadata(now, first, last, "session-1", "bounded source", "memory")
+	if got["ts"] != strconv.FormatInt(now.Unix(), 10) || got["observed_at"] != got["ts"] {
+		t.Fatalf("capture timestamp = %#v", got)
+	}
+	if got["occurred_at"] != strconv.FormatInt(last.Unix(), 10) ||
+		got["session_started_at"] != strconv.FormatInt(first.Unix(), 10) {
+		t.Fatalf("session bounds = %#v", got)
+	}
+	if got["source_id"] == "" || got["status"] != "active" || got["memory_type"] != "event" {
+		t.Fatalf("capture provenance = %#v", got)
+	}
+}
+
+func TestCaptureMetadataSourceIDIsStableForSameBoundedSource(t *testing.T) {
+	now := time.Date(2026, 7, 20, 18, 1, 0, 0, time.UTC)
+	last := now.Add(-time.Minute)
+	a := captureMetadata(now, time.Time{}, last, "session-1", "same source", "memory")
+	b := captureMetadata(now.Add(time.Hour), time.Time{}, last, "session-1", "same source", "memory")
+	if a["source_id"] != b["source_id"] {
+		t.Fatalf("source ids differ: %q != %q", a["source_id"], b["source_id"])
 	}
 }

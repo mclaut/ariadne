@@ -28,6 +28,9 @@ Qdrant data, backups, logs); source lives in the repo.
 - Use `room` to narrow retrieval when the category is known: `decisions`,
   `gotchas`, `reference`, or `diary`. For release/deployment/status reports,
   search `room: "reference"` first, then broaden only if needed.
+- Normal semantic recall hides records marked `archived`, `superseded`, or
+  `orphaned`. Pass `include_archived: true` only for an explicit history/audit
+  query; exact id retrieval always remains available.
 - The raw session archive lives in a separate collection — pass
   `collection: "sessions"` to dig into old transcripts; normal recall never
   sees them.
@@ -49,12 +52,17 @@ Do this automatically even when the user did not explicitly say "remember".
 
 Do NOT save: raw transcripts, code dumps, anything derivable from the repo,
 secrets/tokens/passwords (NEVER — memories are stored in plaintext), or
-ephemeral session chatter. Identical text deduplicates automatically
-(content-hash ids), so re-saving is harmless.
+ephemeral session chatter. Identical text deduplicates automatically within its
+wing and room (scoped-content ids), so re-saving in the same scope is harmless
+while another scope remains independently addressable.
 
 Metadata: `wing` = stable project slug (e.g. `myapp`, `backend`),
 `room` = category (`decisions`, `gotchas`, `reference`, `diary`). Use
 `reference` for reports and verified outcomes; `diary` is temporary chronology.
+`memory_save` also accepts optional `source_tokens`: pass it only when a hook or
+integration has a measured or conservative count for the bounded source that
+was condensed into this memory. Omit it rather than guessing from the whole
+session, and never send raw source text merely to obtain a count.
 
 ## Curate — delete / move (by id)
 
@@ -66,29 +74,42 @@ curation, not only to find it semantically.
   user asked to forget, or a memory that is clearly wrong or superseded. Recall
   first, confirm the id is the right one, and say what you're removing.
 - **`memory_move(id, wing?, room?)`** — re-home (change project) or re-tag (change
-  room) a memory without touching its text; the id stays the same. Use it when a
-  memory landed in the wrong wing/room.
+  room) a memory without touching its text. It returns a new scoped id and keeps
+  the original record as superseded history.
 
-There is no copy tool: ids are a content-hash of the text, so identical text is
-always exactly one point.
+There is no dedicated copy tool: save the same text in another wing or room
+when both scoped associations are intentionally useful.
 
 ## Ops (via ~/.ariadne/bin/ariadnectl)
 
 ```bash
-~/.ariadne/bin/ariadnectl status        # health: Qdrant, Ollama, points, disk
+~/.ariadne/bin/ariadnectl status        # health, points, storage, maintenance freshness
 ~/.ariadne/bin/ariadnectl metrics       # estimated tokens saved by recalls (net avoided)
 ~/.ariadne/bin/ariadnectl start|stop|restart
-~/.ariadne/bin/ariadnectl backup        # Qdrant snapshot → ~/.ariadne/backups (keeps 10)
+~/.ariadne/bin/ariadnectl backup        # 10 recent snapshots; older ones → backups/archive
 ~/.ariadne/bin/ariadnectl restore <f>   # DESTRUCTIVE: replace collection from snapshot
 ~/.ariadne/bin/ariadnectl export [f]    # portable JSONL (no vectors, re-embeddable)
+~/.ariadne/bin/ariadnectl maintenance  # sync + consolidate, bounded retries
 ~/.ariadne/bin/ariadnectl consolidate --before 24h  # merge old diaries → durable memories
+~/.ariadne/bin/ariadnectl requeue-empty --dry-run   # inspect legacy one-pass empty archives
 ```
 
-`metrics` reports three honest values: **confirmed saved** (sum of positive
-per-recall reuse), **recall overhead** (delivery not backed by measurable source
-context, including legacy memories), and signed **net** (saved minus overhead).
-The tray shows confirmed savings, which cannot be negative; CLI/JSON preserve
-overhead and signed net instead of hiding real costs.
+Daily maintenance retries each failed stage up to three times with bounded
+exponential backoff. Any partial import returns non-zero and blocks
+consolidation; failed consolidation groups remain active for the next retry.
+The tray shows the latest outcome, warns on failed/partial/stuck/stale state,
+and provides **Run maintenance now**. Scheduled and manual output is appended to
+`~/.ariadne/logs/maintenance.log`; structured outcomes are appended to
+`~/.ariadne/state/activity.jsonl`.
+
+`metrics` v2 separates **measured saved/net** from **unattributed** delivery.
+Source-backed memories contribute represented context once per memory per
+client session; every query/result delivery still contributes observed recall
+cost. Legacy/manual memories without source metadata remain visible as
+unattributed instead of being mislabelled as negative overhead. The tray shows
+measured savings, attribution coverage, recall count, and unattributed cost;
+CLI/JSON expose the complete counters. These are conservative context-reuse
+estimates, not provider billing or a counterfactual A/B result.
 
 Backup vs export: **backup** = fast 1:1 snapshot tied to the embedding model;
 **export** = portable text that any future model can re-embed. Before risky
@@ -105,7 +126,11 @@ operations (restore, migration, bulk import) run a backup first.
   would otherwise be lost). The daily `consolidate` run merges accumulated
   diaries into durable memories. Don't duplicate this by saving your own session
   summary; DO still save important decisions/gotchas explicitly (better wording,
-  right room). Capture log: `~/.ariadne/logs/capture.log`;
+  right room). Capture records use the actual capture time plus separate session
+  start/end metadata. Daily consolidation is append-only: it saves durable
+  outputs and archives source diaries by metadata, never deleting their text or
+  vectors. A first empty result remains active and requires a later confirming
+  pass after the grace period. Capture log: `~/.ariadne/logs/capture.log`;
   disable with `ARIADNE_CAPTURE=0`. Capture summaries use
   `ARIADNE_SUMMARY_OLLAMA` (default: local Ollama); remote summary endpoints are
   blocked unless `ARIADNE_CAPTURE_REMOTE=1` is set, because condensed transcript

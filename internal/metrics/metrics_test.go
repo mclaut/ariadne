@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -69,6 +70,18 @@ func TestRepresentedShareRequiresSourceMetadata(t *testing.T) {
 	}
 }
 
+func TestSplitAttributionIncludesSharedRecallCost(t *testing.T) {
+	if attributed, unknown := SplitAttribution(120, 100, 25); attributed != 30 || unknown != 90 {
+		t.Fatalf("mixed attribution = %d/%d", attributed, unknown)
+	}
+	if attributed, unknown := SplitAttribution(120, 100, 0); attributed != 0 || unknown != 120 {
+		t.Fatalf("unknown attribution = %d/%d", attributed, unknown)
+	}
+	if attributed, unknown := SplitAttribution(120, 100, 100); attributed != 120 || unknown != 0 {
+		t.Fatalf("full attribution = %d/%d", attributed, unknown)
+	}
+}
+
 func TestRecordRecallAggregatesAndDeduplicates(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "metrics.db")
@@ -121,8 +134,115 @@ func TestMetricsNeverReportNegativeSavings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.AllTime.ConfirmedSavedTokens != 0 || got.AllTime.RecallOverheadTokens != 120 ||
-		got.AllTime.NetAvoidedTokens != -120 {
+	if got.AllTime.ConfirmedSavedTokens != 0 || got.AllTime.RecallOverheadTokens != 0 ||
+		got.AllTime.NetAvoidedTokens != 0 || got.AllTime.UnattributedTokens != 120 ||
+		got.AllTime.AttributionPercent != 0 {
 		t.Fatalf("legacy-only metrics = %+v", got.AllTime)
+	}
+}
+
+func TestAttributionCoverageKeepsFractionalPercent(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "metrics.db")
+	if err := RecordRecallAt(ctx, path, Event{
+		ID: "fractional", DeliveredTokens: 300, AttributedTokens: 1, UnattributedTokens: 299,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadAt(ctx, path, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AllTime.AttributionPercent < 0.33 || got.AllTime.AttributionPercent > 0.34 {
+		t.Fatalf("attribution percent = %v", got.AllTime.AttributionPercent)
+	}
+}
+
+func TestRepresentationsDeduplicatePerMemory(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "metrics.db")
+	first := Event{
+		ID: "first", Source: "mcp", DeliveredTokens: 100, AttributedTokens: 100, Memories: 2,
+		AttributedMemories: 2,
+		Representations:    []Representation{{ID: "session-memory-a", Tokens: 900}, {ID: "session-memory-b", Tokens: 100}},
+	}
+	if err := RecordRecallAt(ctx, path, first); err != nil {
+		t.Fatal(err)
+	}
+	if err := RecordRecallAt(ctx, path, Event{
+		ID: "second", Source: "mcp", DeliveredTokens: 50, AttributedTokens: 50, Memories: 1,
+		AttributedMemories: 1, Representations: []Representation{{ID: "session-memory-a", Tokens: 900}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadAt(ctx, path, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AllTime.RepresentedTokens != 1_000 || got.AllTime.ConfirmedSavedTokens != 900 ||
+		got.AllTime.RecallOverheadTokens != 50 || got.AllTime.NetAvoidedTokens != 850 {
+		t.Fatalf("deduplicated totals = %+v", got.AllTime)
+	}
+}
+
+func TestSessionSourceIDTracksLineageNotPointID(t *testing.T) {
+	a := SessionSourceID("mcp", "session", "source-a")
+	b := SessionSourceID("mcp", "session", "source-a")
+	if a == "" || a != b {
+		t.Fatalf("source ids = %q/%q", a, b)
+	}
+	if a == SessionSourceID("mcp", "session", "source-b") ||
+		a == SessionSourceID("mcp", "other-session", "source-a") {
+		t.Fatal("source id did not include lineage and session scope")
+	}
+}
+
+func TestReadMigratesV1UnknownDelivery(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "metrics.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `CREATE TABLE recall_events (
+		id TEXT PRIMARY KEY, ts INTEGER NOT NULL, source TEXT NOT NULL,
+		delivered_tokens INTEGER NOT NULL, represented_tokens INTEGER NOT NULL,
+		memories INTEGER NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `INSERT INTO recall_events VALUES ('legacy', 1, 'mcp', 120, 0, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReadAt(ctx, path, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AllTime.UnattributedTokens != 120 || got.AllTime.UnattributedMemories != 1 ||
+		got.AllTime.RecallOverheadTokens != 0 || got.AllTime.NetAvoidedTokens != 0 {
+		t.Fatalf("migrated totals = %+v", got.AllTime)
+	}
+
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, `INSERT INTO recall_events
+		(id, ts, source, delivered_tokens, represented_tokens, memories)
+		VALUES ('old-client', 2, 'mcp', 80, 0, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got, err = ReadAt(ctx, path, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AllTime.UnattributedTokens != 200 || got.AllTime.UnattributedMemories != 2 {
+		t.Fatalf("old-client totals = %+v", got.AllTime)
 	}
 }

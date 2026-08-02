@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.7.0",
+  softwareVersion: "0.8.0",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.7</a>
+          <a href="#new">New in 0.8</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -140,15 +140,15 @@ export default function Home() {
             </div>
           </div>
           <div className="memory-terminal">
-            <span>$ memory_recall id=2704862554782470108</span>
-            <strong>exact ID retrieval</strong>
-            <span>one durable reference returned</span>
+            <span>$ memory_move id=2704862554782470108 room=reference</span>
+            <strong>new scoped ID written first</strong>
+            <span>original retained as superseded</span>
           </div>
         </div>
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.7.0 remembers verified outcomes immediately
+            v0.8.0 keeps every memory change auditable
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.7.0</span>
-            <h2>Remember the result while it is fresh.</h2>
+            <span className="eyebrow">New in v0.8.0</span>
+            <h2>Memory that evolves without erasing its past.</h2>
             <p>
-              Agents save decisions, gotchas, releases, deployments, and
-              verified reports immediately — no SessionEnd command required.
+              Scoped identities, incremental sync, and retry-bounded
+              maintenance keep agent memory current, inspectable, and safe.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <Check aria-hidden="true" />
-              <h3>Immediate durable capture</h3>
+              <h3>Scoped memory identity</h3>
               <p>
-                Completed outcomes go straight to decisions, gotchas, or
-                reference instead of waiting for session capture.
+                Identical text can coexist across projects and rooms. Moves
+                write the new record first and retain superseded history.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>Exact lookup by ID</h3>
+              <h3>Incremental append-only sync</h3>
               <p>
-                Retrieve and verify one known memory without embedding,
-                approximate ranking, or unrelated search results.
+                Unchanged files need zero embeddings. New revisions land before
+                old chunks are superseded; missing sources become orphaned.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Room-scoped recall</h3>
+              <h3>Safer consolidation</h3>
               <p>
-                Search only decisions, gotchas, references, or diary entries
-                while retaining project and collection scopes.
+                Bounded batches and output quality gates keep source diary
+                entries active whenever durable promotion cannot be verified.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Honest token accounting</h3>
+              <h3>Observable maintenance</h3>
               <p>
-                See confirmed savings, recall overhead, and signed net instead
-                of calling a negative total “tokens saved.”
+                Capped retries, append-only activity, health alerts, and a
+                manual tray action make the 04:30 job accountable.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.7.0"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.0"
               target="_blank"
               rel="noreferrer"
             >

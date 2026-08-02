@@ -9,6 +9,10 @@ A **native, local-first, multilingual memory server** for
 [Qdrant](https://qdrant.tech) + [bge-m3](https://huggingface.co/BAAI/bge-m3) —
 no Docker, no cloud, no API keys.
 
+Purpose-built for private coding-agent memory: a small native appliance rather
+than a hosted, multi-tenant memory platform. The default path is offline and
+cross-lingual, with observable retrieval cost and no account dependency.
+
 [![Release](https://img.shields.io/github/v/release/mclaut/ariadne)](https://github.com/mclaut/ariadne/releases/latest)
 [![CI](https://github.com/mclaut/ariadne/actions/workflows/ci.yml/badge.svg)](https://github.com/mclaut/ariadne/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-11120f.svg)](LICENSE)
@@ -22,10 +26,42 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.7.0
+## What's New in v0.8.0
+
+**Scoped append-only memory lifecycle.** Identical text may exist independently
+in different projects and rooms. A move writes the destination record first and
+retains the original as superseded history. Session capture records actual event
+and capture times separately and assigns stable opaque source lineage. Daily
+consolidation saves durable memories first, then archives source diaries by
+metadata; it never deletes them. A first zero-output review remains active as
+`candidate_empty` and needs a later confirming pass after a grace period before
+archival. Normal recall hides archived/superseded records, while exact-ID lookup
+or `include_archived: true` provides an explicit audit path.
+
+**Conservative historical ranking.** Qdrant still supplies the dense+BM25 RRF
+candidate set. A small bounded second pass adds source quality, explicit
+temporal intent, and context-size signals. Old decisions and gotchas do not
+decay merely because they are old; recency applies only when the query asks for
+the latest/current/history-aware answer, and metadata cannot override a
+material semantic lead.
+
+**Non-destructive, observable maintenance.** Memfile sync skips unchanged source
+revisions before embedding, imports changed revisions before marking older
+chunks `superseded`, and preserves original observation timestamps; vanished
+sources become `orphaned`, not deleted. Consolidation is batch- and
+context-bounded, validates model output, and retains source diaries when any
+promotion fails. The runner retries transient failures with capped backoff,
+records append-only activity, and exposes failed, partial, stuck, or stale state
+in status and the tray. Backup rotation archives older snapshots.
+
+**Deterministic regression evaluation.** `go run ./cmd/eval` executes the
+multilingual coding-memory ranking suite in `evaluation/coding-memory.json`
+without touching Qdrant or Ollama.
+
+## Previously in v0.7.0
 
 **Exact retrieval and immediate durable memory.** `memory_recall` now accepts an
-exact content-hash `id`, so agents can retrieve and verify one memory without an
+exact scoped-content `id`, so agents can retrieve and verify one memory without an
 embedding call or approximate ranking. Semantic recall can also be scoped by
 both project (`wing`) and category (`room`).
 
@@ -36,16 +72,15 @@ the agent does not wait for SessionEnd, PreCompact, daily consolidation, or a
 separate “remember this” command. Decisions and hard-won gotchas follow the same
 immediate-save discipline.
 
-Token metrics now distinguish three real quantities instead of presenting a
-negative number as “tokens saved”:
+Token metrics separate source-backed measurement from unknown delivery instead
+of treating every legacy recall as negative savings:
 
-- **confirmed saved** — positive per-recall reuse backed by source metadata;
-- **recall overhead** — delivered context without measurable source reuse;
-- **net** — signed confirmed savings minus overhead.
+- **measured saved/net** — source-backed context benefit after attributed cost;
+- **attribution coverage** — the share of observed recall cost with provenance;
+- **unattributed** — visible legacy/manual delivery with no invented benefit.
 
-The tray shows non-negative confirmed savings. `ariadnectl metrics` and JSON
-retain overhead and signed net, so costs remain visible rather than being
-clamped away.
+The tray shows measured savings, coverage, recall count, and unattributed cost.
+`ariadnectl metrics` and JSON retain the complete observed-cost counters.
 
 ```json
 {
@@ -55,29 +90,37 @@ clamped away.
 
 ## Previously in v0.6.0
 
-**Automatic diary distillation.** SessionEnd capture still writes one concise,
-local-model diary memory per substantive session. Daily maintenance now revisits
-diary entries older than 24 hours, groups them by project and day, and retains
-only durable decisions with rationale, verified gotchas, critical constraints,
-and important open risks. Chronology, routine progress, duplicates, code, and
-repository-derivable details are discarded.
+**Automatic diary distillation.** SessionEnd capture writes one concise,
+local-model diary memory per substantive session. Daily maintenance revisits
+diary entries older than 24 hours, groups them by project and day, and promotes
+durable decisions with rationale, verified gotchas, critical constraints, and
+important open risks. Source chronology remains archived for audit instead of
+being discarded.
 
-The process is fail-safe: Ariadne creates a Qdrant snapshot before modifying
-anything, saves all distilled memories before deleting their source diary, and
-keeps the source group intact if summarization, validation, embedding, or saving
-fails. The summary endpoint remains local-only unless remote capture is
-explicitly enabled.
+The process is fail-safe and append-only: Ariadne creates a due weekly Qdrant
+snapshot before archival, saves every distilled memory, then marks the source
+group archived. A first empty pass stays active for later confirmation, and a
+failure leaves the source group active for retry. The summary endpoint remains
+local-only unless remote capture is explicitly enabled.
 
 Preview or run it manually:
 
 ```bash
 ariadnectl consolidate --before 24h --dry-run
-ariadnectl consolidate --before 24h
+ariadnectl maintenance  # memfile sync + consolidation, with bounded retries
+ariadnectl consolidate --before 24h  # consolidation only
+ariadnectl requeue-empty --dry-run  # inspect records archived by the legacy one-pass empty policy
 ```
 
-The installer schedules consolidation with the existing 04:30 daily memory
-maintenance job on macOS and Linux. Output is written to
-`~/.ariadne/logs/maintenance.log`.
+The installer schedules the 04:30 daily memory maintenance job on macOS and
+Linux. A failed stage is retried up to three times with bounded exponential
+backoff; partial import failures return non-zero and block consolidation.
+systemd uses `Persistent=true`; a loaded launchd calendar agent receives one
+catch-up start after the Mac wakes when a scheduled time was missed. The tray
+shows the latest outcome, warns when maintenance failed, remains partial, is
+stuck, or is older than 36 hours, and offers **Run maintenance now**. Output is
+written to `~/.ariadne/logs/maintenance.log`; append-only outcomes live in
+`~/.ariadne/state/activity.jsonl`.
 
 ## Previously in v0.5.0
 
@@ -142,7 +185,9 @@ maintenance job on macOS and Linux. Output is written to
   (an English query finds Ukrainian notes, cosine ~0.8–0.94 across uk/ru/en/es/
   de/it/pl/ro/hu/lt/lv/et/fi/fr/ar).
 - **Hybrid search** — dense (bge-m3) + BM25 sparse (pure Go tokenizer; Qdrant
-  computes IDF server-side) fused with RRF. Exact terms/codes/names rank sharply.
+  computes IDF server-side) fused with RRF, followed by a bounded historical-
+  quality rerank. Exact terms/codes/names rank sharply; explicit temporal queries
+  prefer the correct dated event without blindly decaying durable decisions.
 - **Scoped recall** — narrow searches by project (`wing`) and category (`room`),
   including `reference` for releases, deployments, audits, and verified reports.
 - **Native** — Qdrant binary + Ollama on Windows, macOS, and Linux; supported
@@ -157,6 +202,7 @@ maintenance job on macOS and Linux. Output is written to
 | `cmd/hook` | Claude Code session hooks (`ariadne-hook`): SessionStart auto-recall, SessionEnd auto-capture. |
 | `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. Windows uses `install.ps1`. |
 | `cmd/ariadnectl` | Control + health core (`status -json`, `metrics -json`, start/stop, backup/export). |
+| `cmd/eval` | Read-only deterministic coding-memory ranking regression runner. |
 | `internal/store` | Storage core: embed (Ollama), BM25 sparse, Qdrant hybrid. |
 | `cmd/ariadne-tray` | Cross-platform tray monitor (macOS/Linux/Windows) — pure-Go, localized, over the `ariadnectl` core. |
 | `skills/ariadne` | Claude Code skill: recall/save discipline + `doctor.sh`/`recall.sh`. |
@@ -397,14 +443,33 @@ or pass `-summary-model` to the installer so it pulls that one.
 long-term knowledge. It selects `room=diary` entries older than 24 hours by
 default, groups them by project (`wing`) and local calendar day, then asks the
 configured local summary model to emit only validated `decisions`, `gotchas`,
-and `reference` memories. Empty groups are safely retired when they contain no
-durable information.
+and `reference` memories. Requests are split to a bounded source-token budget.
+An empty result first marks the source `candidate_empty`; only a later empty
+pass after the default seven-day grace period may archive it as
+`empty_confirmed`.
 
-Every non-dry run first creates a native Qdrant backup. New memories are saved
-before source diary entries are removed; any group that fails remains untouched
-for the next run. Use `--before 48h` for a longer review window or `--dry-run`
-to inspect output without changing the store. Remote summary endpoints remain
-blocked unless `ARIADNE_CAPTURE_REMOTE=1` is explicitly set.
+Automatic consolidation creates a native Qdrant backup only when archival is
+needed and the latest backup is older than seven days (override with
+`ARIADNE_BACKUP_MIN_INTERVAL`); manual `ariadnectl backup` is unconditional.
+New memories are saved before source diary entries are marked archived; source
+text and vectors remain intact. Any group that fails remains active for the next run. Use `--before 48h`
+for a longer review window or `--dry-run` to inspect output without changing the
+store. Search history with `include_archived: true`. Remote summary endpoints
+remain blocked unless `ARIADNE_CAPTURE_REMOTE=1` is explicitly set.
+
+### Coding-memory evaluation
+
+The checked-in suite exercises historical ranking invariants without a live
+database or model:
+
+```bash
+go run ./cmd/eval -cases evaluation/coding-memory.json
+```
+
+It currently covers recency for explicitly temporal queries, no blind decay for
+durable decisions, semantic-dominance bounds, oversized legacy payloads, source
+quality, and multilingual temporal intent. This is a deterministic ranking
+regression suite, not yet an end-to-end embedding accuracy benchmark.
 
 ## Monitor
 
@@ -423,25 +488,30 @@ the whole interface stays in one language. Adding a language is one block in
 
 ### Estimated token savings
 
-Ariadne locally tracks how much context recall delivers and how much original
-session context each new curated diary memory represents. The tray shows
-non-negative all-time confirmed savings, and the full counters are available as:
+Ariadne locally tracks how much observed recall context it delivers and how
+much bounded source context each attributed memory represents. The tray shows
+all-time measured savings, attribution coverage, recall count, and
+unattributed delivery; the full counters are available as:
 
 ```bash
 ariadnectl metrics
 ariadnectl metrics -json
 ```
 
-Each recall contributes either confirmed savings (`represented - delivered`,
-when positive) or recall overhead (`delivered - represented`, when positive).
-Signed net remains the difference between those totals. The deterministic
-multilingual estimate uses UTF-8 bytes because exact tokenizers vary by client
-and model; `~` explicitly marks this as context reuse, not provider billing.
-Legacy memories without source-size metadata receive no invented savings and
-their delivery is counted as overhead. Metrics contain only numeric counters
-and opaque event hashes, never memory or transcript text, and stay in
-`~/.ariadne/metrics.db` with user-only permissions. Set `ARIADNE_METRICS=0` to
-disable new records.
+For source-backed recalls, measured net is represented source context minus the
+attributed share of the complete observed cost (query plus response). Recalling
+the same memory twice in one client session credits its source only once while
+counting both deliveries. Legacy/manual memories without source-size metadata
+receive no invented benefit: their cost is reported separately as
+`unattributed`, not as negative overhead. `memory_save` accepts optional
+`source_tokens` for integrations that know a bounded source size and
+`occurred_at` for historical facts; capture and
+consolidation populate provenance automatically. The deterministic multilingual
+estimate uses UTF-8 bytes because exact tokenizers vary by client and model; `~`
+marks a conservative context-reuse estimate, not provider billing or an A/B
+counterfactual. Metrics contain only numeric counters and opaque hashes, never
+memory or transcript text, and stay in `~/.ariadne/metrics.db` with user-only
+permissions. Set `ARIADNE_METRICS=0` to disable new records.
 
 - **`ariadne-tray`** (pure-Go, `fyne.io/systray`) is the monitor on every
   platform: the installer builds it into `~/.ariadne/bin` and registers autostart
@@ -458,11 +528,12 @@ Two distinct concepts:
 - **Backup / restore** — a fast, full, native Qdrant snapshot (includes vectors;
   one-to-one restore, tied to the embedding model). For recovering after damage.
   ```bash
-  ariadnectl backup            # snapshot → ./backups/, rotated (keeps 10)
+  ariadnectl backup            # 10 recent snapshots; older ones move to backups/archive
   ariadnectl restore <file>    # recover the collection from a snapshot (destructive)
   ```
-- **Export / import** — a portable JSONL of `{text, wing, room}` (no vectors, so
-  it moves between machines and re-embeds with any model). For migration/inspection.
+- **Export / import** — portable JSONL with text, scope, provenance, historical
+  status, timestamps, and source accounting (no vectors, so it moves between
+  machines and re-embeds with any model). For migration/inspection.
   ```bash
   ariadnectl export [file]                        # all memories → JSONL
   import -source jsonl -file export.jsonl           # re-embed + upsert an export
@@ -470,15 +541,25 @@ Two distinct concepts:
 
 `import` also backfills from an archived chromadb sqlite
 (`-source chroma -db <file>`) or markdown memory files (`-source memfiles`).
-All imports are idempotent (content-hash ids). For memfiles, `-sync` keeps the
-collection true to disk: edited files replace their old chunks and chunks of
-deleted files are reaped. The installer registers a daily agent
-(`com.ariadne.sync` / `ariadne-sync.timer`) that runs this plus diary
-consolidation for you; run the import manually after large note edits.
+All imports are idempotent within a `(wing, room, text)` scope; identical text
+may intentionally exist in different projects or rooms. For memfiles, `-sync`
+uses a privacy-safe source key and relative source path, skips unchanged files
+before embedding, imports a changed revision first, preserves original event
+time, marks prior chunks `superseded`, and marks chunks from vanished sources
+`orphaned`; it does not delete their history. The
+installer registers a daily agent
+(`com.ariadne.sync` / `ariadne-sync.timer`) that runs retry-bounded memfile sync
+plus diary consolidation for you; use `ariadnectl maintenance` or the tray
+button after large note edits. The
+`-force` flag is reserved for an explicit migration/repair pass; routine sync
+must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.7.0 — working. Exact ID retrieval, room-scoped hybrid recall, immediate
+v0.8.0 — working. Exact ID retrieval, room-scoped hybrid recall, append-only
+source history, conservative temporal ranking, scoped identities, incremental
+timestamp-safe memfile sync, two-pass empty consolidation, retry-bounded
+maintenance with history/storage observability, immediate
 durable reference/report capture, honest token-efficiency accounting, automatic
 daily diary distillation, explicit Windows client setup,
 local token-efficiency metrics,

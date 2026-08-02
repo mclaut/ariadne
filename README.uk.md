@@ -8,6 +8,10 @@
 [Go](https://go.dev/) + [Qdrant](https://qdrant.tech) +
 [bge-m3](https://huggingface.co/BAAI/bge-m3) — без Docker, хмари й API-ключів.
 
+Ariadne спеціально сфокусована на приватній пам’яті coding agents: це невеликий
+нативний appliance, а не хмарна multi-tenant платформа. Типовий шлях повністю
+локальний, багатомовний і не потребує акаунта.
+
 [![Release](https://img.shields.io/github/v/release/mclaut/ariadne)](https://github.com/mclaut/ariadne/releases/latest)
 [![CI](https://github.com/mclaut/ariadne/actions/workflows/ci.yml/badge.svg)](https://github.com/mclaut/ariadne/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-11120f.svg)](LICENSE)
@@ -20,7 +24,30 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## Нове у v0.7.0
+## Нове у v0.8.0
+
+- **Scoped append-only історія.** Однаковий текст може незалежно існувати в
+  різних проєктах і кімнатах. Move спершу створює цільовий запис і залишає
+  оригінал як superseded history. Capture окремо зберігає час події та запису;
+  consolidate спершу створює durable memories, а джерельні diary лише позначає
+  як `archived`.
+- **Історичні ваги.** Після dense+BM25 RRF застосовується невеликий обмежений
+  rerank за temporal intent, provenance і розміром контексту. Старі рішення не
+  втрачають вагу лише через вік; recency діє, коли сам запит просить останній або
+  поточний стан.
+- **Аудит і безпечний sync.** `include_archived: true` повертає архівні та
+  superseded записи. Memfile sync пропускає незмінені файли без embedding,
+  додає нову ревізію перед supersede старої, а зниклі джерела позначає
+  `orphaned`, не видаляючи історію.
+- **Надійний maintenance.** Обмежена за batch і context консолідація перевіряє
+  структуру та якість відповіді, а source diary лишається активним після
+  помилки. Runner робить до трьох спроб із capped backoff; status і tray
+  показують failed, partial, stuck та stale стани й дозволяють запустити процес
+  негайно.
+- **Regression evaluation.** `go run ./cmd/eval` запускає read-only набір
+  багатомовних coding-memory сценаріїв без Qdrant та Ollama.
+
+## Раніше у v0.7.0
 
 - **Точне отримання за ID.** `memory_recall` приймає content-hash `id` і повертає
   конкретний запис без embedding та приблизного ранжування.
@@ -29,8 +56,9 @@ Ariadne замінює вбудовані векторні бази, які па
   PreCompact, щоденної консолідації або окремої команди не потрібно.
 - **Пошук у межах кімнати.** Recall можна обмежити проєктом (`wing`), категорією
   (`room`) і колекцією.
-- **Чесні метрики токенів.** Підтверджена економія, recall overhead і signed net
-  показуються окремо; від’ємне net більше не називається «зекономленими токенами».
+- **Чесні метрики токенів.** Виміряна економія, coverage, кількість recall і
+  unattributed-витрати показуються окремо; невідоме джерело більше не створює
+  вигаданий негативний net.
 
 ```json
 {
@@ -43,7 +71,8 @@ Ariadne замінює вбудовані векторні бази, які па
 1. MCP-клієнт викликає `memory_save`, `memory_recall`, `memory_move` або
    `memory_delete`.
 2. Ollama з bge-m3 створює багатомовний dense-вектор; BM25 зберігає точні терміни.
-3. Qdrant об’єднує dense і sparse результати через RRF та зберігає дані локально.
+3. Qdrant об’єднує dense і sparse результати через RRF; обмежений другий прохід
+   враховує явний часовий намір, provenance та завеликий контекст.
 
 Звичайний recall використовує кураторську колекцію `ariadne`. Сирі архіви сесій
 лежать окремо в `sessions` і шукаються лише за явним запитом.
@@ -70,7 +99,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 - прив’язує Qdrant лише до `127.0.0.1`;
 - реєструє Ariadne для Codex, Claude Code або обох;
 - встановлює skill негайного збереження довготривалої пам’яті;
-- налаштовує резервні копії та щоденну консолідацію diary.
+- налаштовує резервні копії та retry-bounded maintenance щодня о 04:30.
 
 ## Використання MCP
 
@@ -94,6 +123,16 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 }
 ```
 
+Пошук в архівній історії:
+
+```json
+{
+  "query": "попереднє рішення щодо консолідації",
+  "wing": "my-project",
+  "include_archived": true
+}
+```
+
 Точне отримання:
 
 ```json
@@ -110,13 +149,20 @@ ariadnectl metrics
 ariadnectl backup
 ariadnectl export
 ariadnectl consolidate --before 24h --dry-run
+go run ./cmd/eval -cases evaluation/coding-memory.json
 ```
 
 Метрики показують:
 
-- **confirmed saved** — підтверджене повторне використання контексту;
-- **recall overhead** — доставлений контекст без вимірюваної економії;
-- **net** — signed різницю, яка може бути від’ємною.
+- **measured saved / net** — економію лише для пам’ятей із відомим розміром джерела;
+- **attribution coverage** — частку recall-витрат, яку можна зіставити з джерелом;
+- **unattributed** — доставку старих і ручних пам’ятей без вигаданого негативного net;
+- **recalls** — кількість фактичних отримань пам’яті.
+
+Повторний recall тієї самої пам’яті в одній клієнтській сесії вдруге не отримує
+credit за джерело, але його вартість рахується. `memory_save` має опційний
+`source_tokens` для інтеграцій, які знають розмір конкретного стисненого джерела;
+capture і consolidate додають provenance автоматично.
 
 ## Приватність
 
@@ -131,6 +177,7 @@ ariadnectl consolidate --before 24h --dry-run
 go test ./...
 go build ./...
 golangci-lint run
+go run ./cmd/eval
 cd site && npm test
 ```
 

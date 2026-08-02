@@ -7,6 +7,7 @@ func TestBuildPayloadSkipsEmptyAndParsesTS(t *testing.T) {
 		"wing":          "ariadne",
 		"room":          "",
 		"ts":            "123",
+		"observed_at":   "124",
 		"source_tokens": "456",
 		"memory_tokens": "78",
 	})
@@ -22,8 +23,30 @@ func TestBuildPayloadSkipsEmptyAndParsesTS(t *testing.T) {
 	if payload["ts"] != int64(123) {
 		t.Fatalf("ts = %#v", payload["ts"])
 	}
+	if payload["observed_at"] != int64(124) {
+		t.Fatalf("observed_at = %#v", payload["observed_at"])
+	}
 	if payload["source_tokens"] != int64(456) || payload["memory_tokens"] != int64(78) {
 		t.Fatalf("token metadata = %#v/%#v", payload["source_tokens"], payload["memory_tokens"])
+	}
+}
+
+func TestPreserveSourceMetadataKeepsMeasuredProvenance(t *testing.T) {
+	got := preserveSourceMetadata(map[string]string{"wing": "ariadne", "provenance": "import"}, sourceMeta{
+		SourceTokens: 456, MemoryTokens: 78, Provenance: "capture", SourceID: "source-a",
+		Status: "active", MemoryType: "event", ObservedAt: 123, OccurredAt: 120,
+	})
+	if got["source_tokens"] != "456" || got["memory_tokens"] != "78" || got["provenance"] != "capture" ||
+		got["source_id"] != "source-a" || got["status"] != "active" || got["memory_type"] != "event" ||
+		got["observed_at"] != "123" || got["occurred_at"] != "120" {
+		t.Fatalf("preserved metadata = %#v", got)
+	}
+
+	override := preserveSourceMetadata(map[string]string{
+		"source_tokens": "900", "memory_tokens": "90", "provenance": "manual-measured",
+	}, sourceMeta{SourceTokens: 456, MemoryTokens: 78, Provenance: "capture"})
+	if override["source_tokens"] != "900" || override["provenance"] != "manual-measured" {
+		t.Fatalf("override metadata = %#v", override)
 	}
 }
 
@@ -34,6 +57,49 @@ func TestContentIDIsStable(t *testing.T) {
 	}
 	if a == contentID("different text") {
 		t.Fatal("different text produced the same id")
+	}
+}
+
+func TestScopedContentIDIsStableWithinScopeAndDistinctAcrossScopes(t *testing.T) {
+	a := scopedContentID("same text", "project-a", "reference")
+	if a != scopedContentID("same text", "project-a", "reference") {
+		t.Fatal("same scoped content produced different ids")
+	}
+	if a == scopedContentID("same text", "project-b", "reference") ||
+		a == scopedContentID("same text", "project-a", "decisions") {
+		t.Fatal("different scopes collapsed to one id")
+	}
+	hash := contentHash("same text")
+	if hash == "" || hash == contentHash("different text") {
+		t.Fatal("content hash is not stable and content-sensitive")
+	}
+}
+
+func TestPreserveSourceMetadataKeepsOriginalTimestamps(t *testing.T) {
+	got := preserveSourceMetadata(map[string]string{
+		"ts": "999", "observed_at": "999", "occurred_at": "999", "last_seen_at": "1000",
+	}, sourceMeta{TS: 100, ObservedAt: 110, OccurredAt: 90})
+	if got["ts"] != "100" || got["observed_at"] != "110" || got["occurred_at"] != "90" ||
+		got["last_seen_at"] != "1000" {
+		t.Fatalf("timestamps = %#v", got)
+	}
+}
+
+func TestLegacyRoomAliasAndTimestampsSupportMemfileMigration(t *testing.T) {
+	legacy := sourceMeta{Wing: "project", Room: "memory:design.md", TS: 100, ObservedAt: 110, OccurredAt: 90}
+	meta := map[string]string{
+		"wing": "project", "room": "memory:notes/design.md", "_legacy_room": "memory:design.md",
+	}
+	if !sameScope(legacy, meta) {
+		t.Fatal("legacy basename room should match the migration alias")
+	}
+	got := preserveLegacyTimestamps(map[string]string{"observed_at": "999"}, legacy)
+	if got["ts"] != "100" || got["observed_at"] != "110" || got["occurred_at"] != "90" {
+		t.Fatalf("legacy timestamps = %#v", got)
+	}
+	payload := buildPayload("text", meta)
+	if _, exists := payload["_legacy_room"]; exists {
+		t.Fatal("internal migration alias leaked into payload")
 	}
 }
 
@@ -61,16 +127,22 @@ func TestSparseVecDropsSingleRuneTokens(t *testing.T) {
 }
 
 func TestRecallFilterScopesWingAndRoom(t *testing.T) {
-	if recallFilter("", "") != nil {
-		t.Fatal("empty scope should not create a filter")
+	if got := recallFilter("", "", false); got == nil || len(got.Must) != 0 || len(got.MustNot) != 3 {
+		t.Fatalf("active-only filter = %#v", got)
 	}
-	if got := recallFilter("ariadne", ""); got == nil || len(got.Must) != 1 {
+	if recallFilter("", "", true) != nil {
+		t.Fatal("unscoped history recall should not create a filter")
+	}
+	if got := recallFilter("ariadne", "", false); got == nil || len(got.Must) != 1 || len(got.MustNot) != 3 {
 		t.Fatalf("wing-only filter = %#v", got)
 	}
-	if got := recallFilter("", "reference"); got == nil || len(got.Must) != 1 {
+	if got := recallFilter("", "reference", false); got == nil || len(got.Must) != 1 {
 		t.Fatalf("room-only filter = %#v", got)
 	}
-	if got := recallFilter("ariadne", "reference"); got == nil || len(got.Must) != 2 {
+	if got := recallFilter("ariadne", "reference", false); got == nil || len(got.Must) != 2 {
 		t.Fatalf("wing+room filter = %#v", got)
+	}
+	if got := recallFilter("ariadne", "reference", true); got == nil || len(got.MustNot) != 0 {
+		t.Fatalf("history filter = %#v", got)
 	}
 }
