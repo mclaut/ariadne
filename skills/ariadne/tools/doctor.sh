@@ -16,6 +16,38 @@ ok()   { printf "  ✓ %s\n" "$1"; }
 bad()  { printf "  ✗ %s\n" "$1"; FAIL=1; }
 warn() { printf "  ! %s\n" "$1"; WARN=1; }
 
+classify_status() {
+  python3 -c '
+import json,sys
+try:
+    status=json.load(sys.stdin)
+except Exception:
+    print("failed"); raise SystemExit
+critical=(
+    not status.get("qdrant",{}).get("up") or
+    not status.get("ollama",{}).get("up") or
+    status.get("collection",{}).get("status") != "green" or
+    len(status.get("qdrant_agents",[])) > 1
+)
+maintenance=status.get("maintenance",{})
+failed_stage=any(
+    isinstance(event,dict) and event.get("status") == "failed"
+    for event in maintenance.values()
+)
+if critical or failed_stage:
+    print("failed")
+elif status.get("ok"):
+    print("healthy")
+else:
+    print("degraded")
+'
+}
+
+if [ "${ARIADNE_DOCTOR_CLASSIFY_ONLY:-0}" = "1" ]; then
+  classify_status
+  exit 0
+fi
+
 resolve_ariadnectl() {
   if [ -n "${ARIADNE_CTL_PATH:-}" ] && [ -x "$ARIADNE_CTL_PATH" ]; then
     printf '%s\n' "$ARIADNE_CTL_PATH"
@@ -122,11 +154,16 @@ STATUS_JSON=""
 if [ -n "$CTL" ]; then STATUS_JSON="$($CTL status -json 2>/dev/null || true)"; fi
 if [ -z "$STATUS_JSON" ]; then
   bad "ariadnectl status unavailable"
-elif printf '%s' "$STATUS_JSON" | python3 -c 'import json,sys;sys.exit(0 if json.load(sys.stdin).get("ok") else 1)' 2>/dev/null; then
-  ok "ariadnectl status is healthy"
 else
-  bad "ariadnectl reports degraded health"
-  printf '%s' "$STATUS_JSON" | python3 -c 'import json,sys;[print("    - "+x) for x in json.load(sys.stdin).get("issues",[])]' 2>/dev/null
+  STATUS_SEVERITY="$(printf '%s' "$STATUS_JSON" | classify_status 2>/dev/null || echo failed)"
+  case "$STATUS_SEVERITY" in
+    healthy) ok "ariadnectl status is healthy" ;;
+    degraded) warn "ariadnectl reports degraded health" ;;
+    *) bad "ariadnectl reports failed health" ;;
+  esac
+  if [ "$STATUS_SEVERITY" != "healthy" ]; then
+    printf '%s' "$STATUS_JSON" | python3 -c 'import json,sys;[print("    - "+x) for x in json.load(sys.stdin).get("issues",[])]' 2>/dev/null
+  fi
 fi
 
 if [ -n "$STATUS_JSON" ]; then
