@@ -20,6 +20,19 @@ func TestMaintenanceHealthIssueFailedAndPartial(t *testing.T) {
 	}
 }
 
+func TestMaintenanceHealthIssueSafeDeferredCompletionIsHealthy(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	issue := maintenanceHealthIssue(now, map[string]activity.Event{
+		"maintenance": {
+			At: now.Add(-time.Minute), Operation: "maintenance", Status: "complete_with_deferred",
+			Counters: map[string]int64{"deferred_stages": 1},
+		},
+	}, i18n.EN)
+	if issue != "" {
+		t.Fatalf("safe deferred completion issue = %q", issue)
+	}
+}
+
 func TestMaintenanceHealthIssueMissing(t *testing.T) {
 	issue := maintenanceHealthIssue(time.Now(), nil, i18n.EN)
 	if !strings.Contains(issue, "never") {

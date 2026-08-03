@@ -32,6 +32,7 @@ type diaryPoint struct {
 	ConsolidationStatus       string
 	ConsolidationAttempts     int64
 	ConsolidationFirstEmptyAt int64
+	ConsolidationDeferredKey  string
 }
 
 type consolidatedMemory struct {
@@ -51,9 +52,12 @@ const consolidatePrompt = "You curate long-term software-project memory. " +
 	"Use decisions only for an explicit choice and its rationale; use gotchas for a verified root cause, failure mode, or fix; " +
 	"use reference for verified reports, releases, measurements, and current status. " +
 	"Drop chronology, routine progress, code/log dumps, repository-derivable details, social chatter, and duplicates. " +
-	"Drop local filesystem and ephemeral artifact paths; retain the verified outcome instead. " +
-	"Write one concern per memory and never merge unrelated facts. Multiple sentences are allowed only when every sentence " +
-	"describes the cause, rationale, constraint, or outcome of the same subject; independent actions require separate objects. " +
+	"Drop local filesystem paths, process IDs, and terminal, tmux, screen, watcher, or detached-job identifiers; retain the " +
+	"verified outcome or unfinished risk without its ephemeral runtime name. " +
+	"Write one cohesive subject per memory and never merge unrelated facts. A report may include its scope, method, key " +
+	"measurements, caveats, and verification; an incident may include its symptom, cause, fix, and verification. Multiple " +
+	"sentences are allowed only when every sentence supports the same reusable subject. Independent actions require separate " +
+	"objects; prefer several small memories over one broad memory and never squeeze facts together to reduce object count. " +
 	"Each text must name its subject, be self-contained rather than a fragment, contain 80-1200 characters, " +
 	"and use the diary's language. Never invent a resolution for an explicitly unknown cause. " +
 	"If the diary is trivial or contains no durable content, return an empty memories array; " +
@@ -64,6 +68,7 @@ const (
 	defaultConsolidationTokenBudget = int64(6000)
 	defaultEmptyGrace               = 7 * 24 * time.Hour
 	consolidateDeferredExitCode     = 3
+	consolidationPipelineRevision   = "atomic-v2"
 	roomDecisions                   = "decisions"
 	roomGotchas                     = "gotchas"
 	roomReference                   = "reference"
@@ -84,14 +89,24 @@ var unstablePathPattern = regexp.MustCompile(
 		`c:\\users\\|(?:^|[[:space:]])outputs/)[^[:space:]<>"']*`,
 )
 
+var unstableJobPattern = regexp.MustCompile(
+	`(?i)(?:detached[[:space:]]+)?(?:screen|watcher|tmux[[:space:]]+session)[[:space:]]+` + "`?" +
+		`[[:alnum:]_.:-]+` + "`?",
+)
+
 type consolidationBatch struct {
-	key    string
-	points []diaryPoint
+	key      string
+	groupKey string
+	points   []diaryPoint
 }
 
 type consolidationResult struct {
 	batch    consolidationBatch
 	memories []consolidatedMemory
+}
+
+type deferredConsolidation struct {
+	batch consolidationBatch
 }
 
 type consolidationOutcome struct {
@@ -221,23 +236,16 @@ func consolidateCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "consolidate: list diary:", err)
 		return 1
 	}
+	pipelineKey := consolidationDeferredKey()
+	points, skippedDeferred := eligibleDiaryPoints(points, pipelineKey)
 	rawGroups := groupDiary(points)
 	if len(rawGroups) == 0 {
-		fmt.Println("consolidate: no eligible diary entries")
+		fmt.Printf("consolidate: no eligible diary entries (deferred unchanged=%d)\n", skippedDeferred)
 		return 0
 	}
-	batches := make([]consolidationBatch, 0, len(rawGroups))
-	for _, key := range sortedKeys(rawGroups) {
-		parts := splitDiaryByTokenBudget(rawGroups[key], *maxSourceTokens)
-		for i, part := range parts {
-			batchKey := key
-			if len(parts) > 1 {
-				batchKey += fmt.Sprintf("#%d", i+1)
-			}
-			batches = append(batches, consolidationBatch{key: batchKey, points: part})
-		}
-	}
+	batches := buildConsolidationBatches(rawGroups, *maxSourceTokens)
 	results := make([]consolidationResult, 0, len(batches))
+	deferred := make([]deferredConsolidation, 0)
 	failures := int64(0)
 	retryableFailures := int64(0)
 	deferredFailures := int64(0)
@@ -252,14 +260,19 @@ func consolidateCmd(args []string) int {
 			failures++
 			if isDeferredConsolidationError(err) {
 				deferredFailures++
+				deferred = append(deferred, deferredConsolidation{batch: batch})
 			} else {
 				retryableFailures++
 			}
 			continue
 		}
 		results = append(results, consolidationResult{batch: batch, memories: memories})
-		fmt.Printf("%s: %d diary -> %d durable memories\n", batch.key, len(batch.points), len(memories))
-		for _, memory := range memories {
+	}
+	results = coalesceConsolidationResults(results)
+	for _, result := range results {
+		fmt.Printf("%s: %d diary -> %d durable memories\n",
+			result.batch.key, len(result.batch.points), len(result.memories))
+		for _, memory := range result.memories {
 			fmt.Printf("  %s: %s\n", memory.Room, memory.Text)
 		}
 	}
@@ -269,10 +282,8 @@ func consolidateCmd(args []string) int {
 		if failures > 0 {
 			status, exitCode = consolidationFailureStatus(retryableFailures, deferredFailures)
 		}
-		_ = activity.Append(activity.Event{Operation: "consolidate", Status: status, Counters: map[string]int64{
-			"batches": int64(len(batches)), "failures": failures,
-			"retryable_failures": retryableFailures, "deferred_failures": deferredFailures,
-		}})
+		fmt.Printf("consolidate dry-run summary: status=%s batches=%d failures=%d retryable=%d deferred=%d skipped=%d\n",
+			status, len(batches), failures, retryableFailures, deferredFailures, skippedDeferred)
 		return exitCode
 	}
 	needsBackup := false
@@ -296,8 +307,15 @@ func consolidateCmd(args []string) int {
 		return 1
 	}
 	totals := consolidationOutcome{}
+	now := time.Now()
+	for _, item := range deferred {
+		if err := markDeferredConsolidation(ctx, st, item.batch.points, now, pipelineKey); err != nil {
+			fmt.Fprintf(os.Stderr, "consolidate: %s: persist deferred marker: %v\n", item.batch.key, err)
+			retryableFailures++
+		}
+	}
 	for _, result := range results {
-		outcome, err := applyConsolidatedGroup(ctx, st, result.batch.points, result.memories, time.Now(), *emptyGrace)
+		outcome, err := applyConsolidatedGroup(ctx, st, result.batch.points, result.memories, now, *emptyGrace)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "consolidate: %s: %v; source diary kept\n", result.batch.key, err)
 			failures++
@@ -313,6 +331,7 @@ func consolidateCmd(args []string) int {
 		"batches": int64(len(batches)), "failures": failures, "created": totals.Created,
 		"archived": totals.Archived, "empty_candidates": totals.Candidates,
 		"retryable_failures": retryableFailures, "deferred_failures": deferredFailures,
+		"skipped_deferred": skippedDeferred,
 	}})
 	fmt.Printf("consolidate summary: created=%d archived=%d empty_candidates=%d failures=%d\n",
 		totals.Created, totals.Archived, totals.Candidates, failures)
@@ -327,6 +346,154 @@ func consolidationFailureStatus(retryable, deferred int64) (string, int) {
 		return "deferred", consolidateDeferredExitCode
 	}
 	return "complete", 0
+}
+
+func eligibleDiaryPoints(points []diaryPoint, pipelineKey string) ([]diaryPoint, int64) {
+	eligible := make([]diaryPoint, 0, len(points))
+	skipped := int64(0)
+	for _, point := range points {
+		if point.ConsolidationDeferredKey == pipelineKey {
+			skipped++
+			continue
+		}
+		eligible = append(eligible, point)
+	}
+	return eligible, skipped
+}
+
+func buildConsolidationBatches(rawGroups map[string][]diaryPoint, maxSourceTokens int64) []consolidationBatch {
+	total := 0
+	for _, points := range rawGroups {
+		total += len(points)
+	}
+	batches := make([]consolidationBatch, 0, total)
+	for _, key := range sortedKeys(rawGroups) {
+		groupPoints := rawGroups[key]
+		for i, point := range groupPoints {
+			batchKey := key
+			if len(groupPoints) > 1 {
+				batchKey += fmt.Sprintf("#%d", i+1)
+			}
+			for _, part := range splitDiaryByTokenBudget([]diaryPoint{point}, maxSourceTokens) {
+				batches = append(batches, consolidationBatch{key: batchKey, groupKey: key, points: part})
+			}
+		}
+	}
+	return batches
+}
+
+func coalesceConsolidationResults(results []consolidationResult) []consolidationResult {
+	coalesced := make([]consolidationResult, 0, len(results))
+	byGroup := map[string]int{}
+	for _, result := range results {
+		if len(result.memories) == 0 {
+			coalesced = append(coalesced, result)
+			continue
+		}
+		groupKey := result.batch.groupKey
+		if groupKey == "" {
+			groupKey = result.batch.key
+		}
+		index, ok := byGroup[groupKey]
+		if !ok {
+			result.batch.key = groupKey
+			result.batch.groupKey = groupKey
+			result.memories = deduplicateConsolidatedMemories(result.memories)
+			byGroup[groupKey] = len(coalesced)
+			coalesced = append(coalesced, result)
+			continue
+		}
+		coalesced[index].batch.points = append(coalesced[index].batch.points, result.batch.points...)
+		coalesced[index].memories = deduplicateConsolidatedMemories(append(
+			coalesced[index].memories, result.memories...,
+		))
+	}
+	return coalesced
+}
+
+func deduplicateConsolidatedMemories(memories []consolidatedMemory) []consolidatedMemory {
+	unique := make([]consolidatedMemory, 0, len(memories))
+	for _, candidate := range memories {
+		duplicate := -1
+		for i, existing := range unique {
+			if nearDuplicateMemory(existing.Text, candidate.Text) {
+				duplicate = i
+				break
+			}
+		}
+		if duplicate < 0 {
+			unique = append(unique, candidate)
+			continue
+		}
+		if len([]rune(candidate.Text)) > len([]rune(unique[duplicate].Text)) {
+			unique[duplicate] = candidate
+		}
+	}
+	return unique
+}
+
+func nearDuplicateMemory(a, b string) bool {
+	aTokens := memoryTokenSet(a)
+	bTokens := memoryTokenSet(b)
+	if len(aTokens) == 0 || len(bTokens) == 0 {
+		return false
+	}
+	aNumbers := numericTokens(aTokens)
+	bNumbers := numericTokens(bTokens)
+	if len(aNumbers) > 0 && len(bNumbers) > 0 {
+		sharedNumbers := 0
+		for token := range aNumbers {
+			if _, ok := bNumbers[token]; ok {
+				sharedNumbers++
+			}
+		}
+		if float64(sharedNumbers)/float64(min(len(aNumbers), len(bNumbers))) < 0.5 {
+			return false
+		}
+	}
+	intersection := 0
+	for token := range aTokens {
+		if _, ok := bTokens[token]; ok {
+			intersection++
+		}
+	}
+	minimum := min(len(aTokens), len(bTokens))
+	return intersection >= 4 && float64(intersection)/float64(minimum) >= 0.4
+}
+
+func numericTokens(tokens map[string]struct{}) map[string]struct{} {
+	numbers := map[string]struct{}{}
+	for token := range tokens {
+		if allDigitToken(token) {
+			numbers[token] = struct{}{}
+		}
+	}
+	return numbers
+}
+
+func allDigitToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	for _, r := range token {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func memoryTokenSet(text string) map[string]struct{} {
+	fields := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	tokens := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		if len([]rune(field)) >= 3 || allDigitToken(field) {
+			tokens[field] = struct{}{}
+		}
+	}
+	return tokens
 }
 
 func durationEnv(name string, fallback time.Duration) time.Duration {
@@ -400,12 +567,14 @@ func loadDiary(ctx context.Context, cutoff int64) ([]diaryPoint, error) {
 		consolidationStatus, _ := p.Payload["consolidation_status"].(string)
 		consolidationAttempts, _ := p.Payload["consolidation_attempts"].(float64)
 		consolidationFirstEmptyAt, _ := p.Payload["consolidation_first_empty_at"].(float64)
+		consolidationDeferredKey, _ := p.Payload["consolidation_deferred_key"].(string)
 		if text != "" && wing != "" && ts > 0 {
 			points = append(points, diaryPoint{
 				ID: p.ID, Text: text, Wing: wing, TS: int64(ts), OccurredAt: int64(occurredAt),
 				SourceTokens: int64(sourceTokens), SourceID: sourceID,
 				ConsolidationStatus: consolidationStatus, ConsolidationAttempts: int64(consolidationAttempts),
 				ConsolidationFirstEmptyAt: int64(consolidationFirstEmptyAt),
+				ConsolidationDeferredKey:  consolidationDeferredKey,
 			})
 		}
 	}
@@ -419,7 +588,31 @@ func groupDiary(points []diaryPoint) map[string][]diaryPoint {
 		key := p.Wing + "/" + day
 		out[key] = append(out[key], p)
 	}
+	for key := range out {
+		sort.Slice(out[key], func(i, j int) bool {
+			if out[key][i].TS != out[key][j].TS {
+				return out[key][i].TS < out[key][j].TS
+			}
+			return out[key][i].ID < out[key][j].ID
+		})
+	}
 	return out
+}
+
+func consolidationModel() string {
+	return envOr("ARIADNE_CONSOLIDATION_MODEL", envOr("ARIADNE_SUMMARY_MODEL", "qwen2.5:7b"))
+}
+
+func consolidationJudgeModel() string {
+	return envOr("ARIADNE_CONSOLIDATION_JUDGE_MODEL", consolidationModel())
+}
+
+func consolidationDeferredKey() string {
+	return strings.Join([]string{
+		consolidationPipelineRevision,
+		consolidationModel(),
+		consolidationJudgeModel(),
+	}, "|")
 }
 
 func splitDiaryByTokenBudget(points []diaryPoint, budget int64) [][]diaryPoint {
@@ -469,9 +662,10 @@ func consolidateGroupWithKeepAlive(
 	}
 	requestInput := input.String()
 	var lastErr error
+	guidance := sourceLanguageGuidance(points)
 	correction := ""
 	for attempt := 0; attempt < 2; attempt++ {
-		memories, err := requestConsolidatedMemories(ctx, points, requestInput, keepAlive, correction)
+		memories, err := requestConsolidatedMemories(ctx, points, requestInput, keepAlive, guidance, correction)
 		if err == nil {
 			return memories, nil
 		}
@@ -479,8 +673,8 @@ func consolidateGroupWithKeepAlive(
 		var outputErr *consolidationOutputError
 		if attempt == 0 && errors.As(err, &outputErr) {
 			correction = consolidationRepairGuidance(points, outputErr)
-			if strings.Contains(outputErr.Error(), "unstable local artifact path") {
-				requestInput = redactUnstableArtifactPaths(requestInput)
+			if strings.Contains(outputErr.Error(), "unstable local artifact") {
+				requestInput = redactUnstableArtifacts(requestInput)
 			}
 			continue
 		}
@@ -497,37 +691,57 @@ func consolidationRepairGuidance(points []diaryPoint, err error) string {
 		for i, point := range points {
 			source[i] = point.Text
 		}
-		script, _ := dominantScript(strings.Join(source, "\n"))
-		return "The previous response used the wrong writing system. Write every memory in the source language " +
-			"and its " + script + " script; do not translate it."
-	case strings.Contains(message, "unstable local artifact path"):
-		return "Remove every local filesystem and ephemeral artifact path. State only the durable verified outcome; " +
-			"do not copy, replace, abbreviate, or mention any path."
+		sourceText := strings.Join(source, "\n")
+		language := sourceLanguageHint(sourceText)
+		if language == "" {
+			language, _ = dominantScript(sourceText)
+			language += " script source language"
+		}
+		return "The previous response used the wrong language. Write every memory in " + language +
+			" exactly as the source does; do not translate it."
+	case strings.Contains(message, "unstable local artifact"):
+		return "Remove every local filesystem path and every terminal, tmux, screen, watcher, or detached-job identifier. " +
+			"State only the durable verified outcome or unfinished risk; do not copy or rename the ephemeral reference."
 	default:
 		return "The previous response failed this validation rule: " + message + ". Correct that rule."
 	}
 }
 
-func redactUnstableArtifactPaths(text string) string {
-	return unstablePathPattern.ReplaceAllString(text, " [local artifact omitted]")
+func sourceLanguageGuidance(points []diaryPoint) string {
+	source := make([]string, len(points))
+	for i, point := range points {
+		source[i] = point.Text
+	}
+	if language := sourceLanguageHint(strings.Join(source, "\n")); language != "" {
+		return "The source language is " + language + ". Write every memory only in " + language + "; do not translate it."
+	}
+	return ""
+}
+
+func redactUnstableArtifacts(text string) string {
+	text = unstablePathPattern.ReplaceAllString(text, " [local artifact omitted]")
+	return unstableJobPattern.ReplaceAllString(text, " [ephemeral job omitted]")
 }
 
 func requestConsolidatedMemories(
-	ctx context.Context, points []diaryPoint, input string, keepAlive any, correction string,
+	ctx context.Context, points []diaryPoint, input string, keepAlive any, guidance, correction string,
 ) ([]consolidatedMemory, error) {
 	systemPrompt := consolidatePrompt
+	if guidance != "" {
+		systemPrompt += " " + guidance
+	}
 	if correction != "" {
 		systemPrompt += " " + correction +
 			" Regenerate from the diary; do not mention the rejected response or these repair instructions."
 	}
 	payload, _ := json.Marshal(map[string]any{
-		"model":    envOr("ARIADNE_SUMMARY_MODEL", "qwen2.5:7b"),
+		"model":    consolidationModel(),
 		"messages": []map[string]string{{"role": "system", "content": systemPrompt}, {"role": "user", "content": input}},
 		"stream":   false, "keep_alive": keepAlive,
 		"format": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"memories"},
 			"properties": map[string]any{"memories": map[string]any{
-				"type": "array", "maxItems": 6, "items": map[string]any{
+				"type": "array", "maxItems": 12, "items": map[string]any{
 					"type": "object", "additionalProperties": false, "required": []string{"room", "text"},
 					"properties": map[string]any{
 						"room": map[string]any{"type": "string", "enum": []string{roomDecisions, roomGotchas, roomReference}},
@@ -588,44 +802,25 @@ func requestConsolidatedMemories(
 func validateConsolidatedQuality(
 	ctx context.Context, base string, finalKeepAlive any, memories []consolidatedMemory,
 ) error {
-	requestsLeft := len(memories) + len(memories)*(len(memories)-1)/2
-	if requestsLeft == 0 {
+	if len(memories) == 0 {
 		return nil
 	}
-	nextKeepAlive := func() any {
-		requestsLeft--
-		if requestsLeft == 0 {
-			return finalKeepAlive
-		}
-		return "5m"
-	}
+	var candidates strings.Builder
 	for i, memory := range memories {
-		valid, _, err := requestConsolidationVerdict(ctx, base, nextKeepAlive(),
-			"Decide whether the candidate contains exactly one concern. A problem, its root cause, fix, and verification "+
-				"are one concern. Two different systems, actions, decisions, or outputs are multiple concerns.",
-			"CANDIDATE:\n"+memory.Text)
-		if err != nil {
-			return err
-		}
-		if !valid {
-			return &consolidationOutputError{err: fmt.Errorf(
-				"invalid memory %d: combines independent concerns", i+1)}
-		}
+		fmt.Fprintf(&candidates, "CANDIDATE %d [%s]:\n%s\n\n", i+1, memory.Room, memory.Text)
 	}
-	for i := 0; i < len(memories); i++ {
-		for j := i + 1; j < len(memories); j++ {
-			valid, _, err := requestConsolidationVerdict(ctx, base, nextKeepAlive(),
-				"Decide whether A and B are independently useful durable facts. Return valid=false when they express "+
-					"the same durable fact even if wording or room differs; related but distinct facts are valid.",
-				"A:\n"+memories[i].Text+"\n\nB:\n"+memories[j].Text)
-			if err != nil {
-				return err
-			}
-			if !valid {
-				return &consolidationOutputError{err: fmt.Errorf(
-					"invalid memories %d and %d: duplicate durable fact", i+1, j+1)}
-			}
-		}
+	valid, reason, err := requestConsolidationVerdict(ctx, base, finalKeepAlive,
+		"Review the complete candidate set. Each candidate must cover one cohesive reusable subject. A report may include "+
+			"its scope, method, key measurements, caveats, and verification. An incident may include its symptom, cause, "+
+			"fix, and verification. A release may include related changes and checks. Reject a candidate only when it joins "+
+			"facts that are useful independently and neither fact explains or supports the other. Also reject duplicate "+
+			"candidates that express the same durable fact. Related but distinct candidates are valid.",
+		candidates.String())
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return &consolidationOutputError{err: fmt.Errorf("candidate set failed quality review: %s", reason)}
 	}
 	return nil
 }
@@ -634,7 +829,7 @@ func requestConsolidationVerdict(
 	ctx context.Context, base string, keepAlive any, instruction, input string,
 ) (bool, string, error) {
 	payload, _ := json.Marshal(map[string]any{
-		"model": envOr("ARIADNE_SUMMARY_MODEL", "qwen2.5:7b"),
+		"model": consolidationJudgeModel(),
 		"messages": []map[string]string{
 			{"role": "system", "content": "You are a strict durable-memory quality gate. " + instruction +
 				" Return one JSON object and nothing else."},
@@ -712,7 +907,7 @@ func validateConsolidatedMemories(
 		}
 		if unstableArtifactReference(memories[i].Text) {
 			return nil, &consolidationOutputError{err: fmt.Errorf(
-				"invalid memory %d: contains an unstable local artifact path", i+1)}
+				"invalid memory %d: contains an unstable local artifact reference", i+1)}
 		}
 		if !sameDominantScript(sourceText, memories[i].Text) {
 			return nil, &consolidationOutputError{err: fmt.Errorf(
@@ -778,7 +973,8 @@ func unstableArtifactReference(text string) bool {
 	lower := strings.ToLower(text)
 	return containsAny(lower, []string{
 		"/users/", "/home/", "/data/", "/tmp/", "/var/", "/mnt/", "/private/", "/volumes/", "/workspace/",
-		"c:\\users\\", "~/.codex/", "~/.claude/", "outputs/",
+		"c:\\users\\", "~/.codex/", "~/.claude/", "outputs/", "detached screen ", "detached watcher ",
+		"tmux session ", "[local artifact omitted]", "[ephemeral job omitted]",
 	})
 }
 
@@ -788,7 +984,29 @@ func sameDominantScript(source, output string) bool {
 	if sourceCount < 20 || outputCount < 20 {
 		return true
 	}
-	return sourceScript == outputScript
+	if sourceScript != outputScript {
+		return false
+	}
+	sourceLanguage := sourceLanguageHint(source)
+	outputLanguage := sourceLanguageHint(output)
+	return sourceLanguage == "" || outputLanguage == "" || sourceLanguage == outputLanguage
+}
+
+func sourceLanguageHint(text string) string {
+	ukrainian := strings.Count(text, "і") + strings.Count(text, "І") + strings.Count(text, "ї") +
+		strings.Count(text, "Ї") + strings.Count(text, "є") + strings.Count(text, "Є") +
+		strings.Count(text, "ґ") + strings.Count(text, "Ґ")
+	russian := strings.Count(text, "ы") + strings.Count(text, "Ы") + strings.Count(text, "э") +
+		strings.Count(text, "Э") + strings.Count(text, "ъ") + strings.Count(text, "Ъ") +
+		strings.Count(text, "ё") + strings.Count(text, "Ё")
+	switch {
+	case ukrainian >= 2 && ukrainian > russian:
+		return "Ukrainian"
+	case russian >= 2 && russian > ukrainian:
+		return "Russian"
+	default:
+		return ""
+	}
 }
 
 func dominantScript(text string) (string, int) {
@@ -832,6 +1050,28 @@ func saveConsolidatedGroup(
 ) error {
 	_, err := applyConsolidatedGroup(ctx, st, points, memories, now, defaultEmptyGrace)
 	return err
+}
+
+func markDeferredConsolidation(
+	ctx context.Context, st consolidationWriter, points []diaryPoint, now time.Time, pipelineKey string,
+) error {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	checkedAt := strconv.FormatInt(now.Unix(), 10)
+	for _, point := range points {
+		meta := map[string]string{
+			"consolidation_attempts":        strconv.FormatInt(point.ConsolidationAttempts+1, 10),
+			"consolidation_checked_at":      checkedAt,
+			"consolidation_deferred_at":     checkedAt,
+			"consolidation_deferred_key":    pipelineKey,
+			"consolidation_deferred_reason": "quality_gate",
+		}
+		if err := st.SetMetaByIDs(ctx, []uint64{point.ID}, meta); err != nil {
+			return fmt.Errorf("update source diary %d: %w", point.ID, err)
+		}
+	}
+	return nil
 }
 
 func applyConsolidatedGroup(
