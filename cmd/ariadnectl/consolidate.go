@@ -7,11 +7,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,7 +52,8 @@ const consolidatePrompt = "You curate long-term software-project memory. " +
 	"use reference for verified reports, releases, measurements, and current status. " +
 	"Drop chronology, routine progress, code/log dumps, repository-derivable details, social chatter, and duplicates. " +
 	"Drop local filesystem and ephemeral artifact paths; retain the verified outcome instead. " +
-	"Write one concern per memory and never merge unrelated facts. " +
+	"Write one concern per memory and never merge unrelated facts. Multiple sentences are allowed only when every sentence " +
+	"describes the cause, rationale, constraint, or outcome of the same subject; independent actions require separate objects. " +
 	"Each text must name its subject, be self-contained rather than a fragment, contain 80-1200 characters, " +
 	"and use the diary's language. Never invent a resolution for an explicitly unknown cause. " +
 	"If the diary is trivial or contains no durable content, return an empty memories array; " +
@@ -60,9 +63,25 @@ const consolidatePrompt = "You curate long-term software-project memory. " +
 const (
 	defaultConsolidationTokenBudget = int64(6000)
 	defaultEmptyGrace               = 7 * 24 * time.Hour
+	consolidateDeferredExitCode     = 3
 	roomDecisions                   = "decisions"
 	roomGotchas                     = "gotchas"
 	roomReference                   = "reference"
+)
+
+type consolidationOutputError struct{ err error }
+
+func (e *consolidationOutputError) Error() string { return e.err.Error() }
+func (e *consolidationOutputError) Unwrap() error { return e.err }
+
+type consolidationDeferredError struct{ err error }
+
+func (e *consolidationDeferredError) Error() string { return e.err.Error() }
+func (e *consolidationDeferredError) Unwrap() error { return e.err }
+
+var unstablePathPattern = regexp.MustCompile(
+	`(?i)(?:~/(?:\.codex|\.claude)/|/(?:users|home|data|tmp|var|mnt|private|volumes|workspace)/|` +
+		`c:\\users\\|(?:^|[[:space:]])outputs/)[^[:space:]<>"']*`,
 )
 
 type consolidationBatch struct {
@@ -220,6 +239,8 @@ func consolidateCmd(args []string) int {
 	}
 	results := make([]consolidationResult, 0, len(batches))
 	failures := int64(0)
+	retryableFailures := int64(0)
+	deferredFailures := int64(0)
 	for i, batch := range batches {
 		keepAlive := any("5m")
 		if i == len(batches)-1 {
@@ -229,6 +250,11 @@ func consolidateCmd(args []string) int {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "consolidate: %s: %v; source diary kept\n", batch.key, err)
 			failures++
+			if isDeferredConsolidationError(err) {
+				deferredFailures++
+			} else {
+				retryableFailures++
+			}
 			continue
 		}
 		results = append(results, consolidationResult{batch: batch, memories: memories})
@@ -239,16 +265,15 @@ func consolidateCmd(args []string) int {
 	}
 	if *dryRun {
 		status := "dry_run"
+		exitCode := 0
 		if failures > 0 {
-			status = "partial"
+			status, exitCode = consolidationFailureStatus(retryableFailures, deferredFailures)
 		}
 		_ = activity.Append(activity.Event{Operation: "consolidate", Status: status, Counters: map[string]int64{
 			"batches": int64(len(batches)), "failures": failures,
+			"retryable_failures": retryableFailures, "deferred_failures": deferredFailures,
 		}})
-		if failures > 0 {
-			return 1
-		}
-		return 0
+		return exitCode
 	}
 	needsBackup := false
 	for _, result := range results {
@@ -276,26 +301,32 @@ func consolidateCmd(args []string) int {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "consolidate: %s: %v; source diary kept\n", result.batch.key, err)
 			failures++
+			retryableFailures++
 			continue
 		}
 		totals.Created += outcome.Created
 		totals.Archived += outcome.Archived
 		totals.Candidates += outcome.Candidates
 	}
-	status := "complete"
-	if failures > 0 {
-		status = "partial"
-	}
+	status, exitCode := consolidationFailureStatus(retryableFailures, deferredFailures)
 	_ = activity.Append(activity.Event{Operation: "consolidate", Status: status, Counters: map[string]int64{
 		"batches": int64(len(batches)), "failures": failures, "created": totals.Created,
 		"archived": totals.Archived, "empty_candidates": totals.Candidates,
+		"retryable_failures": retryableFailures, "deferred_failures": deferredFailures,
 	}})
 	fmt.Printf("consolidate summary: created=%d archived=%d empty_candidates=%d failures=%d\n",
 		totals.Created, totals.Archived, totals.Candidates, failures)
-	if failures > 0 {
-		return 1
+	return exitCode
+}
+
+func consolidationFailureStatus(retryable, deferred int64) (string, int) {
+	if retryable > 0 {
+		return "partial", 1
 	}
-	return 0
+	if deferred > 0 {
+		return "deferred", consolidateDeferredExitCode
+	}
+	return "complete", 0
 }
 
 func durationEnv(name string, fallback time.Duration) time.Duration {
@@ -436,9 +467,62 @@ func consolidateGroupWithKeepAlive(
 	for i, p := range points {
 		fmt.Fprintf(&input, "DIARY %d:\n%s\n\n", i+1, p.Text)
 	}
+	requestInput := input.String()
+	var lastErr error
+	correction := ""
+	for attempt := 0; attempt < 2; attempt++ {
+		memories, err := requestConsolidatedMemories(ctx, points, requestInput, keepAlive, correction)
+		if err == nil {
+			return memories, nil
+		}
+		lastErr = err
+		var outputErr *consolidationOutputError
+		if attempt == 0 && errors.As(err, &outputErr) {
+			correction = consolidationRepairGuidance(points, outputErr)
+			if strings.Contains(outputErr.Error(), "unstable local artifact path") {
+				requestInput = redactUnstableArtifactPaths(requestInput)
+			}
+			continue
+		}
+		break
+	}
+	return nil, lastErr
+}
+
+func consolidationRepairGuidance(points []diaryPoint, err error) string {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "output language differs from source"):
+		source := make([]string, len(points))
+		for i, point := range points {
+			source[i] = point.Text
+		}
+		script, _ := dominantScript(strings.Join(source, "\n"))
+		return "The previous response used the wrong writing system. Write every memory in the source language " +
+			"and its " + script + " script; do not translate it."
+	case strings.Contains(message, "unstable local artifact path"):
+		return "Remove every local filesystem and ephemeral artifact path. State only the durable verified outcome; " +
+			"do not copy, replace, abbreviate, or mention any path."
+	default:
+		return "The previous response failed this validation rule: " + message + ". Correct that rule."
+	}
+}
+
+func redactUnstableArtifactPaths(text string) string {
+	return unstablePathPattern.ReplaceAllString(text, " [local artifact omitted]")
+}
+
+func requestConsolidatedMemories(
+	ctx context.Context, points []diaryPoint, input string, keepAlive any, correction string,
+) ([]consolidatedMemory, error) {
+	systemPrompt := consolidatePrompt
+	if correction != "" {
+		systemPrompt += " " + correction +
+			" Regenerate from the diary; do not mention the rejected response or these repair instructions."
+	}
 	payload, _ := json.Marshal(map[string]any{
 		"model":    envOr("ARIADNE_SUMMARY_MODEL", "qwen2.5:7b"),
-		"messages": []map[string]string{{"role": "system", "content": consolidatePrompt}, {"role": "user", "content": input.String()}},
+		"messages": []map[string]string{{"role": "system", "content": systemPrompt}, {"role": "user", "content": input}},
 		"stream":   false, "keep_alive": keepAlive,
 		"format": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"memories"},
@@ -456,7 +540,8 @@ func consolidateGroupWithKeepAlive(
 	})
 	base := strings.TrimRight(envOr("ARIADNE_SUMMARY_OLLAMA", envOr("ARIADNE_OLLAMA", "http://localhost:11434")), "/")
 	if !localSummaryEndpoint(base) && envOr("ARIADNE_CAPTURE_REMOTE", "0") != "1" {
-		return nil, fmt.Errorf("remote summary endpoint blocked; set ARIADNE_CAPTURE_REMOTE=1 to allow")
+		return nil, &consolidationDeferredError{err: errors.New(
+			"remote summary endpoint blocked; set ARIADNE_CAPTURE_REMOTE=1 to allow")}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/chat", bytes.NewReader(payload))
 	if err != nil {
@@ -469,7 +554,11 @@ func consolidateGroupWithKeepAlive(
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("ollama HTTP %s", resp.Status)
+		err = fmt.Errorf("ollama HTTP %s", resp.Status)
+		if resp.StatusCode < http.StatusInternalServerError && resp.StatusCode != http.StatusTooManyRequests {
+			return nil, &consolidationDeferredError{err: err}
+		}
+		return nil, err
 	}
 	var out struct {
 		Message struct {
@@ -484,9 +573,126 @@ func consolidateGroupWithKeepAlive(
 		Memories []consolidatedMemory `json:"memories"`
 	}
 	if err := json.Unmarshal([]byte(content), &wrapped); err != nil {
-		return nil, fmt.Errorf("invalid model JSON: %w", err)
+		return nil, &consolidationOutputError{err: fmt.Errorf("invalid model JSON: %w", err)}
 	}
-	return validateConsolidatedMemories(points, wrapped.Memories)
+	memories, err := validateConsolidatedMemories(points, wrapped.Memories)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateConsolidatedQuality(ctx, base, keepAlive, memories); err != nil {
+		return nil, err
+	}
+	return memories, nil
+}
+
+func validateConsolidatedQuality(
+	ctx context.Context, base string, finalKeepAlive any, memories []consolidatedMemory,
+) error {
+	requestsLeft := len(memories) + len(memories)*(len(memories)-1)/2
+	if requestsLeft == 0 {
+		return nil
+	}
+	nextKeepAlive := func() any {
+		requestsLeft--
+		if requestsLeft == 0 {
+			return finalKeepAlive
+		}
+		return "5m"
+	}
+	for i, memory := range memories {
+		valid, _, err := requestConsolidationVerdict(ctx, base, nextKeepAlive(),
+			"Decide whether the candidate contains exactly one concern. A problem, its root cause, fix, and verification "+
+				"are one concern. Two different systems, actions, decisions, or outputs are multiple concerns.",
+			"CANDIDATE:\n"+memory.Text)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return &consolidationOutputError{err: fmt.Errorf(
+				"invalid memory %d: combines independent concerns", i+1)}
+		}
+	}
+	for i := 0; i < len(memories); i++ {
+		for j := i + 1; j < len(memories); j++ {
+			valid, _, err := requestConsolidationVerdict(ctx, base, nextKeepAlive(),
+				"Decide whether A and B are independently useful durable facts. Return valid=false when they express "+
+					"the same durable fact even if wording or room differs; related but distinct facts are valid.",
+				"A:\n"+memories[i].Text+"\n\nB:\n"+memories[j].Text)
+			if err != nil {
+				return err
+			}
+			if !valid {
+				return &consolidationOutputError{err: fmt.Errorf(
+					"invalid memories %d and %d: duplicate durable fact", i+1, j+1)}
+			}
+		}
+	}
+	return nil
+}
+
+func requestConsolidationVerdict(
+	ctx context.Context, base string, keepAlive any, instruction, input string,
+) (bool, string, error) {
+	payload, _ := json.Marshal(map[string]any{
+		"model": envOr("ARIADNE_SUMMARY_MODEL", "qwen2.5:7b"),
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are a strict durable-memory quality gate. " + instruction +
+				" Return one JSON object and nothing else."},
+			{"role": "user", "content": input},
+		},
+		"stream": false, "keep_alive": keepAlive,
+		"format": map[string]any{
+			"type": "object", "additionalProperties": false, "required": []string{"valid", "reason"},
+			"properties": map[string]any{
+				"valid":  map[string]any{"type": "boolean"},
+				"reason": map[string]any{"type": "string", "maxLength": 400},
+			},
+		},
+		"options": map[string]any{"temperature": 0, "num_ctx": 4096},
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/chat", bytes.NewReader(payload))
+	if err != nil {
+		return false, "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 2 * time.Minute}).Do(req)
+	if err != nil {
+		return false, "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		err = fmt.Errorf("ollama quality gate HTTP %s", resp.Status)
+		if resp.StatusCode < http.StatusInternalServerError && resp.StatusCode != http.StatusTooManyRequests {
+			return false, "", &consolidationDeferredError{err: err}
+		}
+		return false, "", err
+	}
+	var out struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false, "", err
+	}
+	var verdict struct {
+		Valid  bool   `json:"valid"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out.Message.Content)), &verdict); err != nil {
+		return false, "", &consolidationDeferredError{err: fmt.Errorf("invalid quality-gate JSON: %w", err)}
+	}
+	reason := strings.TrimSpace(verdict.Reason)
+	if reason == "" {
+		reason = "quality gate rejected the candidate"
+	}
+	return verdict.Valid, reason, nil
+}
+
+func isDeferredConsolidationError(err error) bool {
+	var outputErr *consolidationOutputError
+	var deferredErr *consolidationDeferredError
+	return errors.As(err, &outputErr) || errors.As(err, &deferredErr)
 }
 
 func validateConsolidatedMemories(
@@ -505,14 +711,16 @@ func validateConsolidatedMemories(
 			continue
 		}
 		if unstableArtifactReference(memories[i].Text) {
-			return nil, fmt.Errorf("invalid memory %d: contains an unstable local artifact path", i+1)
+			return nil, &consolidationOutputError{err: fmt.Errorf(
+				"invalid memory %d: contains an unstable local artifact path", i+1)}
 		}
 		if !sameDominantScript(sourceText, memories[i].Text) {
-			return nil, fmt.Errorf("invalid memory %d: output language differs from source", i+1)
+			return nil, &consolidationOutputError{err: fmt.Errorf(
+				"invalid memory %d: output language differs from source", i+1)}
 		}
 		memories[i].Room = conservativeRoom(memories[i].Room, memories[i].Text)
 		if !validConsolidated(memories[i]) {
-			return nil, fmt.Errorf("invalid memory %d", i+1)
+			return nil, &consolidationOutputError{err: fmt.Errorf("invalid memory %d", i+1)}
 		}
 		validated = append(validated, memories[i])
 	}

@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8</a>
+          <a href="#new">Нове у 0.8.1</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.0 зберігає аудит кожної зміни пам’яті</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.1 показує чесний стан runtime</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й блокувань вбудованої бази.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.0</span><h2>Пам’ять розвивається, не стираючи минуле.</h2><p>Scoped identity, incremental sync і retry-bounded maintenance підтримують пам’ять актуальною, прозорою та безпечною.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.1</span><h2>Runtime health, якому можна вірити.</h2><p>Один власник сервісу, repair-aware maintenance і повна діагностика роблять локальну пам’ять надійною та пояснюваною.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><Check /><h3>Scoped identity пам’яті</h3><p>Однаковий текст може існувати в різних проєктах і кімнатах; move зберігає superseded history.</p></article>
-            <article className="new-item accent-blue"><Server /><h3>Incremental append-only sync</h3><p>Незмінені файли не потребують embedding, а нова ревізія записується раніше за supersede старої.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Безпечніша консолідація</h3><p>Обмежені batch і context та quality gates лишають source diary активним після помилки.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Observable maintenance</h3><p>Capped retries, append-only activity, health alerts і ручний запуск контролюють задачу о 04:30.</p></article>
+            <article className="new-item accent-green"><Check /><h3>Один власник Qdrant</h3><p>Status знаходить дубльовані launchd jobs, а installer нормалізує ownership без видалення історії.</p></article>
+            <article className="new-item accent-blue"><Server /><h3>Repair-aware maintenance</h3><p>Локальний quality gate відхиляє змішані чи дубльовані memories, а потім дає моделі одну цільову repair-спробу.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Надійний tray</h3><p>Аварійний вихід перезапускається, clean Quit працює, а lifecycle reasons залишаються в логах.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Full-stack doctor</h3><p>Version, MCP, launchd, maintenance, attribution, storage і runaway logs формують один чесний verdict.</p></article>
           </div>
         </div>
       </section>
@@ -108,7 +108,7 @@ export default function UkrainianHome() {
           <div className="install-tool">
             <div className="command-window"><div className="command-title"><span>macOS / Linux</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh</code></pre></div>
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.0">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.1">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>

@@ -35,9 +35,9 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.0 adds scoped append-only memory identity, incremental
-non-destructive memfile sync, conservative historical reranking, guarded diary
-consolidation, and retry-bounded maintenance with append-only health activity.
+Version 0.8.1 adds single-owner Qdrant service health, repair-aware diary
+consolidation, deferred deterministic maintenance work, resilient tray
+lifecycle logging, and full-stack doctor diagnostics.
 
 ## Links
 

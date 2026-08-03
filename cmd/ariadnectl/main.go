@@ -13,6 +13,7 @@ import (
 	"ariadne/internal/activity"
 	"ariadne/internal/i18n"
 	"ariadne/internal/metrics"
+	"ariadne/internal/version"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -58,6 +59,7 @@ type status struct {
 	TS            string                    `json:"ts"`
 	OK            bool                      `json:"ok"`
 	Qdrant        svc                       `json:"qdrant"`
+	QdrantAgents  []string                  `json:"qdrant_agents,omitempty"`
 	Ollama        svc                       `json:"ollama"`
 	Collection    coll                      `json:"collection"`
 	TokenMetrics  metrics.Summary           `json:"token_metrics"`
@@ -78,6 +80,8 @@ func main() {
 		cmd = os.Args[1]
 	}
 	switch cmd {
+	case "version", "--version", "-version":
+		fmt.Println(version.Tag)
 	case "status":
 		printStatus(hasFlag("-json"))
 	case "metrics":
@@ -103,7 +107,7 @@ func main() {
 	case "requeue-empty":
 		os.Exit(requeueEmptyCmd(os.Args[2:]))
 	default:
-		fmt.Fprintln(os.Stderr, "usage: ariadnectl {status [-json] | metrics [-json] | "+
+		fmt.Fprintln(os.Stderr, "usage: ariadnectl {version | status [-json] | metrics [-json] | "+
 			"start | stop | restart | backup | restore <file> | export [file] | "+
 			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
 			"requeue-empty [--dry-run]}")
@@ -130,6 +134,7 @@ func arg(i int) string {
 
 func gather() status {
 	s := status{TS: time.Now().Format("2006-01-02T15:04:05-07:00")}
+	s.QdrantAgents = loadedAriadneQdrantAgents()
 
 	// Qdrant
 	if getOK(qdrantREST + "/healthz") {
@@ -176,6 +181,10 @@ func gather() status {
 	lang := i18n.Current()
 	if !s.Qdrant.Up {
 		s.Issues = append(s.Issues, i18n.T(lang, "issue.qdrant_down"))
+	}
+	if len(s.QdrantAgents) > 1 {
+		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.qdrant_duplicate_agents"),
+			len(s.QdrantAgents)))
 	}
 	if !s.Ollama.Up {
 		s.Issues = append(s.Issues, i18n.T(lang, "issue.ollama_down"))

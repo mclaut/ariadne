@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.0",
+  softwareVersion: "0.8.1",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8</a>
+          <a href="#new">New in 0.8.1</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.0 keeps every memory change auditable
+            v0.8.1 makes runtime health truthful
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.0</span>
-            <h2>Memory that evolves without erasing its past.</h2>
+            <span className="eyebrow">New in v0.8.1</span>
+            <h2>Runtime health that tells the truth.</h2>
             <p>
-              Scoped identities, incremental sync, and retry-bounded
-              maintenance keep agent memory current, inspectable, and safe.
+              One service owner, repair-aware maintenance, and full-stack
+              diagnostics keep local memory observable and dependable.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <Check aria-hidden="true" />
-              <h3>Scoped memory identity</h3>
+              <h3>One Qdrant owner</h3>
               <p>
-                Identical text can coexist across projects and rooms. Moves
-                write the new record first and retain superseded history.
+                Status catches duplicate launchd jobs, while controls and the
+                installer normalize ownership without deleting history.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>Incremental append-only sync</h3>
+              <h3>Repair-aware maintenance</h3>
               <p>
-                Unchanged files need zero embeddings. New revisions land before
-                old chunks are superseded; missing sources become orphaned.
+                A local quality gate rejects mixed or duplicate memories, then
+                gives invalid output one focused correction pass.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Safer consolidation</h3>
+              <h3>Resilient tray</h3>
               <p>
-                Bounded batches and output quality gates keep source diary
-                entries active whenever durable promotion cannot be verified.
+                Abnormal exits restart automatically, clean Quit still works,
+                and lifecycle reasons remain visible in the tray log.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Observable maintenance</h3>
+              <h3>Full-stack doctor</h3>
               <p>
-                Capped retries, append-only activity, health alerts, and a
-                manual tray action make the 04:30 job accountable.
+                Active version, MCP paths, launchd ownership, maintenance,
+                attribution, storage, and runaway logs share one verdict.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.0"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.1"
               target="_blank"
               rel="noreferrer"
             >

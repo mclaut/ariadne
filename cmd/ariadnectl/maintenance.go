@@ -3,6 +3,7 @@ package main
 import (
 	"ariadne/internal/activity"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"strconv"
 	"time"
 )
+
+var errMaintenanceDeferred = errors.New("maintenance stage deferred")
 
 const (
 	defaultMaintenanceAttempts       = 3
@@ -129,6 +132,13 @@ func runMaintenance(ctx context.Context, config maintenanceConfig, deps maintena
 	consolidateAttempts, err := runMaintenanceStage(ctx, "consolidate", config, deps,
 		config.ctlPath, "consolidate", "--before", config.before.String())
 	if err != nil {
+		if errors.Is(err, errMaintenanceDeferred) {
+			_ = appendMaintenanceEvent(deps, "partial", "consolidation deferred non-retryable groups", map[string]int64{
+				"import_attempts":      int64(importAttempts),
+				"consolidate_attempts": int64(consolidateAttempts),
+			})
+			return nil
+		}
 		_ = appendMaintenanceEvent(deps, "failed", "consolidation failed after bounded retries", map[string]int64{
 			"import_attempts":      int64(importAttempts),
 			"consolidate_attempts": int64(consolidateAttempts),
@@ -163,6 +173,9 @@ func runMaintenanceStage(
 		cancel()
 		if lastErr == nil {
 			return attempt, nil
+		}
+		if errors.Is(lastErr, errMaintenanceDeferred) {
+			return attempt, lastErr
 		}
 		fmt.Fprintf(os.Stderr, "maintenance: %s attempt %d/%d failed: %v\n",
 			stage, attempt, config.attempts, lastErr)
@@ -210,7 +223,12 @@ func runMaintenanceCommand(ctx context.Context, path string, args ...string) err
 	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // caller selects installed Ariadne binaries only
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == consolidateDeferredExitCode {
+		return fmt.Errorf("%w: %w", errMaintenanceDeferred, err)
+	}
+	return err
 }
 
 func sleepContext(ctx context.Context, delay time.Duration) error {

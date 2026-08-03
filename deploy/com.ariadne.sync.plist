@@ -7,8 +7,9 @@
      Runs the bounded `ariadnectl maintenance` workflow once a day. It syncs
      edited/deleted memory notes, then consolidates diary entries older than
      24h into durable decisions, gotchas, and reference facts. A failed stage
-     is retried three times with bounded exponential backoff; append-only
-     activity and logs preserve the outcome for status/tray diagnostics. -->
+     receives bounded exponential backoff only when it is transient. Invalid
+     model output gets one repair pass, then remains visible as deferred work.
+     Append-only activity and logs preserve every outcome. -->
 <plist version="1.0"><dict>
   <key>Label</key><string>com.ariadne.sync</string>
   <key>ProgramArguments</key><array>

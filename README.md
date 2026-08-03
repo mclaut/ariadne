@@ -26,7 +26,30 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.0
+## What's New in v0.8.1
+
+**One service owner, visible health.** Ariadne detects duplicate macOS Qdrant
+jobs before they can hide behind a green HTTP health check. `ariadnectl`
+normalizes start, stop, and installer ownership to one canonical job while
+retaining old plist files and every byte of memory history. The expanded doctor
+resolves the active immutable runtime, checks both Codex and Claude MCP paths,
+reports maintenance and launchd state, exposes attribution coverage, and warns
+about runaway logs.
+
+**Maintenance that distinguishes retry from review.** An independent local
+quality gate rejects memories that fuse unrelated concerns or duplicate the
+same durable fact, then gives invalid model output one focused repair pass.
+Transient network and Ollama failures still receive bounded backoff;
+deterministic schema, language, local-path, and quality failures become
+explicit deferred work instead of replaying the whole stage. Source diaries
+remain active and append-only throughout.
+
+**A resilient, explainable tray.** The macOS LaunchAgent restarts the tray after
+an abnormal exit but respects an explicit clean Quit. Lifecycle reasons are
+appended to the tray log, so a missing icon no longer leaves an empty forensic
+trail.
+
+## Previously in v0.8.0
 
 **Scoped append-only memory lifecycle.** Identical text may exist independently
 in different projects and rooms. A move writes the destination record first and
@@ -556,7 +579,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.0 — working. Exact ID retrieval, room-scoped hybrid recall, append-only
+v0.8.1 — working. Runtime ownership diagnostics, repair-aware maintenance,
+tray lifecycle logging, truthful full-stack doctor checks, exact ID retrieval,
+room-scoped hybrid recall, append-only
 source history, conservative temporal ranking, scoped identities, incremental
 timestamp-safe memfile sync, two-pass empty consolidation, retry-bounded
 maintenance with history/storage observability, immediate

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -28,13 +29,51 @@ func control(action string) {
 	plist := filepath.Join(home, "Library", "LaunchAgents", qdrantLabel+".plist")
 	switch action {
 	case "start":
-		run("launchctl", "bootstrap", "gui/"+uid, plist)
+		labels := loadedAriadneQdrantAgents()
+		for _, label := range labels {
+			if label != qdrantLabel {
+				run("launchctl", "bootout", "gui/"+uid+"/"+label)
+			}
+		}
+		if !slices.Contains(labels, qdrantLabel) {
+			run("launchctl", "bootstrap", "gui/"+uid, plist)
+		}
+		run("launchctl", "kickstart", "gui/"+uid+"/"+qdrantLabel)
 		run("brew", "services", "start", "ollama")
 	case "stop":
-		run("launchctl", "bootout", "gui/"+uid+"/"+qdrantLabel)
+		for _, label := range loadedAriadneQdrantAgents() {
+			run("launchctl", "bootout", "gui/"+uid+"/"+label)
+		}
 		run("brew", "services", "stop", "ollama")
 	}
 	fmt.Println(action, "issued (qdrant agent + ollama brew service)")
+}
+
+func loadedAriadneQdrantAgents() []string {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+	out, err := exec.CommandContext(context.Background(), "launchctl", "list").Output() //nolint:gosec // fixed command
+	if err != nil {
+		return nil
+	}
+	return parseAriadneQdrantAgents(string(out))
+}
+
+func parseAriadneQdrantAgents(output string) []string {
+	labels := make([]string, 0, 1)
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		label := fields[len(fields)-1]
+		if label == qdrantLabel || strings.HasPrefix(label, qdrantLabel+".") {
+			labels = append(labels, label)
+		}
+	}
+	slices.Sort(labels)
+	return slices.Compact(labels)
 }
 
 func rss(marker string) int64 {

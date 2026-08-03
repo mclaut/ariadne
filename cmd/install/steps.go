@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,11 @@ func makePlan(r *report, o opts) []action {
 			title: "install Qdrant binary + service (loopback-only)",
 			skip:  !installOwnQdrant,
 			run:   func() error { return installQdrant(r, o) },
+		},
+		{
+			title: "normalize Ariadne Qdrant service ownership",
+			skip:  r.qdrant.state != qdOurs,
+			run:   func() error { return installService(r) },
 		},
 		{
 			title: "build + install ariadne / ariadnectl / import → ~/.ariadne/bin",
@@ -465,7 +471,9 @@ func installService(r *report) error {
 			return err
 		}
 		uid := strconv.Itoa(os.Getuid())
-		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.qdrant") // ignore: may not be loaded
+		for _, label := range loadedInstallQdrantAgents() {
+			_ = runCmd("launchctl", "bootout", "gui/"+uid+"/"+label) // ignore: job may exit concurrently
+		}
 		return runCmd("launchctl", "bootstrap", "gui/"+uid, svc)
 	}
 	// linux: systemd user unit (uses %h natively — copy as-is)
@@ -484,6 +492,31 @@ func installService(r *report) error {
 		return err
 	}
 	return nil
+}
+
+func loadedInstallQdrantAgents() []string {
+	out, err := exec.CommandContext(context.Background(), "launchctl", "list").Output() //nolint:gosec // fixed command
+	if err != nil {
+		return nil
+	}
+	return parseInstallQdrantAgents(string(out))
+}
+
+func parseInstallQdrantAgents(output string) []string {
+	const canonical = "com.ariadne.qdrant"
+	labels := make([]string, 0, 1)
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		label := fields[len(fields)-1]
+		if label == canonical || strings.HasPrefix(label, canonical+".") {
+			labels = append(labels, label)
+		}
+	}
+	slices.Sort(labels)
+	return slices.Compact(labels)
 }
 
 func buildBinaries(r *report) error {

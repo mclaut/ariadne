@@ -24,7 +24,7 @@ export default function SocialCard() {
         aria-hidden="true"
       />
       <div className="social-card-footer">
-        <span>v0.8.0</span>
+        <span>v0.8.1</span>
         <span>Windows / macOS / Linux</span>
         <span>MIT + MCP</span>
       </div>
