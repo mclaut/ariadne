@@ -31,9 +31,9 @@ test("server-renders the Ariadne product page and discovery metadata", async () 
   const html = await response.text();
   assert.match(html, /<title>Ariadne - Local-first memory for AI agents<\/title>/i);
   assert.match(html, /<h1>Ariadne<\/h1>/);
-  assert.match(html, /New in v0\.8\.0/);
-  assert.match(html, /Scoped memory identity/);
-  assert.match(html, /Observable maintenance/);
+  assert.match(html, /New in v0\.8\.1/);
+  assert.match(html, /One Qdrant owner/);
+  assert.match(html, /Full-stack doctor/);
   assert.match(html, /application\/ld\+json/);
   assert.match(html, /SoftwareApplication/);
   assert.match(html, /og:image/);
@@ -47,8 +47,8 @@ test("server-renders the Ukrainian localized route", async () => {
 
   const html = await response.text();
   assert.match(html, /локальна пам’ять для AI-агентів/i);
-  assert.match(html, /Нове у v0\.8\.0/);
-  assert.match(html, /Scoped identity пам’яті/);
+  assert.match(html, /Нове у v0\.8\.1/);
+  assert.match(html, /Один власник Qdrant/);
   assert.match(html, /hrefLang="en"|hreflang="en"/i);
 });
 
@@ -57,7 +57,7 @@ test("keeps install, hosting, and social assets in the validated source", async 
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
-    access(new URL("../public/og-v0.8.0.png", import.meta.url)),
+    access(new URL("../public/og-v0.8.1.png", import.meta.url)),
   ]);
 
   assert.match(page, /install\.ps1/);
@@ -65,8 +65,8 @@ test("keeps install, hosting, and social assets in the validated source", async 
   assert.match(page, /Local memory map/);
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview/);
   assert.match(layout, /summary_large_image/);
-  assert.match(layout, /1280/);
-  assert.match(layout, /og-v0\.8\.0\.png/);
+  assert.match(layout, /1200/);
+  assert.match(layout, /og-v0\.8\.1\.png/);
   assert.equal(og, undefined);
 
   const config = JSON.parse(hosting);

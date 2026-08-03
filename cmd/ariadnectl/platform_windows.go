@@ -16,6 +16,8 @@ import (
 
 const qdrantTask = `\Ariadne Qdrant`
 
+func loadedAriadneQdrantAgents() []string { return nil }
+
 func control(action string) {
 	switch action {
 	case "start":

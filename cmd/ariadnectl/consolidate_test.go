@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -128,6 +130,17 @@ func TestSplitDiaryByTokenBudgetNeverDropsEntries(t *testing.T) {
 	}
 }
 
+func TestSplitDiaryByTokenBudgetKeepsEntriesTogetherWithinBudget(t *testing.T) {
+	points := []diaryPoint{
+		{ID: 1, Text: "short"},
+		{ID: 2, Text: "also short"},
+	}
+	groups := splitDiaryByTokenBudget(points, defaultConsolidationTokenBudget)
+	if len(groups) != 1 || len(groups[0]) != 2 {
+		t.Fatalf("groups = %#v", groups)
+	}
+}
+
 func TestConsolidationSourceGroupIsOrderIndependent(t *testing.T) {
 	a := consolidationSourceGroup([]diaryPoint{{ID: 1, SourceID: "a"}, {ID: 2, SourceID: "b"}})
 	b := consolidationSourceGroup([]diaryPoint{{ID: 2, SourceID: "b"}, {ID: 1, SourceID: "a"}})
@@ -245,5 +258,122 @@ func TestConsolidationRequestUsesSchemaAndWrappedResponse(t *testing.T) {
 	if !ok || format["type"] != "object" {
 		body, _ := json.Marshal(request["format"])
 		t.Fatalf("format is not an object schema: %s", bytes.TrimSpace(body))
+	}
+}
+
+func TestConsolidationRepairsRejectedModelOutputOnce(t *testing.T) {
+	calls := 0
+	var secondSystem string
+	var secondInput string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var request struct {
+			Messages []map[string]string `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(request.Messages[0]["content"], "durable-memory quality gate") {
+			body, _ := json.Marshal(map[string]any{
+				"message": map[string]string{"content": `{"valid":true,"reason":"one verified report"}`},
+			})
+			_, _ = w.Write(body)
+			return
+		}
+		content := `{"memories":[{"room":"reference","text":"The verified report completed successfully ` +
+			`and remains at /tmp/report.xlsx for later review."}]}`
+		if calls == 2 {
+			secondSystem = request.Messages[0]["content"]
+			secondInput = request.Messages[1]["content"]
+			content = `{"memories":[{"room":"reference","text":"The verified report completed successfully ` +
+				`and all reconciliation checks passed without unresolved differences."}]}`
+		}
+		body, _ := json.Marshal(map[string]any{"message": map[string]string{"content": content}})
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+	t.Setenv("ARIADNE_SUMMARY_OLLAMA", server.URL)
+	memories, err := consolidateGroupWithKeepAlive(context.Background(), []diaryPoint{{
+		Text: "The verified report at /tmp/source.xlsx completed successfully and all reconciliation checks passed.",
+	}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 3 || len(memories) != 1 || !strings.Contains(secondSystem, "Remove every local filesystem") ||
+		strings.Contains(secondInput, "/tmp/source.xlsx") {
+		t.Fatalf("calls=%d memories=%#v second system=%q second input=%q",
+			calls, memories, secondSystem, secondInput)
+	}
+}
+
+func TestConsolidationRepairsMixedConcernRejectedByQualityGate(t *testing.T) {
+	generationCalls := 0
+	qualityCalls := 0
+	var repairSystem string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Messages []map[string]string `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(request.Messages[0]["content"], "durable-memory quality gate") {
+			qualityCalls++
+			valid := qualityCalls > 1
+			body, _ := json.Marshal(map[string]any{"message": map[string]string{
+				"content": fmt.Sprintf(`{"valid":%t,"reason":"two independent systems"}`, valid),
+			}})
+			_, _ = w.Write(body)
+			return
+		}
+		generationCalls++
+		repairSystem = request.Messages[0]["content"]
+		content := `{"memories":[{"room":"reference","text":"The Qdrant owner was normalized successfully, ` +
+			`while the tray lifecycle log now records every clean exit reason."}]}`
+		if generationCalls == 2 {
+			content = `{"memories":[{"room":"reference","text":"The Ariadne Qdrant owner was normalized ` +
+				`to one canonical service without changing stored memory."}]}`
+		}
+		body, _ := json.Marshal(map[string]any{"message": map[string]string{"content": content}})
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+	t.Setenv("ARIADNE_SUMMARY_OLLAMA", server.URL)
+	memories, err := consolidateGroupWithKeepAlive(context.Background(), []diaryPoint{{
+		Text: "The Ariadne Qdrant owner was normalized to one service. The tray now records clean exit reasons.",
+	}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if generationCalls != 2 || qualityCalls != 2 || len(memories) != 1 ||
+		!strings.Contains(repairSystem, "combines independent concerns") {
+		t.Fatalf("generation=%d quality=%d memories=%#v repair=%q",
+			generationCalls, qualityCalls, memories, repairSystem)
+	}
+}
+
+func TestConsolidationRepairGuidanceNamesExpectedScript(t *testing.T) {
+	err := &consolidationOutputError{err: errors.New("invalid memory 1: output language differs from source")}
+	guidance := consolidationRepairGuidance([]diaryPoint{{
+		Text: "The release completed successfully and all verification checks passed without errors.",
+	}}, err)
+	if !strings.Contains(guidance, "latin script") || !strings.Contains(guidance, "do not translate") {
+		t.Fatalf("guidance = %q", guidance)
+	}
+}
+
+func TestConsolidationFailureStatusPrefersRetryableFailures(t *testing.T) {
+	if status, code := consolidationFailureStatus(0, 2); status != "deferred" || code != consolidateDeferredExitCode {
+		t.Fatalf("deferred status=%q code=%d", status, code)
+	}
+	if status, code := consolidationFailureStatus(1, 2); status != "partial" || code != 1 {
+		t.Fatalf("mixed status=%q code=%d", status, code)
+	}
+	if status, code := consolidationFailureStatus(0, 0); status != "complete" || code != 0 {
+		t.Fatalf("complete status=%q code=%d", status, code)
 	}
 }

@@ -24,4 +24,4 @@ Windows uses install.ps1. Linux and macOS use install.sh. Both are available in 
 
 ## Current release
 
-v0.8.0 adds scoped append-only identity, incremental non-destructive memfile sync, conservative historical reranking, guarded diary consolidation, retry-bounded observable maintenance, and full lifecycle export. v0.7.0 added exact memory retrieval by ID, room-scoped semantic recall, immediate durable capture, and honest token accounting.
+v0.8.1 adds single-owner Qdrant service health, repair-aware consolidation, deferred deterministic maintenance work, resilient tray lifecycle logging, and full-stack doctor diagnostics. v0.8.0 added scoped append-only identity, incremental non-destructive memfile sync, conservative historical reranking, guarded diary consolidation, retry-bounded observable maintenance, and full lifecycle export.

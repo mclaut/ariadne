@@ -22,8 +22,10 @@ func maintenanceHealthIssue(now time.Time, events map[string]activity.Event, lan
 		age = 0
 	}
 	switch event.Status {
-	case "failed", "partial":
+	case "failed":
 		return fmt.Sprintf(i18n.T(lang, "issue.maintenance_failed"), event.Status)
+	case "partial", "deferred":
+		return fmt.Sprintf(i18n.T(lang, "issue.maintenance_degraded"), event.Status)
 	case "running", "retrying":
 		if age > durationEnv("ARIADNE_MAINTENANCE_STUCK_AFTER", defaultMaintenanceStuckAfter) {
 			return fmt.Sprintf(i18n.T(lang, "issue.maintenance_stuck"), maintenanceEventTime(event))

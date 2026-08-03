@@ -17,6 +17,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -89,13 +90,30 @@ var (
 	mUpdate, mStart, mStop, mRestart, mMaintenance, mBackup, mExport, mData, mLogs, mLang, mQuit *systray.MenuItem
 	langItems                                                                                    map[i18n.Lang]*systray.MenuItem
 	maintenanceRunning                                                                           bool
+	trayExitMu                                                                                   sync.Mutex
+	trayExitReason                                                                               = "desktop session ended"
 )
 
 func main() {
 	if len(os.Args) == 4 && os.Args[1] == "--apply-update" {
 		os.Exit(applyUpdate(os.Args[2], os.Args[3]))
 	}
-	systray.Run(onReady, func() {})
+	log.Printf("Ariadne %s tray starting", version.Tag)
+	systray.Run(onReady, onExit)
+}
+
+func onExit() {
+	trayExitMu.Lock()
+	reason := trayExitReason
+	trayExitMu.Unlock()
+	log.Printf("Ariadne %s tray exiting: %s", version.Tag, reason)
+}
+
+func quitTray(reason string) {
+	trayExitMu.Lock()
+	trayExitReason = reason
+	trayExitMu.Unlock()
+	systray.Quit()
 }
 
 func onReady() {
@@ -181,7 +199,7 @@ func loop() {
 		case <-mLogs.ClickedCh:
 			openPath(runtimeDir("logs"))
 		case <-mQuit.ClickedCh:
-			systray.Quit()
+			quitTray("user selected Quit")
 			return
 		}
 	}
@@ -393,7 +411,7 @@ func relaunchTray() error {
 	if err := cmd.Process.Release(); err != nil {
 		return fmt.Errorf("detach tray: %w", err)
 	}
-	systray.Quit()
+	quitTray("tray relaunched")
 	return nil
 }
 

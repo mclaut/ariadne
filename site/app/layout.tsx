@@ -4,7 +4,7 @@ import "./globals.css";
 const description =
   "Ariadne is a local-first multilingual memory server for Codex, Claude Code, and MCP clients, powered by Qdrant, Ollama, and bge-m3 hybrid search.";
 const siteUrl = "https://mclaut.github.io/ariadne";
-const socialImage = `${siteUrl}/og-v0.8.0.png`;
+const socialImage = `${siteUrl}/og-v0.8.1.png`;
 const favicon = `${siteUrl}/favicon.svg`;
 
 export const metadata: Metadata = {
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     description,
     siteName: "Ariadne",
     url: siteUrl,
-    images: [{ url: socialImage, width: 1280, height: 640, alt: "Ariadne local-first AI memory" }],
+    images: [{ url: socialImage, width: 1200, height: 630, alt: "Ariadne local-first AI memory" }],
   },
   twitter: {
     card: "summary_large_image",

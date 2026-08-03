@@ -84,6 +84,7 @@ when both scoped associations are intentionally useful.
 
 ```bash
 ~/.ariadne/bin/ariadnectl status        # health, points, storage, maintenance freshness
+~/.ariadne/bin/ariadnectl version       # active runtime release tag
 ~/.ariadne/bin/ariadnectl metrics       # estimated tokens saved by recalls (net avoided)
 ~/.ariadne/bin/ariadnectl start|stop|restart
 ~/.ariadne/bin/ariadnectl backup        # 10 recent snapshots; older ones → backups/archive
@@ -94,9 +95,13 @@ when both scoped associations are intentionally useful.
 ~/.ariadne/bin/ariadnectl requeue-empty --dry-run   # inspect legacy one-pass empty archives
 ```
 
-Daily maintenance retries each failed stage up to three times with bounded
-exponential backoff. Any partial import returns non-zero and blocks
-consolidation; failed consolidation groups remain active for the next retry.
+Daily maintenance retries transient stage failures up to three times with
+bounded exponential backoff. A local quality gate rejects mixed-concern and
+duplicate memories before invalid model output gets one focused repair pass;
+deterministic schema, language, path, quality, or configuration failures become
+visible deferred work without consuming the remaining retry delays. Any
+partial import returns non-zero and blocks consolidation; deferred consolidation
+groups remain active for the next scheduled run.
 The tray shows the latest outcome, warns on failed/partial/stuck/stale state,
 and provides **Run maintenance now**. Scheduled and manual output is appended to
 `~/.ariadne/logs/maintenance.log`; structured outcomes are appended to
@@ -138,8 +143,10 @@ operations (restore, migration, bulk import) run a backup first.
 
 ## Troubleshooting
 
-1. Run `tools/doctor.sh` — it checks the whole chain (binaries → services →
-   model → collection → MCP registration) and prints what's broken.
+1. Run `tools/doctor.sh` — it resolves the active runtime and checks the whole
+   chain: versioned binaries, services, model, collection, MCP registration,
+   maintenance, launchd ownership, tray, attribution coverage, logs, and disk.
+   Exit 0 is green, 1 is broken, and 2 is available but degraded.
 2. Common fixes:
    - Qdrant down → `~/.ariadne/bin/ariadnectl start` (manages the Qdrant service on
      both macOS `com.ariadne.qdrant` and Linux `systemctl --user ariadne-qdrant`).

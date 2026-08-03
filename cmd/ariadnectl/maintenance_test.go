@@ -4,10 +4,16 @@ import (
 	"ariadne/internal/activity"
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+)
+
+const (
+	testStatusComplete = "complete"
+	testStatusPartial  = "partial"
 )
 
 func TestRunMaintenanceRetriesOnlyFailedStage(t *testing.T) {
@@ -57,7 +63,7 @@ func TestRunMaintenanceRetriesOnlyFailedStage(t *testing.T) {
 		t.Fatalf("sleeps = %#v", sleeps)
 	}
 	last := events[len(events)-1]
-	if last.Status != "complete" || last.Counters["import_attempts"] != 1 ||
+	if last.Status != testStatusComplete || last.Counters["import_attempts"] != 1 ||
 		last.Counters["consolidate_attempts"] != 3 {
 		t.Fatalf("last event = %#v", last)
 	}
@@ -91,6 +97,49 @@ func TestRunMaintenanceStopsBeforeConsolidationWhenImportExhaustsRetries(t *test
 	}
 	last := events[len(events)-1]
 	if last.Status != "failed" || last.Counters["import_attempts"] != 2 {
+		t.Fatalf("last event = %#v", last)
+	}
+}
+
+func TestRunMaintenanceDoesNotRetryDeferredConsolidation(t *testing.T) {
+	config := maintenanceConfig{
+		attempts: 3, retryDelay: time.Second, maxRetryDelay: 10 * time.Second,
+		commandTimeout: time.Minute, before: 24 * time.Hour,
+		importPath: "import", ctlPath: "ariadnectl",
+	}
+	var commands []string
+	var sleeps []time.Duration
+	var events []activity.Event
+	deps := maintenanceDeps{
+		run: func(_ context.Context, path string, args ...string) error {
+			commands = append(commands, path+" "+strings.Join(args, " "))
+			if path == "ariadnectl" {
+				return fmt.Errorf("%w: model output needs later review", errMaintenanceDeferred)
+			}
+			return nil
+		},
+		sleep: func(_ context.Context, delay time.Duration) error {
+			sleeps = append(sleeps, delay)
+			return nil
+		},
+		append: func(event activity.Event) error {
+			events = append(events, event)
+			return nil
+		},
+		now: time.Now,
+	}
+	if err := runMaintenance(context.Background(), config, deps); err != nil {
+		t.Fatal(err)
+	}
+	wantCommands := []string{
+		"import -source memfiles -sync",
+		"ariadnectl consolidate --before 24h0m0s",
+	}
+	if !slices.Equal(commands, wantCommands) || len(sleeps) != 0 {
+		t.Fatalf("commands=%#v sleeps=%#v", commands, sleeps)
+	}
+	last := events[len(events)-1]
+	if last.Status != testStatusPartial || last.Counters["consolidate_attempts"] != 1 {
 		t.Fatalf("last event = %#v", last)
 	}
 }

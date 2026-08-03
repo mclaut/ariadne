@@ -21,8 +21,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
-
-	"fyne.io/systray"
 )
 
 const (
@@ -198,7 +196,7 @@ func startUpdate(release releaseInfo) {
 		return
 	}
 	_ = helper.Process.Release()
-	systray.Quit()
+	quitTray("update handoff started")
 }
 
 func updateStartFailed(tag string, err error) {

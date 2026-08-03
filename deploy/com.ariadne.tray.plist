@@ -4,11 +4,13 @@
        cp deploy/com.ariadne.tray.plist ~/Library/LaunchAgents/
        launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ariadne.tray.plist
      The cross-platform Go tray — the monitor on macOS, Linux and Windows.
-     RunAtLoad only (no KeepAlive) so quitting from the menu actually quits. -->
+     Failed processes restart, while a clean menu Quit remains stopped. -->
 <plist version="1.0"><dict>
   <key>Label</key><string>com.ariadne.tray</string>
   <key>ProgramArguments</key><array><string>__HOME__/.ariadne/bin/ariadne-tray</string></array>
   <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>10</integer>
   <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/tray.log</string>
   <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/tray.log</string>
 </dict></plist>
