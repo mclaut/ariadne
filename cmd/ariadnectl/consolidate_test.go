@@ -46,6 +46,77 @@ func TestGroupDiaryByWingAndLocalDay(t *testing.T) {
 	}
 }
 
+func TestBuildConsolidationBatchesKeepsSessionsAtomic(t *testing.T) {
+	t.Parallel()
+	groups := map[string][]diaryPoint{
+		"api/2026-07-10": {
+			{ID: 10, Text: "first session"},
+			{ID: 20, Text: "second session"},
+		},
+	}
+	batches := buildConsolidationBatches(groups, defaultConsolidationTokenBudget)
+	if len(batches) != 2 || len(batches[0].points) != 1 || len(batches[1].points) != 1 ||
+		batches[0].points[0].ID != 10 || batches[1].points[0].ID != 20 {
+		t.Fatalf("batches = %#v", batches)
+	}
+}
+
+func TestEligibleDiaryPointsSkipsOnlyMatchingDeferredPipeline(t *testing.T) {
+	t.Parallel()
+	points := []diaryPoint{
+		{ID: 1, ConsolidationDeferredKey: "atomic-v1|old|old"},
+		{ID: 2, ConsolidationDeferredKey: "atomic-v2|current|current"},
+		{ID: 3},
+	}
+	eligible, skipped := eligibleDiaryPoints(points, "atomic-v2|current|current")
+	if skipped != 1 || len(eligible) != 2 || eligible[0].ID != 1 || eligible[1].ID != 3 {
+		t.Fatalf("eligible=%#v skipped=%d", eligible, skipped)
+	}
+}
+
+func TestCoalesceConsolidationResultsDeduplicatesWithinWingDay(t *testing.T) {
+	t.Parallel()
+	results := []consolidationResult{
+		{
+			batch: consolidationBatch{key: "app/2026-08-03#1", groupKey: "app/2026-08-03", points: []diaryPoint{{ID: 1}}},
+			memories: []consolidatedMemory{{
+				Room: roomDecisions,
+				Text: "Вирішено додати SSH-доступ для відновлення підключення до бази білінгу через систему безпеки.",
+			}},
+		},
+		{
+			batch: consolidationBatch{key: "app/2026-08-03#2", groupKey: "app/2026-08-03", points: []diaryPoint{{ID: 2}}},
+			memories: []consolidatedMemory{{
+				Room: roomGotchas,
+				Text: "Доступ до бази білінгу зламався через систему безпеки; додавання SSH-доступу відновило підключення.",
+			}},
+		},
+	}
+	got := coalesceConsolidationResults(results)
+	if len(got) != 1 || len(got[0].batch.points) != 2 || len(got[0].memories) != 1 {
+		t.Fatalf("coalesced = %#v", got)
+	}
+}
+
+func TestNearDuplicateMemoryKeepsDistinctReportingPeriods(t *testing.T) {
+	t.Parallel()
+	a := "Verified cash-flow report for July: income 45 million, expenses 48 million, and net flow minus 3 million."
+	b := "Verified cash-flow report for the first half: income 404 million, expenses 460 million, and net flow minus 56 million."
+	if nearDuplicateMemory(a, b) {
+		t.Fatal("reports with different periods and measurements should remain distinct")
+	}
+}
+
+func TestConsolidationModelOverridesCaptureModel(t *testing.T) {
+	t.Setenv("ARIADNE_SUMMARY_MODEL", "capture-small")
+	t.Setenv("ARIADNE_CONSOLIDATION_MODEL", "curator-large")
+	t.Setenv("ARIADNE_CONSOLIDATION_JUDGE_MODEL", "judge")
+	if consolidationModel() != "curator-large" || consolidationJudgeModel() != "judge" ||
+		!strings.Contains(consolidationDeferredKey(), "curator-large|judge") {
+		t.Fatalf("models=%q/%q key=%q", consolidationModel(), consolidationJudgeModel(), consolidationDeferredKey())
+	}
+}
+
 func TestDistributeSourceTokensPreservesTotal(t *testing.T) {
 	memories := []consolidatedMemory{{Text: "short"}, {Text: "a much longer memory"}, {Text: "last"}}
 	shares := distributeSourceTokens(1_003, memories)
@@ -79,6 +150,22 @@ func TestSaveConsolidatedGroupArchivesSourcesWithoutDeleting(t *testing.T) {
 	if !reflect.DeepEqual(writer.archived, []uint64{10, 20}) || writer.archive["status"] != "archived" ||
 		writer.archive["consolidation_status"] != "completed" {
 		t.Fatalf("archive operation = ids %#v meta %#v", writer.archived, writer.archive)
+	}
+}
+
+func TestMarkDeferredConsolidationKeepsSourceActive(t *testing.T) {
+	writer := &fakeConsolidationWriter{}
+	now := time.Date(2026, 8, 3, 5, 0, 0, 0, time.UTC)
+	if err := markDeferredConsolidation(context.Background(), writer, []diaryPoint{{
+		ID: 10, ConsolidationAttempts: 2,
+	}}, now, "atomic-v2|qwen|qwen"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(writer.archived, []uint64{10}) || writer.archive["status"] != "" ||
+		writer.archive["consolidation_status"] != "" ||
+		writer.archive["consolidation_attempts"] != "3" ||
+		writer.archive["consolidation_deferred_key"] != "atomic-v2|qwen|qwen" {
+		t.Fatalf("deferred metadata = ids %#v meta %#v", writer.archived, writer.archive)
 	}
 }
 
@@ -223,6 +310,37 @@ func TestQualityGateRejectsUnstableLocalArtifactPath(t *testing.T) {
 	}
 }
 
+func TestQualityGateRejectsEphemeralJobIdentifier(t *testing.T) {
+	_, err := validateConsolidatedMemories(
+		[]diaryPoint{{Text: "The QA run remains active and its final verified report is still pending."}},
+		[]consolidatedMemory{{
+			Room: roomReference,
+			Text: "Detached screen qa-report-2026 runs the pending QA report and will trigger another model comparison.",
+		}},
+	)
+	if err == nil {
+		t.Fatal("ephemeral detached job identifier should be rejected")
+	}
+	redacted := redactUnstableArtifacts("Detached screen `qa-report-2026` runs /tmp/report.json")
+	if strings.Contains(redacted, "qa-report-2026") || strings.Contains(redacted, "/tmp/report.json") {
+		t.Fatalf("redacted = %q", redacted)
+	}
+	if !unstableArtifactReference("Verified workbook: [local artifact omitted]; all checks passed.") {
+		t.Fatal("redaction placeholder should not become durable memory text")
+	}
+}
+
+func TestQualityGateDistinguishesUkrainianAndRussian(t *testing.T) {
+	ukrainian := "Завершено фінансовий аналіз підприємства: перевірені надходження, витрати й чистий потік за звітний період."
+	russian := "Завершён финансовый анализ предприятия: проверены внешние доходы, расходы и чистый денежный поток за отчётный период."
+	if sameDominantScript(ukrainian, russian) {
+		t.Fatal("Russian output should not match a clearly Ukrainian source")
+	}
+	if hint := sourceLanguageGuidance([]diaryPoint{{Text: ukrainian}}); !strings.Contains(hint, "Ukrainian") {
+		t.Fatalf("language guidance = %q", hint)
+	}
+}
+
 func TestLocalSummaryEndpoint(t *testing.T) {
 	t.Parallel()
 	for _, raw := range []string{"http://localhost:11434", "http://127.0.0.1:11434", "http://[::1]:11434"} {
@@ -350,7 +468,7 @@ func TestConsolidationRepairsMixedConcernRejectedByQualityGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if generationCalls != 2 || qualityCalls != 2 || len(memories) != 1 ||
-		!strings.Contains(repairSystem, "combines independent concerns") {
+		!strings.Contains(repairSystem, "candidate set failed quality review") {
 		t.Fatalf("generation=%d quality=%d memories=%#v repair=%q",
 			generationCalls, qualityCalls, memories, repairSystem)
 	}

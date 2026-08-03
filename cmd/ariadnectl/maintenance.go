@@ -133,10 +133,12 @@ func runMaintenance(ctx context.Context, config maintenanceConfig, deps maintena
 		config.ctlPath, "consolidate", "--before", config.before.String())
 	if err != nil {
 		if errors.Is(err, errMaintenanceDeferred) {
-			_ = appendMaintenanceEvent(deps, "partial", "consolidation deferred non-retryable groups", map[string]int64{
-				"import_attempts":      int64(importAttempts),
-				"consolidate_attempts": int64(consolidateAttempts),
-			})
+			_ = appendMaintenanceEvent(deps, "complete_with_deferred",
+				"maintenance completed; unchanged unsafe groups were deferred for this pipeline revision", map[string]int64{
+					"import_attempts":      int64(importAttempts),
+					"consolidate_attempts": int64(consolidateAttempts),
+					"deferred_stages":      1,
+				})
 			return nil
 		}
 		_ = appendMaintenanceEvent(deps, "failed", "consolidation failed after bounded retries", map[string]int64{

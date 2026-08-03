@@ -206,8 +206,9 @@ export default function Home() {
               <Server aria-hidden="true" />
               <h3>Repair-aware maintenance</h3>
               <p>
-                A local quality gate rejects mixed or duplicate memories, then
-                gives invalid output one focused correction pass.
+                Sessions are curated atomically, same-day outputs are
+                deduplicated, and safe deferred review no longer makes a
+                healthy tray orange.
               </p>
             </article>
             <article className="new-item accent-coral">

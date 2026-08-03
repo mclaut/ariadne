@@ -36,13 +36,16 @@ resolves the active immutable runtime, checks both Codex and Claude MCP paths,
 reports maintenance and launchd state, exposes attribution coverage, and warns
 about runaway logs.
 
-**Maintenance that distinguishes retry from review.** An independent local
-quality gate rejects memories that fuse unrelated concerns or duplicate the
-same durable fact, then gives invalid model output one focused repair pass.
+**Maintenance that distinguishes retry from review.** Each captured session is
+curated atomically before same-day outputs are coalesced and deduplicated. An
+independent local quality pass rejects memories that fuse unrelated concerns,
+then gives invalid model output one focused repair pass.
 Transient network and Ollama failures still receive bounded backoff;
 deterministic schema, language, local-path, and quality failures become
-explicit deferred work instead of replaying the whole stage. Source diaries
-remain active and append-only throughout.
+explicit deferred work instead of replaying the whole stage. Unchanged sources
+are not retried again with the same model and pipeline revision. Source diaries
+remain active and append-only throughout, and safe deferred review does not
+misreport otherwise successful maintenance as unhealthy.
 
 **A resilient, explainable tray.** The macOS LaunchAgent restarts the tray after
 an abnormal exit but respects an explicit clean Quit. Lifecycle reasons are
@@ -141,8 +144,10 @@ backoff; partial import failures return non-zero and block consolidation.
 systemd uses `Persistent=true`; a loaded launchd calendar agent receives one
 catch-up start after the Mac wakes when a scheduled time was missed. The tray
 shows the latest outcome, warns when maintenance failed, remains partial, is
-stuck, or is older than 36 hours, and offers **Run maintenance now**. Output is
-written to `~/.ariadne/logs/maintenance.log`; append-only outcomes live in
+stuck, or is older than 36 hours, and offers **Run maintenance now**. A
+`complete_with_deferred` outcome remains observable without turning the service
+indicator orange. Output is written to `~/.ariadne/logs/maintenance.log`;
+append-only outcomes live in
 `~/.ariadne/state/activity.jsonl`.
 
 ## Previously in v0.5.0
@@ -460,13 +465,20 @@ The summary model is loaded only for capture and unloaded right after
 `ARIADNE_SUMMARY_MODEL=qwen2.5:3b` (~2GB vs ~4.7GB, at some summary quality) —
 or pass `-summary-model` to the installer so it pulls that one.
 
+Consolidation can use a stronger model without increasing capture latency:
+`ARIADNE_CONSOLIDATION_MODEL` falls back to `ARIADNE_SUMMARY_MODEL`, while
+`ARIADNE_CONSOLIDATION_JUDGE_MODEL` falls back to the consolidation model. A
+24GB machine can run `qwen2.5:14b` (~9GB) for both roles; validate it with a
+dry-run before changing scheduled maintenance.
+
 ### Daily diary consolidation
 
 `ariadnectl consolidate` turns short-lived session chronology into compact
 long-term knowledge. It selects `room=diary` entries older than 24 hours by
-default, groups them by project (`wing`) and local calendar day, then asks the
-configured local summary model to emit only validated `decisions`, `gotchas`,
-and `reference` memories. Requests are split to a bounded source-token budget.
+default, processes each captured session atomically, then coalesces and
+deduplicates validated same-day outputs within each project (`wing`). The
+configured local consolidation model emits only `decisions`, `gotchas`, and
+`reference` memories. Requests are split to a bounded source-token budget.
 An empty result first marks the source `candidate_empty`; only a later empty
 pass after the default seven-day grace period may archive it as
 `empty_confirmed`.
@@ -475,9 +487,11 @@ Automatic consolidation creates a native Qdrant backup only when archival is
 needed and the latest backup is older than seven days (override with
 `ARIADNE_BACKUP_MIN_INTERVAL`); manual `ariadnectl backup` is unconditional.
 New memories are saved before source diary entries are marked archived; source
-text and vectors remain intact. Any group that fails remains active for the next run. Use `--before 48h`
-for a longer review window or `--dry-run` to inspect output without changing the
-store. Search history with `include_archived: true`. Remote summary endpoints
+text and vectors remain intact. Deterministic failures remain active and receive
+a model-and-pipeline revision marker, so unchanged input is reconsidered only
+after the model or curation pipeline changes. Use `--before 48h` for a longer
+review window or `--dry-run` to inspect output without changing either the store
+or production activity history. Search history with `include_archived: true`. Remote summary endpoints
 remain blocked unless `ARIADNE_CAPTURE_REMOTE=1` is explicitly set.
 
 ### Coding-memory evaluation

@@ -159,6 +159,7 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 	for _, field := range []string{
 		"room", "status", "provenance", "memory_type", "consolidation_status", "source_revision",
 		"source_kind", "source_key", "content_hash", "identity_version", "superseded_by", "superseded_reason",
+		"consolidation_deferred_key", "consolidation_deferred_reason",
 	} {
 		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collection,
@@ -169,7 +170,7 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 	for _, field := range []string{
 		"observed_at", "occurred_at", "last_seen_at", "source_modified_at",
 		"consolidated_at", "consolidation_checked_at", "consolidation_first_empty_at",
-		"consolidation_attempts", "superseded_at", "orphaned_at",
+		"consolidation_deferred_at", "consolidation_attempts", "superseded_at", "orphaned_at",
 	} {
 		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collection,
@@ -464,7 +465,7 @@ func metadataValue(key, value string) any {
 	case "ts", "source_tokens", "memory_tokens", "observed_at", "occurred_at",
 		"session_started_at", "session_ended_at", "last_seen_at", "source_modified_at",
 		"consolidated_at", "consolidation_checked_at", "consolidation_first_empty_at",
-		"superseded_at", "orphaned_at", "consolidation_attempts":
+		"consolidation_deferred_at", "superseded_at", "orphaned_at", "consolidation_attempts":
 		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
 			return n
 		}

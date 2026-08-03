@@ -96,14 +96,14 @@ when both scoped associations are intentionally useful.
 ```
 
 Daily maintenance retries transient stage failures up to three times with
-bounded exponential backoff. A local quality gate rejects mixed-concern and
-duplicate memories before invalid model output gets one focused repair pass;
-deterministic schema, language, path, quality, or configuration failures become
-visible deferred work without consuming the remaining retry delays. Any
-partial import returns non-zero and blocks consolidation; deferred consolidation
-groups remain active for the next scheduled run.
-The tray shows the latest outcome, warns on failed/partial/stuck/stale state,
-and provides **Run maintenance now**. Scheduled and manual output is appended to
+bounded exponential backoff. Each captured session is curated atomically before
+same-day outputs are coalesced and deduplicated. Invalid local-model output gets
+one focused repair pass; deterministic schema, language, artifact, quality, or
+configuration failures remain active and receive a model-and-pipeline revision
+marker, so unchanged input is not replayed every day. Any partial import returns
+non-zero and blocks consolidation. A `complete_with_deferred` outcome is visible
+without turning a healthy tray orange; failed/partial/stuck/stale states still
+warn. The tray also provides **Run maintenance now**. Scheduled and manual output is appended to
 `~/.ariadne/logs/maintenance.log`; structured outcomes are appended to
 `~/.ariadne/state/activity.jsonl`.
 
@@ -139,7 +139,9 @@ operations (restore, migration, bulk import) run a backup first.
   disable with `ARIADNE_CAPTURE=0`. Capture summaries use
   `ARIADNE_SUMMARY_OLLAMA` (default: local Ollama); remote summary endpoints are
   blocked unless `ARIADNE_CAPTURE_REMOTE=1` is set, because condensed transcript
-  text is sent there.
+  text is sent there. Consolidation may use a stronger independent curator via
+  `ARIADNE_CONSOLIDATION_MODEL` and optional `ARIADNE_CONSOLIDATION_JUDGE_MODEL`;
+  both fall back to `ARIADNE_SUMMARY_MODEL`.
 
 ## Troubleshooting
 

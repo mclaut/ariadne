@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	testStatusComplete = "complete"
-	testStatusPartial  = "partial"
+	testStatusComplete             = "complete"
+	testStatusCompleteWithDeferred = "complete_with_deferred"
 )
 
 func TestRunMaintenanceRetriesOnlyFailedStage(t *testing.T) {
@@ -139,7 +139,8 @@ func TestRunMaintenanceDoesNotRetryDeferredConsolidation(t *testing.T) {
 		t.Fatalf("commands=%#v sleeps=%#v", commands, sleeps)
 	}
 	last := events[len(events)-1]
-	if last.Status != testStatusPartial || last.Counters["consolidate_attempts"] != 1 {
+	if last.Status != testStatusCompleteWithDeferred || last.Counters["consolidate_attempts"] != 1 ||
+		last.Counters["deferred_stages"] != 1 {
 		t.Fatalf("last event = %#v", last)
 	}
 }
