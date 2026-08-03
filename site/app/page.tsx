@@ -204,11 +204,11 @@ export default function Home() {
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>Repair-aware maintenance</h3>
+              <h3>Stronger, atomic curation</h3>
               <p>
-                Sessions are curated atomically, same-day outputs are
-                deduplicated, and safe deferred review no longer makes a
-                healthy tray orange.
+                Capture stays light while an independent 14B curator cleared
+                11/11 test batches. Unsafe unchanged work is deferred without
+                turning a healthy tray orange.
               </p>
             </article>
             <article className="new-item accent-coral">
