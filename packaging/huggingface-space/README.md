@@ -37,7 +37,10 @@ macOS, or Linux machine, where memories remain local.
 
 Version 0.8.1 adds single-owner Qdrant service health, repair-aware diary
 consolidation, deferred deterministic maintenance work, resilient tray
-lifecycle logging, and full-stack doctor diagnostics.
+lifecycle logging, and full-stack doctor diagnostics. Capture and consolidation
+can use different local models: in a fixed 11-batch validation, qwen2.5:7b
+deferred five batches while qwen2.5:14b cleared all eleven. The 14B curator is
+recommended when local memory permits.
 
 ## Links
 

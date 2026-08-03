@@ -84,7 +84,7 @@ export default function UkrainianHome() {
           <div className="section-heading"><span className="eyebrow">Нове у v0.8.1</span><h2>Runtime health, якому можна вірити.</h2><p>Один власник сервісу, repair-aware maintenance і повна діагностика роблять локальну пам’ять надійною та пояснюваною.</p></div>
           <div className="new-grid">
             <article className="new-item accent-green"><Check /><h3>Один власник Qdrant</h3><p>Status знаходить дубльовані launchd jobs, а installer нормалізує ownership без видалення історії.</p></article>
-            <article className="new-item accent-blue"><Server /><h3>Repair-aware maintenance</h3><p>Сесії консолідуються атомарно, same-day результати дедуплікуються, а safe deferred більше не фарбує справний tray у помаранчевий.</p></article>
+            <article className="new-item accent-blue"><Server /><h3>Сильніша атомарна курація</h3><p>Capture лишається легким, а окрема 14B-модель пройшла 11/11 тестових пакетів. Unsafe deferred більше не фарбує справний tray у помаранчевий.</p></article>
             <article className="new-item accent-coral"><Network /><h3>Надійний tray</h3><p>Аварійний вихід перезапускається, clean Quit працює, а lifecycle reasons залишаються в логах.</p></article>
             <article className="new-item accent-black"><Terminal /><h3>Full-stack doctor</h3><p>Version, MCP, launchd, maintenance, attribution, storage і runaway logs формують один чесний verdict.</p></article>
           </div>

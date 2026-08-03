@@ -47,6 +47,13 @@ are not retried again with the same model and pipeline revision. Source diaries
 remain active and append-only throughout, and safe deferred review does not
 misreport otherwise successful maintenance as unhealthy.
 
+**A stronger curator without heavier capture.** Capture and consolidation can
+use different local models through `ARIADNE_CONSOLIDATION_MODEL` and
+`ARIADNE_CONSOLIDATION_JUDGE_MODEL`. In a fixed 11-batch validation,
+`qwen2.5:7b` deferred five batches while `qwen2.5:14b` cleared all eleven. The
+14B curator is therefore the recommended local choice when memory permits;
+capture can remain on a smaller model.
+
 **A resilient, explainable tray.** The macOS LaunchAgent restarts the tray after
 an abnormal exit but respects an explicit clean Quit. Lifecycle reasons are
 appended to the tray log, so a missing icon no longer leaves an empty forensic
