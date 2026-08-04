@@ -1,6 +1,10 @@
 package store
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+)
 
 func TestBuildPayloadSkipsEmptyAndParsesTS(t *testing.T) {
 	payload := buildPayload("hello", map[string]string{
@@ -127,13 +131,13 @@ func TestSparseVecDropsSingleRuneTokens(t *testing.T) {
 }
 
 func TestRecallFilterScopesWingAndRoom(t *testing.T) {
-	if got := recallFilter("", "", false); got == nil || len(got.Must) != 0 || len(got.MustNot) != 3 {
+	if got := recallFilter("", "", false); got == nil || len(got.Must) != 0 || len(got.MustNot) != 4 {
 		t.Fatalf("active-only filter = %#v", got)
 	}
-	if recallFilter("", "", true) != nil {
-		t.Fatal("unscoped history recall should not create a filter")
+	if got := recallFilter("", "", true); got == nil || len(got.MustNot) != 1 {
+		t.Fatalf("history recall must retain quarantine filter: %#v", got)
 	}
-	if got := recallFilter("ariadne", "", false); got == nil || len(got.Must) != 1 || len(got.MustNot) != 3 {
+	if got := recallFilter("ariadne", "", false); got == nil || len(got.Must) != 1 || len(got.MustNot) != 4 {
 		t.Fatalf("wing-only filter = %#v", got)
 	}
 	if got := recallFilter("", "reference", false); got == nil || len(got.Must) != 1 {
@@ -142,7 +146,30 @@ func TestRecallFilterScopesWingAndRoom(t *testing.T) {
 	if got := recallFilter("ariadne", "reference", false); got == nil || len(got.Must) != 2 {
 		t.Fatalf("wing+room filter = %#v", got)
 	}
-	if got := recallFilter("ariadne", "reference", true); got == nil || len(got.MustNot) != 0 {
+	if got := recallFilter("ariadne", "reference", true); got == nil || len(got.MustNot) != 1 {
 		t.Fatalf("history filter = %#v", got)
+	}
+}
+
+func TestSaveRejectsCredentialMaterialBeforeNetworkAccess(t *testing.T) {
+	_, err := (&Store{}).Save(context.Background(), "API_TOKEN=actual-secret-value", map[string]string{"wing": "app"})
+	if err == nil || !strings.Contains(err.Error(), "credential material") {
+		t.Fatalf("Save error = %v", err)
+	}
+	err = (&Store{}).SaveBatch(context.Background(), []SaveItem{{
+		Text: "DB_PASSWORD=actual-secret-value", Meta: map[string]string{"wing": "app"},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "credential material") {
+		t.Fatalf("SaveBatch error = %v", err)
+	}
+}
+
+func TestSaveRequiresWingBeforeNetworkAccess(t *testing.T) {
+	if _, err := (&Store{}).Save(context.Background(), "safe durable fact", nil); err == nil || err.Error() != "wing is required" {
+		t.Fatalf("Save error = %v", err)
+	}
+	err := (&Store{}).SaveBatch(context.Background(), []SaveItem{{Text: "safe durable fact"}})
+	if err == nil || err.Error() != "item 1: wing is required" {
+		t.Fatalf("SaveBatch error = %v", err)
 	}
 }

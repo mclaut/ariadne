@@ -12,8 +12,8 @@
 - Platforms: Windows x64, macOS Intel and Apple Silicon, Linux x64 and ARM64
 - Runtime: Go MCP server, Qdrant vector server, Ollama bge-m3 embeddings
 - Retrieval: exact lookup by ID or hybrid dense plus BM25 sparse search, with wing, room, and collection scopes plus bounded historical-intent reranking
-- MCP tools: memory_save, memory_recall, memory_delete, memory_move
-- Privacy: local endpoints by default; Qdrant binds to 127.0.0.1
+- MCP tools: memory_save, memory_recall, memory_delete, memory_move, credential_access
+- Privacy: local endpoints by default; Qdrant binds to 127.0.0.1; project scope is default-deny; cross-wing recall requires a visible human approval
 - Lifecycle: scoped append-only identities retain superseded and orphaned history for exact-ID audit
 - Maintenance: incremental memfile sync, guarded diary consolidation, bounded retries, and append-only health activity
 - Token efficiency: confirmed savings, recall overhead, and signed net are measured locally without storing content
@@ -24,4 +24,4 @@ Windows uses install.ps1. Linux and macOS use install.sh. Both are available in 
 
 ## Current release
 
-v0.8.1 adds single-owner Qdrant service health, atomic repair-aware consolidation, independent curator and judge models, deferred deterministic maintenance work that does not make a healthy tray orange, resilient tray lifecycle logging, and full-stack doctor diagnostics. In a fixed 11-batch validation, qwen2.5:7b deferred five batches while qwen2.5:14b cleared all eleven. v0.8.0 added scoped append-only identity, incremental non-destructive memfile sync, conservative historical reranking, guarded diary consolidation, retry-bounded observable maintenance, and full lifecycle export.
+v0.8.4 adds visible system approval dialogs for cross-project memory and protected resources, with fail-closed Later/close behavior and one-minute reminders. v0.8.3 introduced 15-minute session-and-collection-scoped cross-wing grants, 0.70 external-origin weighting, and separate five-minute one-shot credential grants. v0.8.2 made project scope default-deny, added deterministic secret blocking/redaction, append-only quarantine, and stable project identity markers. The approval handshake is audited agent policy, not an operating-system credential broker.

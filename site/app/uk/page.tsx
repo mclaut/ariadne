@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.1</a>
+          <a href="#new">Нове у 0.8.4</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,10 +67,10 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.1 показує чесний стан runtime</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.4 робить межі пам’яті видимими</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
-          <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й блокувань вбудованої бази.</p>
+          <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
           <div className="hero-actions">
             <a className="button button-primary" href="#install">Встановити Ariadne <ArrowRight size={18} /></a>
             <a className="button button-secondary" href="https://github.com/mclaut/ariadne">Переглянути код <ArrowUpRight size={18} /></a>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.1</span><h2>Runtime health, якому можна вірити.</h2><p>Один власник сервісу, repair-aware maintenance і повна діагностика роблять локальну пам’ять надійною та пояснюваною.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.4</span><h2>Межі пам’яті, які видно.</h2><p>Ізоляція проєкту працює за замовчуванням. Перетин межі потребує видимого й обмеженого рішення людини.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><Check /><h3>Один власник Qdrant</h3><p>Status знаходить дубльовані launchd jobs, а installer нормалізує ownership без видалення історії.</p></article>
-            <article className="new-item accent-blue"><Server /><h3>Сильніша атомарна курація</h3><p>Capture лишається легким, а окрема 14B-модель пройшла 11/11 тестових пакетів. Unsafe deferred більше не фарбує справний tray у помаранчевий.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Надійний tray</h3><p>Аварійний вихід перезапускається, clean Quit працює, а lifecycle reasons залишаються в логах.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Full-stack doctor</h3><p>Version, MCP, launchd, maintenance, attribution, storage і runaway logs формують один чесний verdict.</p></article>
+            <article className="new-item accent-green"><Check /><h3>Проєктний scope за замовчуванням</h3><p>Recall і save вимагають active wing. Доступний для читання сусідній репозиторій не дає права позичати його пам’ять або конфігурацію.</p></article>
+            <article className="new-item accent-blue"><Server /><h3>Системне вікно дозволу</h3><p>Cross-wing request відкриває warning із «Схвалити», «Відхилити» та безпечним «Пізніше». Закриття нічого не дозволяє.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Окремий доступ до credentials</h3><p>Захищений ресурс потребує другого точного grant на п’ять хвилин. Він споживається один раз, а значення credential не зберігається.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Локальний контекст перший</h3><p>Дозволені зовнішні memories отримують origin weight 0.70 та явну позначку. Локальні результати мають пріоритет.</p></article>
           </div>
         </div>
       </section>
@@ -95,7 +95,7 @@ export default function UkrainianHome() {
         <div className="section-shell">
           <div className="section-heading compact"><span className="eyebrow">Архітектура</span><h2>Один сервіс пам’яті. Багато агентів.</h2><p>Ariadne залишає MCP на краю, а зберігання передає справжньому серверу для паралельного читання й запису.</p></div>
           <ol className="architecture-flow">
-            <li><div className="step-number">01</div><Network /><h3>MCP-клієнти</h3><p>Codex, Claude Code та будь-який stdio-сумісний клієнт.</p><code>save / recall / delete / move</code></li>
+            <li><div className="step-number">01</div><Network /><h3>MCP-клієнти</h3><p>Codex, Claude Code та будь-який stdio-сумісний клієнт.</p><code>save / recall / delete / move / approve</code></li>
             <li><div className="step-number">02</div><Globe2 /><h3>bge-m3 + BM25</h3><p>Багатомовний зміст і точні терміни, об’єднані через RRF.</p><code>Ollama localhost:11434</code></li>
             <li><div className="step-number">03</div><Database /><h3>Сервер Qdrant</h3><p>Надійні вектори й текстові payload лише на loopback.</p><code>Qdrant localhost:6333/6334</code></li>
           </ol>
@@ -108,13 +108,13 @@ export default function UkrainianHome() {
           <div className="install-tool">
             <div className="command-window"><div className="command-title"><span>macOS / Linux</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh</code></pre></div>
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.1">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.4">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>
 
       <section className="security-band">
-        <div className="section-shell security-layout"><LockKeyhole size={42} /><div><span className="eyebrow">Локальність за задумом</span><h2>Ваша пам’ять — не потік телеметрії.</h2></div><div className="security-points"><p><HardDrive size={18} /> Runtime і дані зберігаються у домашній теці.</p><p><Server size={18} /> Qdrant прив’язаний до 127.0.0.1.</p><p><ShieldCheck size={18} /> Віддалені підсумки потребують явної згоди.</p></div></div>
+        <div className="section-shell security-layout"><LockKeyhole size={42} /><div><span className="eyebrow">Локальність за задумом</span><h2>Ваша пам’ять — не потік телеметрії.</h2></div><div className="security-points"><p><HardDrive size={18} /> Runtime і дані зберігаються у домашній теці.</p><p><Server size={18} /> Qdrant прив’язаний до 127.0.0.1.</p><p><ShieldCheck size={18} /> Міжпроєктний доступ потребує видимого рішення людини.</p></div></div>
       </section>
 
       <footer><div className="footer-brand"><span className="status-dot" /><strong>Ariadne</strong><span>Локальна пам’ять для AI-агентів.</span></div><div className="footer-links"><a href="https://github.com/mclaut/ariadne">GitHub</a><a href="https://github.com/mclaut/ariadne/issues">Issues</a><a href="https://github.com/mclaut/ariadne/blob/main/LICENSE">Ліцензія MIT</a></div></footer>

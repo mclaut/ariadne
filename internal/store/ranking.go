@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const CrossWingWeight = 0.70
+
 // Rerank applies small, explainable historical-quality adjustments after
 // Qdrant's dense+BM25 RRF. The bounded adjustment keeps semantic relevance in
 // control while letting an explicitly temporal query prefer the right dated
@@ -35,6 +37,48 @@ func Rerank(query string, candidates []Result, limit int, now time.Time) []Resul
 		out = out[:limit]
 	}
 	return out
+}
+
+// RerankCrossWing applies an origin penalty after normal semantic/historical
+// ranking and reserves a bounded share of the response for approved external
+// projects. The permission check happens before this function; weighting is a
+// relevance policy, never an access-control mechanism.
+func RerankCrossWing(candidates []Result, homeWing string, limit int) []Result {
+	if limit <= 0 {
+		limit = 5
+	}
+	local := make([]Result, 0, len(candidates))
+	remote := make([]Result, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Wing == homeWing {
+			local = append(local, candidate)
+			continue
+		}
+		candidate.Score *= CrossWingWeight
+		remote = append(remote, candidate)
+	}
+	scoreSort := func(items []Result) {
+		sort.SliceStable(items, func(i, j int) bool { return items[i].Score > items[j].Score })
+	}
+	scoreSort(local)
+	scoreSort(remote)
+	remoteSlots := min(2, (limit+1)/2)
+	localSlots := limit - remoteSlots
+	selected := make([]Result, 0, min(limit, len(candidates)))
+	localTake := min(localSlots, len(local))
+	remoteTake := min(remoteSlots, len(remote))
+	selected = append(selected, local[:localTake]...)
+	selected = append(selected, remote[:remoteTake]...)
+	leftovers := append(slices.Clone(local[localTake:]), remote[remoteTake:]...)
+	scoreSort(leftovers)
+	for _, candidate := range leftovers {
+		if len(selected) == limit {
+			break
+		}
+		selected = append(selected, candidate)
+	}
+	scoreSort(selected)
+	return selected
 }
 
 func temporalQuery(query string) bool {

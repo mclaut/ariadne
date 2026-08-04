@@ -4,13 +4,16 @@
 package store
 
 import (
+	"ariadne/internal/secretguard"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,11 +60,30 @@ type Result struct {
 	SupersededBy     string  `json:"superseded_by,omitempty"`
 }
 
+// SensitivePoint is metadata-only output from the deterministic credential
+// audit. Findings names rules, never matched values or memory text.
+type SensitivePoint struct {
+	ID       uint64
+	Wing     string
+	Room     string
+	Status   string
+	Findings []string
+}
+
+// ClearedQuarantinePoint identifies a record quarantined by one detector
+// revision that no longer matches the current rules. No payload text leaves
+// the store layer.
+type ClearedQuarantinePoint struct {
+	ID             uint64
+	PreviousStatus string
+}
+
 const (
-	StatusActive     = "active"
-	StatusArchived   = "archived"
-	StatusSuperseded = "superseded"
-	StatusOrphaned   = "orphaned"
+	StatusActive      = "active"
+	StatusArchived    = "archived"
+	StatusSuperseded  = "superseded"
+	StatusOrphaned    = "orphaned"
+	StatusQuarantined = "quarantined"
 )
 
 // GetByID retrieves one memory exactly, without embedding or semantic search.
@@ -159,7 +181,8 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 	for _, field := range []string{
 		"room", "status", "provenance", "memory_type", "consolidation_status", "source_revision",
 		"source_kind", "source_key", "content_hash", "identity_version", "superseded_by", "superseded_reason",
-		"consolidation_deferred_key", "consolidation_deferred_reason",
+		"consolidation_deferred_key", "consolidation_deferred_reason", "quarantine_reason",
+		"pre_quarantine_status", "quarantine_state", "quarantine_clear_reason", "secret_redacted", "redaction_rules",
 	} {
 		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collection,
@@ -170,7 +193,8 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 	for _, field := range []string{
 		"observed_at", "occurred_at", "last_seen_at", "source_modified_at",
 		"consolidated_at", "consolidation_checked_at", "consolidation_first_empty_at",
-		"consolidation_deferred_at", "consolidation_attempts", "superseded_at", "orphaned_at",
+		"consolidation_deferred_at", "consolidation_attempts", "superseded_at", "orphaned_at", "quarantined_at",
+		"quarantine_cleared_at",
 	} {
 		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collection,
@@ -185,6 +209,12 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 // content hash by wing+room, so identical text can safely exist in more than
 // one project. A matching legacy text-only point is retained as superseded.
 func (s *Store) Save(ctx context.Context, text string, meta map[string]string) (uint64, error) {
+	if findings := secretguard.Findings(text); len(findings) > 0 {
+		return 0, fmt.Errorf("refusing to store credential material (%s)", strings.Join(findings, ","))
+	}
+	if strings.TrimSpace(meta["wing"]) == "" {
+		return 0, errors.New("wing is required")
+	}
 	meta = identityMetadata(text, meta)
 	id := scopedContentID(text, meta["wing"], meta["room"])
 	legacyID := contentID(text)
@@ -253,6 +283,12 @@ func (s *Store) SaveBatch(ctx context.Context, items []SaveItem) error {
 	legacyIDs := make([]uint64, len(items))
 	allIDs := make([]uint64, 0, len(items)*2)
 	for i, it := range items {
+		if findings := secretguard.Findings(it.Text); len(findings) > 0 {
+			return fmt.Errorf("item %d contains credential material (%s)", i+1, strings.Join(findings, ","))
+		}
+		if strings.TrimSpace(it.Meta["wing"]) == "" {
+			return fmt.Errorf("item %d: wing is required", i+1)
+		}
 		items[i].Meta = identityMetadata(it.Text, it.Meta)
 		texts[i] = it.Text
 		ids[i] = scopedContentID(it.Text, items[i].Meta["wing"], items[i].Meta["room"])
@@ -465,7 +501,8 @@ func metadataValue(key, value string) any {
 	case "ts", "source_tokens", "memory_tokens", "observed_at", "occurred_at",
 		"session_started_at", "session_ended_at", "last_seen_at", "source_modified_at",
 		"consolidated_at", "consolidation_checked_at", "consolidation_first_empty_at",
-		"consolidation_deferred_at", "superseded_at", "orphaned_at", "consolidation_attempts":
+		"consolidation_deferred_at", "superseded_at", "orphaned_at", "quarantined_at", "quarantine_cleared_at",
+		"consolidation_attempts":
 		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
 			return n
 		}
@@ -513,10 +550,14 @@ func (s *Store) Recall(
 	out := make([]Result, 0, len(res))
 	for _, p := range res {
 		pl := p.GetPayload()
+		text := pl["text"].GetStringValue()
+		if secretguard.Contains(text) {
+			continue
+		}
 		out = append(out, Result{
 			ID:               p.GetId().GetNum(),
 			Score:            p.GetScore(),
-			Text:             pl["text"].GetStringValue(),
+			Text:             text,
 			Wing:             pl["wing"].GetStringValue(),
 			Room:             pl["room"].GetStringValue(),
 			SourceTokens:     pl["source_tokens"].GetIntegerValue(),
@@ -549,10 +590,11 @@ func recallFilter(wing, room string, includeArchived bool) *qdrant.Filter {
 	if room != "" {
 		conditions = append(conditions, qdrant.NewMatch("room", room))
 	}
-	if includeArchived && len(conditions) == 0 {
-		return nil
-	}
 	filter := &qdrant.Filter{Must: conditions}
+	// Quarantine is a security boundary, not ordinary lifecycle history. It is
+	// excluded even from includeArchived semantic search. Exact-id retrieval is
+	// still available to the MCP layer, which redacts values before returning it.
+	filter.MustNot = append(filter.MustNot, qdrant.NewMatch("status", StatusQuarantined))
 	// Consolidated and superseded records remain stored and are available by
 	// exact id or an explicit includeArchived recall. Normal recall only sees
 	// active or legacy records.
@@ -739,8 +781,19 @@ func (s *Store) MoveAppendOnly(ctx context.Context, id uint64, wing, room string
 // text or vectors. It is used to archive source diary records after an
 // append-only consolidation pass.
 func (s *Store) SetMetaByIDs(ctx context.Context, ids []uint64, meta map[string]string) error {
+	return s.SetMetaByIDsInCollection(ctx, "", ids, meta)
+}
+
+// SetMetaByIDsInCollection applies lifecycle metadata without touching text or
+// vectors. A non-empty collection overrides the configured default.
+func (s *Store) SetMetaByIDsInCollection(
+	ctx context.Context, collection string, ids []uint64, meta map[string]string,
+) error {
 	if len(ids) == 0 {
 		return nil
+	}
+	if collection == "" {
+		collection = s.collection
 	}
 	payload := map[string]any{}
 	for key, value := range meta {
@@ -756,11 +809,99 @@ func (s *Store) SetMetaByIDs(ctx context.Context, ids []uint64, meta map[string]
 		pointIDs[i] = qdrant.NewIDNum(id)
 	}
 	_, err := s.qc.SetPayload(ctx, &qdrant.SetPayloadPoints{
-		CollectionName: s.collection,
+		CollectionName: collection,
 		Payload:        qdrant.NewValueMap(payload),
 		PointsSelector: qdrant.NewPointsSelector(pointIDs...),
 	})
 	return err
+}
+
+// SensitivePoints scans plaintext payloads locally and returns only ids and
+// non-sensitive metadata for records matching high-confidence credential
+// rules. The text itself never leaves this method.
+func (s *Store) SensitivePoints(
+	ctx context.Context, collection string,
+) ([]SensitivePoint, bool, error) {
+	if collection == "" {
+		collection = s.collection
+	}
+	exists, err := s.qc.CollectionExists(ctx, collection)
+	if err != nil || !exists {
+		return nil, false, err
+	}
+	const pageSize = uint32(256)
+	iterator := s.qc.ScrollAll(ctx, &qdrant.ScrollPoints{
+		CollectionName: collection,
+		Limit:          qdrant.PtrOf(pageSize),
+		WithPayload:    qdrant.NewWithPayloadInclude("text", "wing", "room", "status"),
+	})
+	out := make([]SensitivePoint, 0)
+	for {
+		points, err := iterator.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		for _, point := range points {
+			payload := point.GetPayload()
+			findings := secretguard.Findings(payload["text"].GetStringValue())
+			if len(findings) == 0 {
+				continue
+			}
+			out = append(out, SensitivePoint{
+				ID: point.GetId().GetNum(), Wing: payload["wing"].GetStringValue(),
+				Room: payload["room"].GetStringValue(), Status: payload["status"].GetStringValue(),
+				Findings: findings,
+			})
+		}
+	}
+	return out, false, nil
+}
+
+// ClearedQuarantinePoints returns records quarantined for reason whose text no
+// longer matches the current detector. Callers can restore the previous status
+// without deleting payloads, vectors, or quarantine audit metadata.
+func (s *Store) ClearedQuarantinePoints(
+	ctx context.Context, collection, reason string,
+) ([]ClearedQuarantinePoint, error) {
+	if collection == "" {
+		collection = s.collection
+	}
+	exists, err := s.qc.CollectionExists(ctx, collection)
+	if err != nil || !exists {
+		return nil, err
+	}
+	filter := &qdrant.Filter{Must: []*qdrant.Condition{
+		qdrant.NewMatch("status", StatusQuarantined), qdrant.NewMatch("quarantine_reason", reason),
+	}}
+	iterator := s.qc.ScrollAll(ctx, &qdrant.ScrollPoints{
+		CollectionName: collection,
+		Limit:          qdrant.PtrOf(uint32(256)),
+		Filter:         filter,
+		WithPayload:    qdrant.NewWithPayloadInclude("text", "pre_quarantine_status"),
+	})
+	out := make([]ClearedQuarantinePoint, 0)
+	for {
+		points, nextErr := iterator.Next()
+		if errors.Is(nextErr, io.EOF) {
+			break
+		}
+		if nextErr != nil {
+			return nil, nextErr
+		}
+		for _, point := range points {
+			payload := point.GetPayload()
+			if secretguard.Contains(payload["text"].GetStringValue()) {
+				continue
+			}
+			out = append(out, ClearedQuarantinePoint{
+				ID: point.GetId().GetNum(), PreviousStatus: payload["pre_quarantine_status"].GetStringValue(),
+			})
+		}
+	}
+	return out, nil
 }
 
 // SetMetaByWingRoom updates every record from one imported source. When
@@ -822,7 +963,7 @@ func (s *Store) SetMetaByWingRoomLegacy(
 // never the original observation or event time.
 func (s *Store) TouchActiveMemfiles(ctx context.Context, lastSeenAt int64) error {
 	filter := &qdrant.Filter{Must: []*qdrant.Condition{qdrant.NewMatch("source_kind", "memfile")}}
-	for _, status := range []string{StatusArchived, StatusSuperseded, StatusOrphaned} {
+	for _, status := range []string{StatusArchived, StatusSuperseded, StatusOrphaned, StatusQuarantined} {
 		filter.MustNot = append(filter.MustNot, qdrant.NewMatch("status", status))
 	}
 	return s.setMetaByFilter(ctx, filter, map[string]string{
@@ -860,6 +1001,7 @@ func (s *Store) MemfileSourceStates(ctx context.Context) (map[string]MemfileSour
 				qdrant.NewMatch("status", StatusArchived),
 				qdrant.NewMatch("status", StatusSuperseded),
 				qdrant.NewMatch("status", StatusOrphaned),
+				qdrant.NewMatch("status", StatusQuarantined),
 			},
 		},
 		Limit:       qdrant.PtrOf(uint32(200_000)),
@@ -906,7 +1048,7 @@ func (s *Store) WingRoomPairs(ctx context.Context) (map[[2]string]int, error) {
 	for _, p := range res {
 		pl := p.GetPayload()
 		switch pl["status"].GetStringValue() {
-		case StatusArchived, StatusSuperseded, StatusOrphaned:
+		case StatusArchived, StatusSuperseded, StatusOrphaned, StatusQuarantined:
 			continue
 		}
 		out[[2]string{pl["wing"].GetStringValue(), pl["room"].GetStringValue()}]++

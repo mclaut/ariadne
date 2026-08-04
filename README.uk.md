@@ -24,7 +24,58 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## Нове у v0.8.1
+## Нове у v0.8.4
+
+- **Системне вікно підтвердження.** Новий cross-wing або protected-resource
+  request одразу відкриває системне warning-вікно, а не покладається лише на
+  tray та notification. Воно показує обмежені scope/purpose і кнопки
+  **Схвалити**, **Відхилити**, **Пізніше**. Закриття, Escape або «Пізніше» не
+  надає жодного доступу; pending request повторно нагадується за хвилину. Черга
+  в tray лишається резервним способом і audit view.
+- На macOS використовується нативний warning dialog, на Windows — системний
+  popup, на Linux — доступний KDialog/Zenity. Append-only decision з’являється
+  лише після явного Approve/Deny.
+
+## Раніше у v0.8.3
+
+- **Людське підтвердження міжпроєктної пам’яті.** `all_wings: true` більше не
+  запускає пошук одразу: MCP створює pending request, а tray показує active
+  wing, purpose та обмежений query. Лише натискання Approve видає 15-хвилинний
+  grant, прив’язаний до MCP session, active wing і collection. Після цього
+  клієнт повторює запит з `approval_id`.
+- **Менша вага інших wings.** Після дозволу зовнішні результати отримують вагу
+  0.70 і зазвичай займають не більше двох із п’яти позицій. Відповідь явно
+  позначає local/cross-wing origin. Вага застосовується лише після permission
+  gate і не замінює його.
+- **Окремий одноразовий дозвіл для credentials.** `credential_access` створює
+  інший tray request із точними source wing, target wing, назвою/шляхом ресурсу
+  та purpose. Grant діє п’ять хвилин і споживається один раз. Ariadne не читає й
+  не повертає значення credential.
+- **Append-only аудит дозволів.** Request, tray decision та consumption
+  зберігаються окремими незмінними records. `ariadnectl approvals` показує
+  pending requests, але не дозволяє схвалити їх через CLI.
+
+## Раніше у v0.8.2
+
+- **Ізоляція проєктів за замовчуванням.** Семантичний `memory_recall` тепер
+  вимагає `wing`; пошук по всіх проєктах можливий лише з явним
+  `all_wings: true` для запитаного користувачем аудиту. Hooks визначають
+  найближчий корінь репозиторію або стабільний slug із `.ariadne-wing`, тому
+  вкладена робоча директорія не створює випадково інший namespace.
+- **Файлова межа для агентів.** Оновлений спільний skill Codex і Claude Code
+  забороняє шукати або позичати `.env`, ключі, IP, endpoints чи конфігурацію з
+  сусіднього проєкту лише тому, що той доступний для читання.
+- **Детермінований захист секретів.** MCP/store відхиляє приватні ключі,
+  credential URI, відомі формати токенів та явні присвоєння секретів. Import і
+  capture редагують значення до запису, consolidation повторно перевіряє
+  результат, а normal recall не повертає quarantined-записи.
+- **Append-only карантин.** `ariadnectl quarantine-secrets` за замовчуванням
+  показує лише безпечний dry-run. `--apply` змінює metadata, але зберігає
+  оригінальний payload, vector та попередній status для аудиту й відновлення;
+  `--apply --reconcile` повертає попередній status після уточнення detector,
+  не стираючи історію карантину.
+
+## Раніше у v0.8.1
 
 - **Один власник Qdrant.** Status виявляє дубльовані macOS launchd jobs, а
   `ariadnectl` та installer нормалізують керування до одного канонічного job без
@@ -93,14 +144,16 @@ Ariadne замінює вбудовані векторні бази, які па
 
 ## Як це працює
 
-1. MCP-клієнт викликає `memory_save`, `memory_recall`, `memory_move` або
-   `memory_delete`.
+1. MCP-клієнт викликає `memory_save`, `memory_recall`, `credential_access`,
+   `memory_move` або `memory_delete`.
 2. Ollama з bge-m3 створює багатомовний dense-вектор; BM25 зберігає точні терміни.
 3. Qdrant об’єднує dense і sparse результати через RRF; обмежений другий прохід
    враховує явний часовий намір, provenance та завеликий контекст.
 
-Звичайний recall використовує кураторську колекцію `ariadne`. Сирі архіви сесій
-лежать окремо в `sessions` і шукаються лише за явним запитом.
+Звичайний recall використовує кураторську колекцію `ariadne` і завжди вимагає
+`wing`. Сирі архіви сесій лежать окремо в `sessions` і шукаються лише за явним
+запитом із `collection: "sessions"` та `wing: "sessions"`. `all_wings: true`
+створює окремий tray request і не виконує пошук до людського Approve.
 
 ## Швидке встановлення
 
@@ -148,6 +201,36 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 }
 ```
 
+Міжпроєктний пошук спочатку створює tray request:
+
+```json
+{
+  "query": "як інші проєкти вирішували повторні спроби",
+  "wing": "my-project",
+  "all_wings": true,
+  "purpose": "знайти придатний для повторного використання підхід"
+}
+```
+
+Після Approve у tray повторіть ті самі аргументи з отриманим
+`"approval_id": "..."`. Grant діє 15 хвилин лише для цієї MCP session, active
+wing і collection.
+
+Окреме підтвердження credential:
+
+```json
+{
+  "source_wing": "service-a",
+  "target_wing": "service-b",
+  "resource": "deployment credential file",
+  "purpose": "одноразовий production deployment"
+}
+```
+
+Перший `credential_access` лише створить tray request. Після Approve повторний
+виклик з `approval_id` споживає grant один раз; значення credential через
+Ariadne не передається.
+
 Пошук в архівній історії:
 
 ```json
@@ -174,6 +257,7 @@ ariadnectl metrics
 ariadnectl backup
 ariadnectl export
 ariadnectl consolidate --before 24h --dry-run
+ariadnectl quarantine-secrets --collections ariadne,sessions
 go run ./cmd/eval -cases evaluation/coding-memory.json
 ```
 
@@ -193,6 +277,9 @@ capture і consolidate додають provenance автоматично.
 
 - Qdrant працює лише на loopback і не має автентифікації за замовчуванням.
 - Пам’ять зберігається у plaintext payload, тому секрети записувати не можна.
+- Нові записи з детерміновано виявленими credentials відхиляються; import і
+  hooks редагують значення, а старі збіги можна append-only ізолювати командою
+  `ariadnectl quarantine-secrets --apply` після перевірки dry-run.
 - Типовий стек використовує локальні Qdrant, Ollama та bge-m3.
 - Віддалене створення session summary заблоковане без явного opt-in.
 

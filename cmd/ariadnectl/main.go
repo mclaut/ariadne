@@ -11,6 +11,7 @@ package main
 
 import (
 	"ariadne/internal/activity"
+	"ariadne/internal/approval"
 	"ariadne/internal/i18n"
 	"ariadne/internal/metrics"
 	"ariadne/internal/version"
@@ -72,6 +73,7 @@ type status struct {
 	RuntimeMB     int64                     `json:"runtime_mb"`
 	FreeGB        int64                     `json:"free_gb"`
 	Issues        []string                  `json:"issues"`
+	PendingAccess int                       `json:"pending_access_requests"`
 }
 
 func main() {
@@ -106,11 +108,15 @@ func main() {
 		os.Exit(maintenanceCmd(os.Args[2:]))
 	case "requeue-empty":
 		os.Exit(requeueEmptyCmd(os.Args[2:]))
+	case "quarantine-secrets":
+		os.Exit(quarantineSecretsCmd(os.Args[2:]))
+	case "approvals":
+		os.Exit(approvalsCmd(hasFlag("-json")))
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ariadnectl {version | status [-json] | metrics [-json] | "+
 			"start | stop | restart | backup | restore <file> | export [file] | "+
 			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
-			"requeue-empty [--dry-run]}")
+			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | approvals [-json]}")
 		os.Exit(2)
 	}
 }
@@ -134,6 +140,9 @@ func arg(i int) string {
 
 func gather() status {
 	s := status{TS: time.Now().Format("2006-01-02T15:04:05-07:00")}
+	if pending, err := approval.New("").Pending(); err == nil {
+		s.PendingAccess = len(pending)
+	}
 	s.QdrantAgents = loadedAriadneQdrantAgents()
 
 	// Qdrant

@@ -11,6 +11,7 @@ package main
 
 import (
 	"ariadne/internal/activity"
+	"ariadne/internal/secretguard"
 	"ariadne/internal/store"
 	"bufio"
 	"context"
@@ -87,21 +88,18 @@ func main() {
 
 	jobs := make(chan doc, 1024)
 	batches := make(chan []store.SaveItem, *workers*2)
-	var done, failed atomic.Int64
+	var done, failed, redacted atomic.Int64
 	start := time.Now()
 
 	// batcher: group docs into fixed-size batches, one round trip each.
 	go func() {
 		buf := make([]store.SaveItem, 0, *batchSize)
 		for d := range jobs {
-			meta := map[string]string{"wing": d.wing, "room": d.room, "provenance": "import"}
-			for key, value := range d.meta {
-				meta[key] = value
+			item, wasRedacted := prepareSaveItem(d)
+			if wasRedacted {
+				redacted.Add(1)
 			}
-			buf = append(buf, store.SaveItem{
-				Text: store.SanitizeUTF8(d.text),
-				Meta: meta,
-			})
+			buf = append(buf, item)
 			if len(buf) == *batchSize {
 				batches <- buf
 				buf = make([]store.SaveItem, 0, *batchSize)
@@ -167,26 +165,43 @@ func main() {
 		if failed.Load() > 0 {
 			fmt.Fprintln(os.Stderr, "sync: import failures detected; existing revisions left active")
 			_ = activity.Append(activity.Event{Operation: "memfile_sync", Status: "failed", Counters: map[string]int64{
-				"embedded": done.Load(), "failed": failed.Load(), "unchanged": int64(syncPlan.skipped),
+				"embedded": done.Load(), "failed": failed.Load(), "redacted": redacted.Load(),
+				"unchanged": int64(syncPlan.skipped),
 			}})
 		} else if err := finalizeMemfileSync(ctx, st, syncPlan, time.Now()); err != nil {
 			_ = activity.Append(activity.Event{Operation: "memfile_sync", Status: "failed", Message: err.Error()})
 			fatal("sync finalize:", err)
 		} else {
 			_ = activity.Append(activity.Event{Operation: "memfile_sync", Status: "complete", Counters: map[string]int64{
-				"embedded": done.Load(), "failed": failed.Load(), "unchanged": int64(syncPlan.skipped),
-				"sources": int64(len(syncPlan.sources)),
+				"embedded": done.Load(), "failed": failed.Load(), "redacted": redacted.Load(),
+				"unchanged": int64(syncPlan.skipped),
+				"sources":   int64(len(syncPlan.sources)),
 			}})
 		}
 		fmt.Printf("  unchanged=%d embedded=%d\n", syncPlan.skipped, feed)
 	}
 
-	fmt.Printf("\n=== IMPORT DONE ===\n  fed=%d saved=%d failed=%d\n  wall=%s (%.0f docs/s)\n",
-		feed, done.Load(), failed.Load(), time.Since(start).Round(time.Second),
+	fmt.Printf("\n=== IMPORT DONE ===\n  fed=%d saved=%d failed=%d redacted=%d\n  wall=%s (%.0f docs/s)\n",
+		feed, done.Load(), failed.Load(), redacted.Load(), time.Since(start).Round(time.Second),
 		float64(done.Load())/time.Since(start).Seconds())
 	if importResultCode(failed.Load()) != 0 {
 		os.Exit(1)
 	}
+}
+
+func prepareSaveItem(d doc) (store.SaveItem, bool) {
+	meta := map[string]string{"wing": d.wing, "room": d.room, "provenance": "import"}
+	for key, value := range d.meta {
+		meta[key] = value
+	}
+	text := store.SanitizeUTF8(d.text)
+	findings := secretguard.Findings(text)
+	if len(findings) == 0 {
+		return store.SaveItem{Text: text, Meta: meta}, false
+	}
+	meta["secret_redacted"] = "true"
+	meta["redaction_rules"] = strings.Join(findings, ",")
+	return store.SaveItem{Text: secretguard.Redact(text), Meta: meta}, true
 }
 
 func importResultCode(failed int64) int {
