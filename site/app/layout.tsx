@@ -4,7 +4,7 @@ import "./globals.css";
 const description =
   "Ariadne is local-first multilingual memory for Codex, Claude Code, and MCP clients, with project isolation and human-approved cross-project access.";
 const siteUrl = "https://mclaut.github.io/ariadne";
-const socialImage = `${siteUrl}/og.png`;
+const socialImage = `${siteUrl}/og-v0.8.5.png`;
 const favicon = `${siteUrl}/favicon.svg`;
 
 export const metadata: Metadata = {
