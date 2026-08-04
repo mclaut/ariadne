@@ -26,7 +26,17 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.4
+## What's New in v0.8.5
+
+**The macOS approval warning now comes to the foreground.** The native dialog
+activates before it is displayed, so an access request cannot sit unnoticed
+behind the active coding window. The decision path remains fail-closed and
+append-only: activation changes visibility, never authority.
+
+**Hugging Face publishing is valid again.** The Space metadata now stays within
+the Hub's 60-character `short_description` limit.
+
+## Previously in v0.8.4
 
 **Approval requests now interrupt visibly.** A new cross-wing or protected-
 resource request opens a system warning dialog immediately instead of relying
@@ -657,7 +667,7 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.4 — current release. System approval warnings, human-approved cross-wing recall, origin weighting,
+v0.8.5 — current release. Foreground macOS approval warnings, human-approved cross-wing recall, origin weighting,
 one-time credential grants, append-only approval audit, default-deny project recall, deterministic credential
 blocking/redaction, append-only secret quarantine, stable project markers,
 runtime ownership diagnostics, repair-aware maintenance,
