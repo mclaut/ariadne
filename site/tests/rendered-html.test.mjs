@@ -57,7 +57,7 @@ test("keeps install, hosting, and social assets in the validated source", async 
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
-    access(new URL("../public/og.png", import.meta.url)),
+    access(new URL("../public/og-v0.8.5.png", import.meta.url)),
   ]);
 
   assert.match(page, /install\.ps1/);
@@ -66,7 +66,7 @@ test("keeps install, hosting, and social assets in the validated source", async 
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview/);
   assert.match(layout, /summary_large_image/);
   assert.match(layout, /1200/);
-  assert.match(layout, /og\.png/);
+  assert.match(layout, /og-v0\.8\.5\.png/);
   assert.equal(og, undefined);
 
   const config = JSON.parse(hosting);
