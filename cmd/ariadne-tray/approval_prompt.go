@@ -15,6 +15,26 @@ import (
 
 const approvalPromptRetryEvery = time.Minute
 
+const darwinApprovalScript = `on run argv
+set dialogTitle to item 1 of argv
+set dialogBody to item 2 of argv
+set approveLabel to item 3 of argv
+set denyLabel to item 4 of argv
+set laterLabel to item 5 of argv
+tell current application to activate
+try
+  set answer to display dialog dialogBody ¬
+    with title dialogTitle ¬
+    buttons {laterLabel, denyLabel, approveLabel} ¬
+    default button laterLabel ¬
+    cancel button laterLabel ¬
+    with icon caution
+  return button returned of answer
+on error number -128
+  return laterLabel
+end try
+end run`
+
 var errApprovalPromptUnavailable = errors.New("system approval prompt is unavailable")
 
 type approvalPromptAction uint8
@@ -90,26 +110,8 @@ func approvalPromptBody(activeLang i18n.Lang, request approval.Request) string {
 func runDarwinApprovalPrompt(
 	ctx context.Context, title, body, approve, deny, later string,
 ) (approvalPromptAction, error) {
-	const script = `on run argv
-set dialogTitle to item 1 of argv
-set dialogBody to item 2 of argv
-set approveLabel to item 3 of argv
-set denyLabel to item 4 of argv
-set laterLabel to item 5 of argv
-try
-  set answer to display dialog dialogBody ¬
-    with title dialogTitle ¬
-    buttons {laterLabel, denyLabel, approveLabel} ¬
-    default button laterLabel ¬
-    cancel button laterLabel ¬
-    with icon caution
-  return button returned of answer
-on error number -128
-  return laterLabel
-end try
-end run`
 	out, err := exec.CommandContext( //nolint:gosec // fixed AppleScript; all user-facing values are isolated argv items
-		ctx, "osascript", "-e", script, "--", title, body, approve, deny, later,
+		ctx, "osascript", "-e", darwinApprovalScript, "--", title, body, approve, deny, later,
 	).Output()
 	if err != nil {
 		return approvalPromptLater, fmt.Errorf("macOS approval prompt: %w", err)

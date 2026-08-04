@@ -61,6 +61,14 @@ func TestParseApprovalPromptLabelFailsClosed(t *testing.T) {
 	}
 }
 
+func TestDarwinApprovalPromptActivatesBeforeDisplaying(t *testing.T) {
+	activate := strings.Index(darwinApprovalScript, "tell current application to activate")
+	display := strings.Index(darwinApprovalScript, "display dialog")
+	if activate < 0 || display < 0 || activate > display {
+		t.Fatalf("darwin prompt must activate before display: %q", darwinApprovalScript)
+	}
+}
+
 func TestApprovalKindTitleIsLocalized(t *testing.T) {
 	if got := approvalKindTitle(i18n.UK, approval.KindCrossWing); got != "Міжпроєктна пам’ять" {
 		t.Fatalf("cross-wing title = %q", got)

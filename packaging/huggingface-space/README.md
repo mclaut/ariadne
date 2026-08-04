@@ -9,7 +9,7 @@ fullWidth: true
 header: mini
 pinned: true
 license: mit
-short_description: Local-first agent memory with human-approved project boundaries.
+short_description: Local-first memory with human-approved boundaries.
 models:
   - BAAI/bge-m3
 tags:
@@ -35,14 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.4 makes project boundaries visible. Cross-project memory and
-protected-resource requests open a system warning with Approve, Deny, and a
-safe-default Later action; closing it grants nothing. Cross-wing grants are
-scoped to the MCP session and collection, external results receive a 0.70
-origin weight, and credentials require a separate five-minute grant consumed
-once. Project recall is default-deny, detected secrets are blocked or redacted,
-and approval/quarantine history remains append-only. The credential handshake
-is audited agent policy, not an operating-system credential broker.
+Version 0.8.5 brings the macOS system warning to the foreground before asking
+for a decision and keeps the Hugging Face metadata within Hub limits. It builds
+on 0.8.4: cross-project memory and protected-resource requests use explicit
+Approve, Deny, and safe-default Later actions; grants are scoped, external
+results receive a 0.70 origin weight, credentials need a separate one-shot
+approval, and all approval/quarantine history remains append-only.
 
 ## Links
 

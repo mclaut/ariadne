@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.4",
+  softwareVersion: "0.8.5",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.4</a>
+          <a href="#new">New in 0.8.5</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.4 makes memory boundaries visible
+            v0.8.5 brings the warning to the front
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,8 +186,8 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.4</span>
-            <h2>Memory boundaries you can see.</h2>
+            <span className="eyebrow">New in v0.8.5</span>
+            <h2>A warning that cannot hide behind your work.</h2>
             <p>
               Project isolation is the default. Crossing a boundary requires a
               visible, scoped decision from a human.
@@ -204,10 +204,10 @@ export default function Home() {
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>System approval window</h3>
+              <h3>Foreground approval window</h3>
               <p>
-                Cross-wing requests open a warning with Approve, Deny, and a
-                safe-default Later. Closing it grants nothing.
+                On macOS the native warning activates before display. Approve,
+                Deny, and safe-default Later remain explicit human choices.
               </p>
             </article>
             <article className="new-item accent-coral">
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.4"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.5"
               target="_blank"
               rel="noreferrer"
             >
