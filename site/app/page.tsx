@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.1",
+  softwareVersion: "0.8.4",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.1</a>
+          <a href="#new">New in 0.8.4</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.1 makes runtime health truthful
+            v0.8.4 makes memory boundaries visible
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -157,7 +157,7 @@ export default function Home() {
           </p>
           <p className="hero-detail">
             Go, Qdrant, Ollama, and bge-m3. Your context stays on your machine.
-            No cloud account, no API key, no embedded database lockups.
+            No cloud account, no API key, no silent cross-project access.
           </p>
           <div className="hero-actions">
             <a className="button button-primary" href="#install">
@@ -186,45 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.1</span>
-            <h2>Runtime health that tells the truth.</h2>
+            <span className="eyebrow">New in v0.8.4</span>
+            <h2>Memory boundaries you can see.</h2>
             <p>
-              One service owner, repair-aware maintenance, and full-stack
-              diagnostics keep local memory observable and dependable.
+              Project isolation is the default. Crossing a boundary requires a
+              visible, scoped decision from a human.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <Check aria-hidden="true" />
-              <h3>One Qdrant owner</h3>
+              <h3>Project-scoped by default</h3>
               <p>
-                Status catches duplicate launchd jobs, while controls and the
-                installer normalize ownership without deleting history.
+                Recall and saves require an active wing. A readable sibling
+                repository is not permission to reuse its memory or config.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>Stronger, atomic curation</h3>
+              <h3>System approval window</h3>
               <p>
-                Capture stays light while an independent 14B curator cleared
-                11/11 test batches. Unsafe unchanged work is deferred without
-                turning a healthy tray orange.
+                Cross-wing requests open a warning with Approve, Deny, and a
+                safe-default Later. Closing it grants nothing.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Resilient tray</h3>
+              <h3>Credentials stay separate</h3>
               <p>
-                Abnormal exits restart automatically, clean Quit still works,
-                and lifecycle reasons remain visible in the tray log.
+                Protected resources need a second, exact five-minute grant.
+                It is consumed once and the credential value is never stored.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Full-stack doctor</h3>
+              <h3>Local context stays first</h3>
               <p>
-                Active version, MCP paths, launchd ownership, maintenance,
-                attribution, storage, and runaway logs share one verdict.
+                Approved external memories carry a 0.70 origin weight and are
+                labeled clearly. Local results retain ranking priority.
               </p>
             </article>
           </div>
@@ -247,7 +246,7 @@ export default function Home() {
               <Network aria-hidden="true" />
               <h3>MCP clients</h3>
               <p>Codex, Claude Code, and any stdio-compatible client.</p>
-              <code>save / recall / delete / move</code>
+              <code>save / recall / delete / move / approve</code>
             </li>
             <li>
               <div className="step-number">02</div>
@@ -360,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.1"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.4"
               target="_blank"
               rel="noreferrer"
             >
@@ -381,7 +380,7 @@ export default function Home() {
           <div className="security-points">
             <p><HardDrive size={18} /> Runtime and data live under your user home.</p>
             <p><Server size={18} /> Qdrant binds to 127.0.0.1 and has no public port.</p>
-            <p><ShieldCheck size={18} /> Remote session summaries require explicit opt-in.</p>
+            <p><ShieldCheck size={18} /> Cross-project access requires a visible human decision.</p>
           </div>
         </div>
       </section>
@@ -400,6 +399,10 @@ export default function Home() {
             <details>
               <summary>Can several Codex sessions use it at once?</summary>
               <p>Yes. Qdrant is a server and handles concurrent access natively.</p>
+            </details>
+            <details>
+              <summary>Can an agent silently search another project?</summary>
+              <p>No. Cross-wing recall opens a scoped system approval request first.</p>
             </details>
             <details>
               <summary>Does English recall find Ukrainian notes?</summary>

@@ -60,3 +60,40 @@ func TestTemporalQueryRecognizesSupportedLanguages(t *testing.T) {
 		t.Fatal("non-temporal query classified as temporal")
 	}
 }
+
+func TestRerankCrossWingPenalizesAndBoundsExternalResults(t *testing.T) {
+	got := RerankCrossWing([]Result{
+		{ID: 1, Wing: "home", Score: 0.90},
+		{ID: 2, Wing: "home", Score: 0.80},
+		{ID: 3, Wing: "home", Score: 0.70},
+		{ID: 4, Wing: "other-a", Score: 0.95},
+		{ID: 5, Wing: "other-b", Score: 0.85},
+		{ID: 6, Wing: "other-c", Score: 0.75},
+	}, "home", 5)
+	if len(got) != 5 {
+		t.Fatalf("results = %#v", got)
+	}
+	remote := 0
+	for _, result := range got {
+		if result.Wing != "home" {
+			remote++
+			if result.Score > 0.95*CrossWingWeight+0.0001 {
+				t.Fatalf("remote score was not weighted: %#v", result)
+			}
+		}
+	}
+	if remote != 2 {
+		t.Fatalf("remote result count = %d, results=%#v", remote, got)
+	}
+}
+
+func TestRerankCrossWingFillsWhenHomeHasNoCandidates(t *testing.T) {
+	got := RerankCrossWing([]Result{
+		{ID: 1, Wing: "other-a", Score: 0.9},
+		{ID: 2, Wing: "other-b", Score: 0.8},
+		{ID: 3, Wing: "other-c", Score: 0.7},
+	}, "home", 3)
+	if len(got) != 3 {
+		t.Fatalf("results = %#v", got)
+	}
+}

@@ -1,10 +1,29 @@
 package main
 
 import (
+	"ariadne/internal/approval"
 	"ariadne/internal/metrics"
 	"ariadne/internal/store"
+	"context"
 	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
 )
+
+func TestSemanticRecallScopeIsDefaultDeny(t *testing.T) {
+	if _, err := semanticRecallScope("", false); err == nil {
+		t.Fatal("unscoped semantic recall was accepted")
+	}
+	if got, err := semanticRecallScope(" ariadne ", false); err != nil || got != "ariadne" {
+		t.Fatalf("scoped recall = %q, %v", got, err)
+	}
+	if _, err := semanticRecallScope("", true); err == nil {
+		t.Fatal("all-wings recall without a home wing was accepted")
+	}
+	if got, err := semanticRecallScope("ariadne", true); err != nil || got != "" {
+		t.Fatalf("approved all-wings scope = %q, %v", got, err)
+	}
+}
 
 func TestFormatMoveResultShowsKeptFields(t *testing.T) {
 	got := formatMoveResult(42, 84, "ariadne", "")
@@ -63,5 +82,60 @@ func TestManualMemoryType(t *testing.T) {
 		if got := manualMemoryType(room); got != want {
 			t.Fatalf("manualMemoryType(%q) = %q, want %q", room, got, want)
 		}
+	}
+}
+
+func TestCrossWingApprovalHelperRequiresTrayDecision(t *testing.T) {
+	manager := approval.New(t.TempDir())
+	result := requireCrossWingApproval(
+		manager, "session", "ariadne", "query", "compare patterns", "", "", "",
+	)
+	if result == nil || !result.IsError {
+		t.Fatalf("initial result = %#v", result)
+	}
+	pending, err := manager.Pending()
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("pending = %#v err=%v", pending, err)
+	}
+	if _, err := manager.Decide(pending[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if result := requireCrossWingApproval(manager, "session", "ariadne", "new query", "same task", "", "", pending[0].ID); result != nil {
+		t.Fatalf("approved result = %#v", result)
+	}
+	result = requireCrossWingApproval(
+		manager, "session", "ariadne", "query", "purpose", "sessions", "", pending[0].ID,
+	)
+	if result == nil || !result.IsError {
+		t.Fatalf("cross-collection result = %#v", result)
+	}
+}
+
+func TestCredentialAccessHandlerConsumesOneTimeApproval(t *testing.T) {
+	manager := approval.New(t.TempDir())
+	handler := credentialAccessHandler(manager, "session")
+	arguments := map[string]any{
+		"source_wing": "service-a", "target_wing": "service-b",
+		"resource": "deployment credential file", "purpose": "one deployment",
+	}
+	result, err := handler(context.Background(), mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: arguments}})
+	if err != nil || result == nil || !result.IsError {
+		t.Fatalf("initial result = %#v err=%v", result, err)
+	}
+	pending, err := manager.Pending()
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("pending = %#v err=%v", pending, err)
+	}
+	if _, err := manager.Decide(pending[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	arguments["approval_id"] = pending[0].ID
+	result, err = handler(context.Background(), mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: arguments}})
+	if err != nil || result == nil || result.IsError {
+		t.Fatalf("approved result = %#v err=%v", result, err)
+	}
+	result, err = handler(context.Background(), mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: arguments}})
+	if err != nil || result == nil || !result.IsError {
+		t.Fatalf("reused result = %#v err=%v", result, err)
 	}
 }

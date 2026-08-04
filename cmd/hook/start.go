@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -42,14 +41,18 @@ func newStore() (*store.Store, error) {
 }
 
 // sessionStart injects the project's top memories as additionalContext.
-// The wing is the cwd basename; a project with no memories yields NO output —
+// The wing comes from the nearest project root (or its .ariadne-wing marker);
+// a project with no memories yields NO output —
 // sessions outside known projects start completely clean.
 func sessionStart() {
 	in, ok := readHookInput()
 	if !ok || in.CWD == "" || in.Source == "compact" {
 		return // after compact the summary already carries the context
 	}
-	wing := filepath.Base(in.CWD)
+	wing := projectWing(in.CWD)
+	if wing == "" {
+		return
+	}
 
 	st, err := newStore()
 	if err != nil {

@@ -26,7 +26,61 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.1
+## What's New in v0.8.4
+
+**Approval requests now interrupt visibly.** A new cross-wing or protected-
+resource request opens a system warning dialog immediately instead of relying
+on the tray badge and desktop notification alone. The dialog shows the bounded
+scope and purpose with **Approve**, **Deny**, and a safe-default **Later** action.
+Closing it, pressing Escape, or choosing Later grants nothing; a pending request
+is shown again after one minute. The tray queue remains available as a fallback
+and audit view.
+
+The prompt uses the native macOS warning dialog, Windows system popup, or an
+available KDialog/Zenity provider on Linux. Only an explicit Approve/Deny writes
+the append-only decision record.
+
+## Previously in v0.8.3
+
+**Cross-project memory with a real human gate.** `all_wings: true` now creates a
+pending request instead of searching. The Ariadne tray displays its active
+wing, purpose, and bounded query; only an Approve click issues a 15-minute grant
+scoped to that MCP client session, active wing, and collection. The client then
+retries with `approval_id`. Exact-ID cross-wing recall follows the same path.
+
+**Local context stays dominant.** After approval, external candidates receive a
+0.70 origin weight and normally occupy at most two of five results. Responses
+label local versus cross-wing origins and disclose the applied weight. The
+weight is applied after authorization and is never treated as permission.
+
+**Credentials require a second, one-time approval.** `credential_access`
+creates an independent tray request for one exact source wing, target wing,
+credential name/path, and purpose. Approval expires after five minutes and is
+consumed once. Ariadne never reads or returns the value; requests, decisions,
+and consumptions remain as separate append-only audit records.
+
+## Previously in v0.8.2
+
+**Project isolation is now default-deny.** Semantic `memory_recall` requires a
+project `wing`; searching every project needs the explicit `all_wings: true`
+opt-in intended for a user-requested cross-project audit. Session hooks resolve
+the nearest repository root and may use a stable `.ariadne-wing` marker, so a
+nested working directory cannot silently become a new namespace. The shared
+Codex and Claude Code skill also treats the active workspace as the filesystem
+boundary: a readable sibling project is not permission to borrow its `.env`,
+credentials, endpoints, or configuration.
+
+**Credential material is blocked and quarantinable.** MCP saves and the store
+reject high-confidence private keys, credential URIs, known token formats, and
+explicit secret assignments. Import and hook capture redact detected values,
+consolidation validates output again, and recall excludes quarantined records
+with defensive redaction on exact-ID output. `ariadnectl quarantine-secrets`
+performs a metadata-only dry-run by default; `--apply` preserves the original
+payload, vector, and previous status while removing the record from normal
+recall. `--apply --reconcile` can restore the previous status after detector
+refinement without erasing the quarantine audit trail.
+
+## Previously in v0.8.1
 
 **One service owner, visible health.** Ariadne detects duplicate macOS Qdrant
 jobs before they can hide behind a green HTTP health check. `ariadnectl`
@@ -223,8 +277,9 @@ append-only outcomes live in
   computes IDF server-side) fused with RRF, followed by a bounded historical-
   quality rerank. Exact terms/codes/names rank sharply; explicit temporal queries
   prefer the correct dated event without blindly decaying durable decisions.
-- **Scoped recall** — narrow searches by project (`wing`) and category (`room`),
-  including `reference` for releases, deployments, audits, and verified reports.
+- **Default-deny scoped recall** — semantic searches require a project (`wing`)
+  and may be narrowed further by category (`room`). Cross-project recall needs
+  an explicit purpose plus a human-approved tray request.
 - **Native** — Qdrant binary + Ollama on Windows, macOS, and Linux; supported
   NVIDIA/AMD acceleration, Metal on Apple Silicon, and a CPU fallback.
 
@@ -232,7 +287,7 @@ append-only outcomes live in
 
 | Path | What |
 |---|---|
-| `cmd/ariadne` | MCP server (stdio). Tools: `memory_save`, `memory_recall`, `memory_delete`, `memory_move`. |
+| `cmd/ariadne` | MCP server (stdio). Tools: `memory_save`, `memory_recall`, `credential_access`, `memory_delete`, `memory_move`. |
 | `cmd/import` | Backfill from a chromadb sqlite, markdown memory files or JSONL (batched embeds). |
 | `cmd/hook` | Claude Code session hooks (`ariadne-hook`): SessionStart auto-recall, SessionEnd auto-capture. |
 | `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. Windows uses `install.ps1`. |
@@ -240,7 +295,7 @@ append-only outcomes live in
 | `cmd/eval` | Read-only deterministic coding-memory ranking regression runner. |
 | `internal/store` | Storage core: embed (Ollama), BM25 sparse, Qdrant hybrid. |
 | `cmd/ariadne-tray` | Cross-platform tray monitor (macOS/Linux/Windows) — pure-Go, localized, over the `ariadnectl` core. |
-| `skills/ariadne` | Claude Code skill: recall/save discipline + `doctor.sh`/`recall.sh`. |
+| `skills/ariadne` | Codex and Claude Code skill: scoped recall/save discipline + `doctor.sh`/`recall.sh`. |
 | `deploy/` | LaunchAgent / systemd templates: Qdrant service, daily memfiles-sync, tray autostart. |
 | `poc/` | Standalone experiments that validated the stack. |
 
@@ -431,9 +486,9 @@ Config via env (defaults in brackets): `ARIADNE_QDRANT_HOST` [localhost],
 `ARIADNE_QDRANT_PORT` [6334], `ARIADNE_OLLAMA` [http://localhost:11434],
 `ARIADNE_MODEL` [bge-m3], `ARIADNE_COLLECTION` [ariadne].
 
-## Claude Code skill
+## Codex and Claude Code skill
 
-`skills/ariadne/` teaches Claude Code when to recall, what (not) to save, and
+`skills/ariadne/` teaches agents when to recall, what (not) to save, and
 how to operate the stack; `tools/doctor.sh` checks the whole chain
 (binaries → services → model → collection → binding → MCP registration) and
 `tools/recall.sh "query"` does CLI recall without MCP. Install (a real copy —
@@ -441,6 +496,7 @@ symlinked skills are not discovered at session start):
 
 ```bash
 cp -R skills/ariadne ~/.claude/skills/ariadne
+cp -R skills/ariadne ~/.codex/skills/ariadne
 ```
 
 ## Session hooks — auto-recall & auto-capture
@@ -449,7 +505,8 @@ The installer registers two Claude Code lifecycle hooks (`cmd/hook`, binary
 `ariadne-hook`; skip with `-skip-hooks`):
 
 - **SessionStart → auto-recall.** When a session starts in a project that HAS
-  memories (wing = the directory name), the top hits are injected as context —
+  memories (wing = the nearest project root or its `.ariadne-wing` marker), the
+  top hits are injected as context —
   Claude "remembers" the project before your first message. Projects without
   memories start completely clean; failures are silent and never block the
   session.
@@ -600,7 +657,10 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.1 — working. Runtime ownership diagnostics, repair-aware maintenance,
+v0.8.4 — current release. System approval warnings, human-approved cross-wing recall, origin weighting,
+one-time credential grants, append-only approval audit, default-deny project recall, deterministic credential
+blocking/redaction, append-only secret quarantine, stable project markers,
+runtime ownership diagnostics, repair-aware maintenance,
 tray lifecycle logging, truthful full-stack doctor checks, exact ID retrieval,
 room-scoped hybrid recall, append-only
 source history, conservative temporal ranking, scoped identities, incremental

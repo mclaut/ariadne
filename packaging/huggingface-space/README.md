@@ -9,7 +9,7 @@ fullWidth: true
 header: mini
 pinned: true
 license: mit
-short_description: Local-first multilingual memory for AI agents and MCP.
+short_description: Local-first agent memory with human-approved project boundaries.
 models:
   - BAAI/bge-m3
 tags:
@@ -35,12 +35,14 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.1 adds single-owner Qdrant service health, repair-aware diary
-consolidation, deferred deterministic maintenance work, resilient tray
-lifecycle logging, and full-stack doctor diagnostics. Capture and consolidation
-can use different local models: in a fixed 11-batch validation, qwen2.5:7b
-deferred five batches while qwen2.5:14b cleared all eleven. The 14B curator is
-recommended when local memory permits.
+Version 0.8.4 makes project boundaries visible. Cross-project memory and
+protected-resource requests open a system warning with Approve, Deny, and a
+safe-default Later action; closing it grants nothing. Cross-wing grants are
+scoped to the MCP session and collection, external results receive a 0.70
+origin weight, and credentials require a separate five-minute grant consumed
+once. Project recall is default-deny, detected secrets are blocked or redacted,
+and approval/quarantine history remains append-only. The credential handshake
+is audited agent policy, not an operating-system credential broker.
 
 ## Links
 

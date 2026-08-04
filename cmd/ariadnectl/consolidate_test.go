@@ -310,6 +310,20 @@ func TestQualityGateRejectsUnstableLocalArtifactPath(t *testing.T) {
 	}
 }
 
+func TestQualityGateRejectsCredentialMaterial(t *testing.T) {
+	_, err := validateConsolidatedMemories(
+		[]diaryPoint{{Text: "The service deployment completed successfully after configuration was corrected."}},
+		[]consolidatedMemory{{
+			Room: roomReference,
+			Text: "The service deployment completed successfully, but the generated report included " +
+				"API_TOKEN=actual-secret-value and must be rejected.",
+		}},
+	)
+	if err == nil || !strings.Contains(err.Error(), "credential material") {
+		t.Fatalf("validation error = %v", err)
+	}
+}
+
 func TestQualityGateRejectsEphemeralJobIdentifier(t *testing.T) {
 	_, err := validateConsolidatedMemories(
 		[]diaryPoint{{Text: "The QA run remains active and its final verified report is still pending."}},

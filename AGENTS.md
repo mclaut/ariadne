@@ -22,7 +22,8 @@ sessions — Qdrant is a server, so the single-writer/lock-starvation class is g
 - `internal/store` — storage core: bge-m3 dense embedding (Ollama) + BM25 sparse
   (pure Go tokenizer; Qdrant computes IDF) fused with RRF server-side. No MCP concerns.
 - `cmd/ariadne` — MCP server (stdio). Tools: `memory_save`, `memory_recall`
-  (semantic by query or exact by id; optional wing/room/collection scopes),
+  (semantic by query with required wing, explicit all-wing audit opt-in, or exact
+  by id; optional room/collection scopes),
   `memory_delete`, `memory_move` (curate: delete by id, re-home/re-tag by id).
 - `cmd/ariadnectl` — control/health core; `cmd/ariadne-tray` (localized system-tray
   monitor, macOS/Linux/Windows) is a thin viewer over it.
@@ -47,5 +48,11 @@ The repo holds only source.
   Grep the working tree **and git history** before every push.
 - **Qdrant is loopback-only** (`QDRANT__SERVICE__HOST=127.0.0.1`) — it has no auth
   by default and memories are stored as plaintext payloads. Never expose it.
+- **Project isolation is default-deny.** Semantic recall must include the active
+  project's wing. Never inspect another project's files or reuse its credentials,
+  endpoints, IPs, or configuration merely because another workspace root is readable.
+- Cross-wing recall requires an Ariadne system-warning/tray approval ID; external results receive
+  lower origin weight. Cross-project credential use requires a second, exact,
+  one-time system-warning/tray approval and must never place the value in memory or logs.
 - `golangci-lint run` clean before every commit; justify any `//nolint` inline.
 - Surgical changes, match existing style, keep it simple (no speculative abstraction).

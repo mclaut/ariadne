@@ -2,6 +2,7 @@ package main
 
 import (
 	"ariadne/internal/metrics"
+	"ariadne/internal/secretguard"
 	"ariadne/internal/store"
 	"bufio"
 	"bytes"
@@ -76,7 +77,11 @@ func captureRun(args []string) {
 		return
 	}
 
-	project := filepath.Base(*cwd)
+	project := projectWing(*cwd)
+	if project == "" {
+		log.Printf("skip %s: cannot resolve project wing", short(*session))
+		return
+	}
 	branch, commits := gitFacts(*cwd, first, last)
 
 	summaryURL, ok := summaryOllamaURL()
@@ -85,7 +90,7 @@ func captureRun(args []string) {
 			short(*session), env("ARIADNE_SUMMARY_OLLAMA", env("ARIADNE_OLLAMA", "http://localhost:11434")))
 		return
 	}
-	condensed := condense(turns)
+	condensed := secretguard.Redact(condense(turns))
 	summary := summarize(condensed, summaryURL)
 	if summary == "" {
 		log.Printf("FAIL %s: empty summary (model down or not pulled? ollama pull %s)",
@@ -107,7 +112,7 @@ func captureRun(args []string) {
 	}
 	b.WriteString("\n")
 	b.WriteString(strings.TrimSpace(summary))
-	text := b.String()
+	text := secretguard.Redact(b.String())
 
 	if *dry {
 		fmt.Println("---- DRY RUN (не зберігаю) ----")
@@ -270,7 +275,7 @@ func condense(turns []turn) string {
 const summaryPrompt = "Ти — архіваріус сесій розробки. На вході стенограма сесії (U: користувач, A: асистент). " +
 	"Стисни її українською в 4–8 речень: (1) що зроблено і які рішення ухвалено — з ПРИЧИНАМИ; " +
 	"(2) що зламалося і як полагоджено; (3) що свідомо відкладено чи лишилось відкритим. " +
-	"Пиши щільні факти без води, без заголовків і списків. " +
+	"Пиши щільні факти без води, без заголовків і списків. Ніколи не відтворюй паролі, токени, ключі чи інші секрети. " +
 	"Якщо сесія беззмістовна (привітання, проби), відповідай рівно одним словом: SKIP"
 
 func summaryOllamaURL() (string, bool) {

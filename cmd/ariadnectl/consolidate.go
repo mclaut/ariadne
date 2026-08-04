@@ -3,6 +3,7 @@ package main
 import (
 	"ariadne/internal/activity"
 	"ariadne/internal/metrics"
+	"ariadne/internal/secretguard"
 	"ariadne/internal/store"
 	"bytes"
 	"context"
@@ -658,7 +659,7 @@ func consolidateGroupWithKeepAlive(
 		fmt.Fprintf(&input, "PROJECT/WING: %s\n\n", points[0].Wing)
 	}
 	for i, p := range points {
-		fmt.Fprintf(&input, "DIARY %d:\n%s\n\n", i+1, p.Text)
+		fmt.Fprintf(&input, "DIARY %d:\n%s\n\n", i+1, secretguard.Redact(p.Text))
 	}
 	requestInput := input.String()
 	var lastErr error
@@ -702,6 +703,9 @@ func consolidationRepairGuidance(points []diaryPoint, err error) string {
 	case strings.Contains(message, "unstable local artifact"):
 		return "Remove every local filesystem path and every terminal, tmux, screen, watcher, or detached-job identifier. " +
 			"State only the durable verified outcome or unfinished risk; do not copy or rename the ephemeral reference."
+	case strings.Contains(message, "credential material"):
+		return "Remove every credential value, password, token, private key, credential URI, and secret assignment. " +
+			"Retain only the non-sensitive operational conclusion and, when needed, the variable name without its value."
 	default:
 		return "The previous response failed this validation rule: " + message + ". Correct that rule."
 	}
@@ -908,6 +912,10 @@ func validateConsolidatedMemories(
 		if unstableArtifactReference(memories[i].Text) {
 			return nil, &consolidationOutputError{err: fmt.Errorf(
 				"invalid memory %d: contains an unstable local artifact reference", i+1)}
+		}
+		if findings := secretguard.Findings(memories[i].Text); len(findings) > 0 {
+			return nil, &consolidationOutputError{err: fmt.Errorf(
+				"invalid memory %d: contains credential material (%s)", i+1, strings.Join(findings, ","))}
 		}
 		if !sameDominantScript(sourceText, memories[i].Text) {
 			return nil, &consolidationOutputError{err: fmt.Errorf(

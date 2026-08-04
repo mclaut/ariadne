@@ -7,6 +7,7 @@ package main
 
 import (
 	"ariadne/internal/activity"
+	"ariadne/internal/approval"
 	"ariadne/internal/i18n"
 	"ariadne/internal/metrics"
 	"ariadne/internal/version"
@@ -87,9 +88,17 @@ var (
 
 	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints                                       *systray.MenuItem
 	rowTokens, rowCoverage, rowUnattributed, rowDisk, rowMaintenance                             *systray.MenuItem
+	rowApproval, rowApprovalDetail                                                               *systray.MenuItem
 	mUpdate, mStart, mStop, mRestart, mMaintenance, mBackup, mExport, mData, mLogs, mLang, mQuit *systray.MenuItem
+	mApprove, mDeny                                                                              *systray.MenuItem
 	langItems                                                                                    map[i18n.Lang]*systray.MenuItem
 	maintenanceRunning                                                                           bool
+	approvalManager                                                                              = approval.New("")
+	currentApproval                                                                              approval.Request
+	hasCurrentApproval                                                                           bool
+	currentApprovalCount                                                                         int
+	lastNotifiedApprovalID                                                                       string
+	approvalPrompts                                                                              approvalPromptGate
 	trayExitMu                                                                                   sync.Mutex
 	trayExitReason                                                                               = "desktop session ended"
 )
@@ -132,6 +141,11 @@ func onReady() {
 	rowUnattributed = infoRow("")
 	rowDisk = infoRow("")
 	rowMaintenance = infoRow("")
+	rowApproval = infoRow("")
+	rowApprovalDetail = infoRow("")
+	mApprove = systray.AddMenuItem("", "")
+	mDeny = systray.AddMenuItem("", "")
+	systray.AddSeparator()
 	mUpdate = systray.AddMenuItem("", "")
 	systray.AddSeparator()
 	mStart = systray.AddMenuItem("", "")
@@ -188,6 +202,10 @@ func loop() {
 			}
 		case <-mMaintenance.ClickedCh:
 			go maintenanceClicked()
+		case <-mApprove.ClickedCh:
+			go decideApproval(true)
+		case <-mDeny.ClickedCh:
+			go decideApproval(false)
 		case <-mUpdate.ClickedCh:
 			go updateClicked()
 		case <-mBackup.ClickedCh:
@@ -229,6 +247,7 @@ func relabel() {
 	mLogs.SetTitle(i18n.T(lang, "menu.logs"))
 	mLang.SetTitle("🌐 " + i18n.T(lang, "menu.language") + ": " + i18n.Name[lang])
 	mQuit.SetTitle(i18n.T(lang, "menu.quit"))
+	refreshApprovalMenuLocked()
 	refreshUpdateMenuLocked()
 	for l, it := range langItems {
 		if l == lang {
@@ -247,8 +266,8 @@ func infoRow(title string) *systray.MenuItem {
 
 func poll() {
 	s := fetch()
+	pending, approvalErr := approvalManager.Pending()
 	mu.Lock()
-	defer mu.Unlock()
 	var icon []byte
 	var word string
 	switch {
@@ -281,12 +300,40 @@ func poll() {
 	} else {
 		rowMaintenance.SetTitle(fmt.Sprintf("%s: %s", i18n.T(lang, "row.maintenance"), i18n.T(lang, "row.never")))
 	}
+	var approvalNotice, approvalPrompt *approval.Request
+	if approvalErr == nil && len(pending) > 0 {
+		currentApproval = pending[0]
+		hasCurrentApproval = true
+		currentApprovalCount = len(pending)
+		if currentApproval.ID != lastNotifiedApprovalID {
+			request := currentApproval
+			approvalNotice = &request
+			lastNotifiedApprovalID = currentApproval.ID
+		}
+		if approvalPrompts.begin(currentApproval.ID, time.Now()) {
+			request := currentApproval
+			approvalPrompt = &request
+		}
+	} else {
+		currentApproval = approval.Request{}
+		hasCurrentApproval = false
+		currentApprovalCount = 0
+	}
+	refreshApprovalMenuLocked()
 
 	// notify only when a NEW issue appears (or a service just dropped)
 	if s.reachable && len(s.Issues) > 0 && !slices.Equal(s.Issues, lastIssues) {
 		notify("⚠️ ariadne", strings.Join(s.Issues, " · "))
 	}
 	lastIssues = s.Issues
+	activeLang := lang
+	mu.Unlock()
+	if approvalNotice != nil {
+		notify(i18n.T(activeLang, "notify.approval"), approvalNotification(activeLang, *approvalNotice))
+	}
+	if approvalPrompt != nil {
+		go runApprovalSystemPrompt(*approvalPrompt, activeLang)
+	}
 }
 
 func latestTrayMaintenanceEvent(events map[string]activity.Event) (activity.Event, bool) {
@@ -316,6 +363,83 @@ func refreshMaintenanceMenuLocked() {
 	}
 	mMaintenance.SetTitle(i18n.T(lang, "menu.maintenance"))
 	mMaintenance.Enable()
+}
+
+func refreshApprovalMenuLocked() {
+	if rowApproval == nil || mApprove == nil || mDeny == nil {
+		return
+	}
+	if !hasCurrentApproval {
+		rowApproval.SetTitle(i18n.T(lang, "row.approvals") + ": " + i18n.T(lang, "approval.none"))
+		rowApprovalDetail.SetTitle("")
+		mApprove.SetTitle(i18n.T(lang, "menu.approve"))
+		mDeny.SetTitle(i18n.T(lang, "menu.deny"))
+		mApprove.Disable()
+		mDeny.Disable()
+		return
+	}
+	kind := approvalKindTitle(lang, currentApproval.Kind)
+	count := ""
+	if currentApprovalCount > 1 {
+		count = fmt.Sprintf(" (+%d)", currentApprovalCount-1)
+	}
+	rowApproval.SetTitle(i18n.T(lang, "row.approvals") + ": " + kind + count)
+	rowApprovalDetail.SetTitle(shortApprovalDetail(currentApproval, 96))
+	mApprove.SetTitle(i18n.T(lang, "menu.approve"))
+	mDeny.SetTitle(i18n.T(lang, "menu.deny"))
+	mApprove.Enable()
+	mDeny.Enable()
+}
+
+func decideApproval(approved bool) {
+	mu.Lock()
+	if !hasCurrentApproval {
+		mu.Unlock()
+		return
+	}
+	id := currentApproval.ID
+	activeLang := lang
+	mu.Unlock()
+	decideApprovalByID(id, approved, activeLang)
+}
+
+func decideApprovalByID(id string, approved bool, activeLang i18n.Lang) {
+	_, err := approvalManager.Decide(id, approved)
+	message := i18n.T(activeLang, "notify.done")
+	if !approved {
+		message = i18n.T(activeLang, "menu.deny")
+	}
+	if err != nil {
+		message = i18n.T(activeLang, "notify.failed") + ": " + err.Error()
+	}
+	notify(i18n.T(activeLang, "notify.approval"), message)
+	poll()
+}
+
+func approvalKindTitle(l i18n.Lang, kind approval.Kind) string {
+	if kind == approval.KindCredential {
+		return i18n.T(l, "approval.protected")
+	}
+	return i18n.T(l, "approval.cross")
+}
+
+func approvalNotification(l i18n.Lang, request approval.Request) string {
+	return approvalKindTitle(l, request.Kind) + ": " + shortApprovalDetail(request, 140)
+}
+
+func shortApprovalDetail(request approval.Request, limit int) string {
+	var detail string
+	if request.Kind == approval.KindCredential {
+		detail = request.SourceWing + " → " + request.TargetWing + " · " + request.Resource + " · " + request.Purpose
+	} else {
+		detail = request.ActiveWing + " → * · " + request.Purpose + " · " + request.Query
+	}
+	detail = strings.Join(strings.Fields(detail), " ")
+	runes := []rune(detail)
+	if len(runes) <= limit {
+		return detail
+	}
+	return string(runes[:limit-1]) + "…"
 }
 
 func maintenanceClicked() {

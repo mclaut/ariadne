@@ -147,6 +147,24 @@ func TestImportResultCodeFailsPartialImports(t *testing.T) {
 	}
 }
 
+func TestPrepareSaveItemRedactsCredentialMaterial(t *testing.T) {
+	item, redacted := prepareSaveItem(doc{
+		wing: "demo",
+		room: "reference",
+		text: "Deployment uses API_TOKEN=synthetic-test-value.",
+		meta: map[string]string{"source": "fixture"},
+	})
+	if !redacted || strings.Contains(item.Text, "synthetic-test-value") {
+		t.Fatalf("credential was not redacted: %#v", item)
+	}
+	if item.Meta["secret_redacted"] != "true" || item.Meta["redaction_rules"] != "secret-assignment" {
+		t.Fatalf("redaction metadata = %#v", item.Meta)
+	}
+	if item.Meta["wing"] != "demo" || item.Meta["source"] != "fixture" {
+		t.Fatalf("source metadata lost: %#v", item.Meta)
+	}
+}
+
 func TestFinalizeMemfileSyncArchivesOldRevisionsAndOrphans(t *testing.T) {
 	fake := &fakeMemfileSyncStore{pairs: map[[2]string]int{
 		{"ariadne", "memory:live.md"}:  4,
