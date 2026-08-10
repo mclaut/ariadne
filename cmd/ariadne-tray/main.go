@@ -35,6 +35,7 @@ import (
 const (
 	pollEvery                = 5 * time.Second
 	manualMaintenanceTimeout = 4 * time.Hour
+	trayRestartExitCode      = 75
 	osDarwin                 = "darwin"
 	osLinux                  = "linux"
 	osWindows                = "windows"
@@ -101,6 +102,7 @@ var (
 	approvalPrompts                                                                              approvalPromptGate
 	trayExitMu                                                                                   sync.Mutex
 	trayExitReason                                                                               = "desktop session ended"
+	trayRestartRequested                                                                         bool
 )
 
 func main() {
@@ -109,6 +111,12 @@ func main() {
 	}
 	log.Printf("Ariadne %s tray starting", version.Tag)
 	systray.Run(onReady, onExit)
+	trayExitMu.Lock()
+	restart := trayRestartRequested
+	trayExitMu.Unlock()
+	if restart {
+		os.Exit(trayRestartExitCode)
+	}
 }
 
 func onExit() {
@@ -121,6 +129,14 @@ func onExit() {
 func quitTray(reason string) {
 	trayExitMu.Lock()
 	trayExitReason = reason
+	trayExitMu.Unlock()
+	systray.Quit()
+}
+
+func restartTrayThroughSupervisor(reason string) {
+	trayExitMu.Lock()
+	trayExitReason = reason
+	trayRestartRequested = true
 	trayExitMu.Unlock()
 	systray.Quit()
 }
@@ -524,6 +540,14 @@ func ctl(action, banner string) error {
 // matters after an update: restarting the managed services alone leaves the old
 // UI code resident in memory until the tray itself is replaced.
 func relaunchTray() error {
+	if supervisedTray(runtime.GOOS, os.Getenv("XPC_SERVICE_NAME")) {
+		// The launchd job has KeepAlive.SuccessfulExit=false. Exit with a
+		// deliberate non-zero status so launchd starts one replacement only
+		// after this status item has fully left the menu bar. Starting a second
+		// Cocoa tray before quitting this one races and can leave no icon.
+		restartTrayThroughSupervisor("launchd tray restart requested")
+		return nil
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve tray executable: %w", err)
@@ -537,6 +561,11 @@ func relaunchTray() error {
 	}
 	quitTray("tray relaunched")
 	return nil
+}
+
+func supervisedTray(platform, serviceName string) bool {
+	return platform == osDarwin &&
+		(serviceName == "com.ariadne.tray" || strings.HasPrefix(serviceName, "com.ariadne.tray."))
 }
 
 func openPath(p string) {

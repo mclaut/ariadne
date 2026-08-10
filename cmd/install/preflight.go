@@ -3,8 +3,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -91,11 +93,41 @@ func preflight(o opts) *report {
 	r.goOK = which("go")
 	r.svcInstalled = fileExists(servicePath(r))
 	r.mcpOK = mcpRegistered(r.home)
-	r.skillOK = fileExists(filepath.Join(r.home, ".claude", "skills", "ariadne", "SKILL.md"))
+	r.skillOK = skillFilesCurrent(
+		filepath.Join(r.repoRoot, "skills", "ariadne"),
+		filepath.Join(r.home, ".claude", "skills", "ariadne"),
+	)
 	if b, err := os.ReadFile(filepath.Join(r.home, ".claude", "settings.json")); err == nil { //nolint:gosec // own config
-		r.hooksOK = strings.Contains(string(b), "ariadne-hook")
+		r.hooksOK = hooksConfigCurrent(b, r.home)
 	}
 	return r
+}
+
+func skillFilesCurrent(src, dest string) bool {
+	if src == "" || dest == "" {
+		return false
+	}
+	return filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		want, err := os.ReadFile(path) //nolint:gosec // installer-owned source tree
+		if err != nil {
+			return err
+		}
+		got, err := os.ReadFile(filepath.Join(dest, rel)) //nolint:gosec // user-owned installed skill
+		if err != nil || !bytes.Equal(got, want) {
+			return errors.New("installed skill differs")
+		}
+		return nil
+	}) == nil
 }
 
 func printReport(r *report) {

@@ -18,14 +18,19 @@ const qdrantTask = `\Ariadne Qdrant`
 
 func loadedAriadneQdrantAgents() []string { return nil }
 
-func control(action string) {
+func control(action string) error {
 	switch action {
 	case "start":
-		run("schtasks.exe", "/Run", "/TN", qdrantTask)
+		if err := run("schtasks.exe", "/Run", "/TN", qdrantTask); err != nil {
+			return fmt.Errorf("start Ariadne Qdrant task: %w", err)
+		}
 	case "stop":
-		run("schtasks.exe", "/End", "/TN", qdrantTask)
+		if err := run("schtasks.exe", "/End", "/TN", qdrantTask); err != nil {
+			return fmt.Errorf("stop Ariadne Qdrant task: %w", err)
+		}
 	}
 	fmt.Println(action, "issued (Ariadne Qdrant task; Ollama is managed by its Windows app)")
+	return nil
 }
 
 func rss(marker string) int64 {
@@ -71,6 +76,6 @@ func freeGB(path string) int64 {
 	return int64(available / (1024 * 1024 * 1024))
 }
 
-func run(bin string, args ...string) {
-	_ = exec.CommandContext(context.Background(), bin, args...).Run() //nolint:gosec,errcheck // fixed task controls
+func run(bin string, args ...string) error {
+	return exec.CommandContext(context.Background(), bin, args...).Run() //nolint:gosec // fixed task controls
 }

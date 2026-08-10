@@ -35,12 +35,16 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.5 brings the macOS system warning to the foreground before asking
-for a decision and keeps the Hugging Face metadata within Hub limits. It builds
-on 0.8.4: cross-project memory and protected-resource requests use explicit
-Approve, Deny, and safe-default Later actions; grants are scoped, external
-results receive a 0.70 origin weight, credentials need a separate one-shot
-approval, and all approval/quarantine history remains append-only.
+Version 0.8.6 fixes the launchd tray-restart race, propagates service-control
+errors, and repairs stale Claude skills and hooks during upgrades. Claude
+auto-recall now covers startup, resume, clear, compact, and fork.
+
+- **Fixed:** tray restarts, honest service failures, stale integration detection,
+  and warning copy that still described a removed action.
+- **Added:** persistent Claude recall after context transitions plus explicit
+  guidance to save durable decisions, gotchas, and verified outcomes.
+- **Changed:** system warnings now expose exactly Approve and Deny; neither is a
+  default keyboard action, and unrelated Claude hooks remain untouched.
 
 ## Links
 

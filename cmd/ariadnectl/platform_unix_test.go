@@ -19,3 +19,10 @@ func TestParseAriadneQdrantAgents(t *testing.T) {
 		t.Fatalf("agents = %#v, want %#v", got, want)
 	}
 }
+
+func TestControlReturnsServiceCommandFailure(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	if err := control("start"); err == nil {
+		t.Fatal("control reported success when the platform service command was unavailable")
+	}
+}

@@ -46,8 +46,8 @@ func newStore() (*store.Store, error) {
 // sessions outside known projects start completely clean.
 func sessionStart() {
 	in, ok := readHookInput()
-	if !ok || in.CWD == "" || in.Source == "compact" {
-		return // after compact the summary already carries the context
+	if !ok || in.CWD == "" || !autoRecallSource(in.Source) {
+		return
 	}
 	wing := projectWing(in.CWD)
 	if wing == "" {
@@ -102,7 +102,9 @@ func sessionStart() {
 			})
 		}
 	}
-	b.WriteString("(глибше: тул mcp__ariadne__memory_recall, параметр wing)")
+	b.WriteString("Ariadne is the persistent-memory workflow for this session. ")
+	b.WriteString("Recall deeper context with mcp__ariadne__memory_recall and the active wing. ")
+	b.WriteString("Immediately save durable decisions, gotchas, and verified outcomes; do not wait for SessionEnd.")
 
 	delivered := metrics.EstimateTokens(b.String())
 	attributed, unknown := metrics.SplitAttribution(delivered, totalMemoryTokens, attributedMemoryTokens)
@@ -125,6 +127,15 @@ func sessionStart() {
 		"additionalContext": b.String(),
 	}}
 	_ = json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func autoRecallSource(source string) bool {
+	switch source {
+	case "", "startup", "resume", "clear", "compact", "fork":
+		return true
+	default:
+		return false
+	}
 }
 
 func room(r string) string {

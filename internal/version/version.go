@@ -2,7 +2,7 @@
 package version
 
 const (
-	Current    = "0.8.5"
+	Current    = "0.8.6"
 	Tag        = "v" + Current
 	Repository = "mclaut/ariadne"
 )

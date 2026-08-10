@@ -89,13 +89,25 @@ func main() {
 	case "metrics":
 		printMetrics(hasFlag("-json"))
 	case "start":
-		control("start")
+		if err := control("start"); err != nil {
+			fmt.Fprintln(os.Stderr, "start:", err)
+			os.Exit(1)
+		}
 	case "stop":
-		control("stop")
+		if err := control("stop"); err != nil {
+			fmt.Fprintln(os.Stderr, "stop:", err)
+			os.Exit(1)
+		}
 	case "restart":
-		control("stop")
+		if err := control("stop"); err != nil {
+			fmt.Fprintln(os.Stderr, "restart stop:", err)
+			os.Exit(1)
+		}
 		time.Sleep(2 * time.Second)
-		control("start")
+		if err := control("start"); err != nil {
+			fmt.Fprintln(os.Stderr, "restart start:", err)
+			os.Exit(1)
+		}
 	case "backup":
 		os.Exit(backupCmd())
 	case "restore":

@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.5</a>
+          <a href="#new">Нове у 0.8.6</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.5 виводить warning на передній план</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.6 робить approval свідомим, а Claude memory — постійною</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.5</span><h2>Warning, який не ховається позаду.</h2><p>На macOS нативний діалог активується перед показом. Це змінює лише видимість — доступ усе одно надає виключно людина.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.6</span><h2>Надійні approval prompts. Постійна Claude memory.</h2><p>Реліз виправляє desktop lifecycle, усуває випадкові keyboard-рішення та зберігає memory workflow після переходів контексту.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><Check /><h3>Проєктний scope за замовчуванням</h3><p>Recall і save вимагають active wing. Доступний для читання сусідній репозиторій не дає права позичати його пам’ять або конфігурацію.</p></article>
-            <article className="new-item accent-blue"><Server /><h3>Warning на передньому плані</h3><p>На macOS нативний діалог активується перед показом. «Схвалити», «Відхилити» та безпечне «Пізніше» лишаються явним рішенням людини.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Окремий доступ до credentials</h3><p>Захищений ресурс потребує другого точного grant на п’ять хвилин. Він споживається один раз, а значення credential не зберігається.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Локальний контекст перший</h3><p>Дозволені зовнішні memories отримують origin weight 0.70 та явну позначку. Локальні результати мають пріоритет.</p></article>
+            <article className="new-item accent-green"><Check /><h3>Виправлено: рестарт tray</h3><p>Керований launchd tray завершується перед тим, як supervisor запускає одну заміну, тому race більше не ховає іконку.</p></article>
+            <article className="new-item accent-blue"><Server /><h3>Змінено: свідоме approval</h3><p>Warning має лише «Схвалити» й «Відхилити». Жодна кнопка не вибрана, а Return/Enter чи Escape не вирішують запит.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Додано: persistent Claude recall</h3><p>Auto-recall працює після startup, resume, clear, compact і fork та повертає явне нагадування про memory workflow.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Виправлено: чесні service errors</h3><p>Помилки start, stop і restart доходять до CLI та tray, а старі Claude skills і hooks виявляються й оновлюються.</p></article>
           </div>
         </div>
       </section>
@@ -108,7 +108,7 @@ export default function UkrainianHome() {
           <div className="install-tool">
             <div className="command-window"><div className="command-title"><span>macOS / Linux</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh</code></pre></div>
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.5">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.6">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>

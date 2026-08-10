@@ -1,6 +1,6 @@
 ---
 name: ariadne
-description: Long-term memory for Codex, Claude Code, and MCP clients backed by the local Ariadne server (Qdrant + bge-m3). Use proactively during substantive project work: recall past context and immediately save durable decisions, gotchas, completed reports, release/deployment results, verified status, and critical reference facts without waiting for session end or an explicit remember command. Also use when the user asks about earlier work, requests permanent memory, or needs Ariadne operations.
+description: Mandatory long-term memory workflow for Codex, Claude Code, and MCP clients backed by the local Ariadne server (Qdrant + bge-m3). Always use at the start or resumption of substantive project work, after context compaction, when prior work or decisions may matter, and immediately after durable decisions, gotchas, completed reports, release/deployment results, or verified status. Also use for explicit remember, recall, or Ariadne requests.
 ---
 
 # Ariadne — long-term memory
