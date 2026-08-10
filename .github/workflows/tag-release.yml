@@ -7,8 +7,13 @@ on:
         description: Release tag (vX.Y.Z)
         required: true
         type: string
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/release-requests/**"
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
@@ -22,23 +27,32 @@ jobs:
           fetch-depth: 0
       - name: Validate release identity
         env:
-          TAG: ${{ inputs.tag }}
+          REQUESTED_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           source_version=$(sed -n 's/.*Current[[:space:]]*= "\([^"]*\)".*/\1/p' internal/version/version.go)
+          tag="$REQUESTED_TAG"
+          if [[ -z "$tag" ]]; then
+            tag="v$source_version"
+          fi
+          TAG="$tag"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "v$source_version" = "$TAG"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f ".github/release-requests/$TAG.md"
           if git rev-parse --verify --quiet "refs/tags/$TAG"; then
             echo "tag already exists: $TAG" >&2
             exit 1
           fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
       - name: Create annotated release tag
-        env:
-          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git tag -a "$TAG" -m "Ariadne $TAG"
           git push origin "refs/tags/$TAG"
+      - name: Start release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref "$TAG"
