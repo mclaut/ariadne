@@ -34,6 +34,15 @@ func TestApprovalPromptBodyIsBoundedAndWarnsUser(t *testing.T) {
 	}
 }
 
+func TestApprovalPromptHelpMatchesTwoChoiceUI(t *testing.T) {
+	for _, lang := range []i18n.Lang{i18n.EN, i18n.UK} {
+		help := i18n.T(lang, "approval.prompt_help")
+		if strings.Contains(help, "Later") || strings.Contains(help, "Пізніше") {
+			t.Fatalf("approval help still describes a removed third choice: %q", help)
+		}
+	}
+}
+
 func TestApprovalPromptGatePreventsDuplicatesAndRetries(t *testing.T) {
 	var gate approvalPromptGate
 	now := time.Unix(100, 0)
@@ -66,6 +75,46 @@ func TestDarwinApprovalPromptActivatesBeforeDisplaying(t *testing.T) {
 	display := strings.Index(darwinApprovalScript, "display dialog")
 	if activate < 0 || display < 0 || activate > display {
 		t.Fatalf("darwin prompt must activate before display: %q", darwinApprovalScript)
+	}
+}
+
+func TestDarwinApprovalPromptHasExactlyTwoNonDefaultButtons(t *testing.T) {
+	if strings.Contains(darwinApprovalScript, "default button") {
+		t.Fatalf("approval prompt must not let Return activate any button: %q", darwinApprovalScript)
+	}
+	if strings.Contains(darwinApprovalScript, "cancel button") ||
+		strings.Contains(darwinApprovalScript, "laterLabel") {
+		t.Fatalf("approval prompt must not expose a Later or cancel button: %q", darwinApprovalScript)
+	}
+	if !strings.Contains(darwinApprovalScript, "buttons {denyLabel, approveLabel}") {
+		t.Fatalf("approval prompt must expose only Deny and Approve: %q", darwinApprovalScript)
+	}
+}
+
+func TestWindowsApprovalPromptHasExactlyTwoNonDefaultButtons(t *testing.T) {
+	command := windowsApprovalCommand("Title", "Body", "Approve", "Deny")
+	for _, required := range []string{
+		"$f.AcceptButton=$null", "$f.CancelButton=$null",
+		"$a.TabStop=$false", "$d.TabStop=$false",
+		"Keys]::Enter", "Keys]::Escape",
+	} {
+		if !strings.Contains(command, required) {
+			t.Fatalf("Windows prompt is missing %q: %q", required, command)
+		}
+	}
+	if strings.Contains(command, "WScript.Shell") || strings.Contains(command, "Later") {
+		t.Fatalf("Windows prompt must expose only explicit Approve and Deny controls: %q", command)
+	}
+}
+
+func TestLinuxApprovalPromptHasExactlyTwoNonDefaultButtons(t *testing.T) {
+	args := linuxApprovalArgs("Title", "Body", "Approve", "Deny")
+	joined := strings.Join(args, " ")
+	if strings.Contains(joined, "-default") || strings.Contains(joined, "Later") {
+		t.Fatalf("Linux prompt must not expose or select a third choice: %q", joined)
+	}
+	if !strings.Contains(joined, "-buttons Deny:7,Approve:6") {
+		t.Fatalf("Linux prompt must expose only Deny and Approve: %q", joined)
 	}
 }
 

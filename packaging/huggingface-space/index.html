@@ -19,7 +19,7 @@
         Ariadne
       </a>
       <div class="nav-links">
-        <a href="#new">New in 0.8.5</a>
+        <a href="#new">New in 0.8.6</a>
         <a href="#architecture">Architecture</a>
         <a href="#install">Install</a>
       </div>
@@ -40,7 +40,7 @@
         <div class="hero-content">
           <div class="release-kicker">
             <span data-lucide="sparkles" aria-hidden="true"></span>
-            v0.8.5 brings the warning to the front
+            v0.8.6 makes approvals deliberate and Claude memory persistent
           </div>
           <h1>Ariadne</h1>
           <p class="hero-lead">
@@ -58,7 +58,7 @@
             </a>
             <a
               class="button button-secondary"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.5"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.6"
               target="_blank"
               rel="noreferrer"
             >
@@ -78,36 +78,36 @@
       <section class="new-band" id="new">
         <div class="section-shell">
           <div class="section-heading">
-            <span class="eyebrow">New in v0.8.5</span>
-            <h2>Memory boundaries you can see.</h2>
+            <span class="eyebrow">New in v0.8.6</span>
+            <h2>Reliable approval prompts. Persistent Claude memory.</h2>
             <p>
-              Project isolation is the default. Crossing a boundary requires a
-              visible, scoped decision from a human.
+              Fixed lifecycle failures, safer input handling, and an update-aware
+              memory workflow for Claude Code.
             </p>
           </div>
           <div class="feature-grid">
             <article class="feature feature-green">
               <span data-lucide="check-circle-2" aria-hidden="true"></span>
-              <h3>Project-scoped by default</h3>
+              <h3>Fixed</h3>
               <p>
-                Recall and saves require an active wing. A readable sibling
-                repository is not permission to reuse its memory or config.
+                Tray restarts no longer race, service errors are reported, and
+                stale Claude integration files are detected.
               </p>
             </article>
             <article class="feature feature-blue">
               <span data-lucide="scan-search" aria-hidden="true"></span>
-              <h3>System approval window</h3>
+              <h3>Changed</h3>
               <p>
-                Cross-wing requests open a foreground warning with Approve,
-                Deny, and a safe-default Later. Closing it grants nothing.
+                Warnings expose only Approve and Deny. Neither is a default;
+                Return/Enter and Escape cannot decide or dismiss the request.
               </p>
             </article>
             <article class="feature feature-coral">
               <span data-lucide="list-filter" aria-hidden="true"></span>
-              <h3>Separate protected access</h3>
+              <h3>Added</h3>
               <p>
-                Credentials require a second exact grant, expire after five
-                minutes, and are consumed once without storing the value.
+                Claude auto-recall now follows startup, resume, clear, compact,
+                and fork with explicit persistent-memory guidance.
               </p>
             </article>
           </div>

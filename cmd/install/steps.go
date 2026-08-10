@@ -633,15 +633,12 @@ func registerMCP(home string, o opts) error {
 }
 
 // registerHooks merges Ariadne's session hooks into ~/.claude/settings.json:
-// SessionStart (startup|resume|clear) → auto-recall, SessionEnd → auto-capture,
+// SessionStart (startup|resume|clear|compact|fork) → auto-recall, SessionEnd → auto-capture,
 // PreCompact (manual|auto) → mid-session capture before context is compacted.
 func registerHooks(home string) error {
 	path := filepath.Join(home, ".claude", "settings.json")
 	m := map[string]any{}
 	if b, err := os.ReadFile(path); err == nil { //nolint:gosec // own config
-		if strings.Contains(string(b), "ariadne-hook") {
-			return nil
-		}
 		if err := json.Unmarshal(b, &m); err != nil {
 			return fmt.Errorf("~/.claude/settings.json is not valid JSON, refusing to touch it: %w", err)
 		}
@@ -655,30 +652,92 @@ func registerHooks(home string) error {
 		hooks = map[string]any{}
 	}
 	bin := filepath.Join(home, ".ariadne", "bin", "ariadne-hook")
-	add := func(event, matcher, sub string, timeout int) {
-		entry := map[string]any{
-			"hooks": []any{map[string]any{"type": "command", "command": bin + " " + sub, "timeout": timeout}},
-		}
-		if matcher != "" {
-			entry["matcher"] = matcher
-		}
-		arr, _ := hooks[event].([]any)
-		hooks[event] = append(arr, entry)
-	}
-	add("SessionStart", "startup|resume|clear", "session-start", 15)
-	add("SessionEnd", "", "session-end", 10)
+	upsertClaudeHook(hooks, "SessionStart", claudeSessionStartMatcher, bin+" session-start", 15)
+	upsertClaudeHook(hooks, "SessionEnd", "", bin+" session-end", 10)
 	// PreCompact fires right before Claude Code compacts the context — the
 	// moment session detail is about to be summarized away. Capturing here keeps
 	// long sessions remembered mid-flight, not only at exit; the detached worker
 	// (same subcommand) never delays compaction, and daily `ariadnectl
 	// consolidate` merges the extra diaries into durable memories.
-	add("PreCompact", "manual|auto", "session-end", 10)
+	upsertClaudeHook(hooks, "PreCompact", "manual|auto", bin+" session-end", 10)
 	m["hooks"] = hooks
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, out, 0o600)
+}
+
+const claudeSessionStartMatcher = "startup|resume|clear|compact|fork"
+
+func upsertClaudeHook(hooks map[string]any, event, matcher, command string, timeout int) {
+	entries, _ := hooks[event].([]any)
+	found := false
+	for _, rawEntry := range entries {
+		entry, _ := rawEntry.(map[string]any)
+		if entry == nil {
+			continue
+		}
+		handlers, _ := entry["hooks"].([]any)
+		for _, rawHandler := range handlers {
+			handler, _ := rawHandler.(map[string]any)
+			existing, _ := handler["command"].(string)
+			if handler == nil || !strings.Contains(existing, "ariadne-hook") {
+				continue
+			}
+			handler["type"] = "command"
+			handler["command"] = command
+			handler["timeout"] = timeout
+			entry["matcher"] = matcher
+			found = true
+		}
+	}
+	if found {
+		return
+	}
+	entry := map[string]any{
+		"hooks": []any{map[string]any{"type": "command", "command": command, "timeout": timeout}},
+	}
+	if matcher != "" {
+		entry["matcher"] = matcher
+	}
+	hooks[event] = append(entries, entry)
+}
+
+func hooksConfigCurrent(data []byte, home string) bool {
+	var settings map[string]any
+	if json.Unmarshal(data, &settings) != nil {
+		return false
+	}
+	hooks, _ := settings["hooks"].(map[string]any)
+	bin := filepath.Join(home, ".ariadne", "bin", "ariadne-hook")
+	return claudeHookCurrent(hooks, "SessionStart", claudeSessionStartMatcher, bin+" session-start", 15) &&
+		claudeHookCurrent(hooks, "SessionEnd", "", bin+" session-end", 10) &&
+		claudeHookCurrent(hooks, "PreCompact", "manual|auto", bin+" session-end", 10)
+}
+
+func claudeHookCurrent(hooks map[string]any, event, matcher, command string, timeout int) bool {
+	entries, _ := hooks[event].([]any)
+	for _, rawEntry := range entries {
+		entry, _ := rawEntry.(map[string]any)
+		if entry == nil {
+			continue
+		}
+		gotMatcher, _ := entry["matcher"].(string)
+		if gotMatcher != matcher {
+			continue
+		}
+		handlers, _ := entry["hooks"].([]any)
+		for _, rawHandler := range handlers {
+			handler, _ := rawHandler.(map[string]any)
+			gotCommand, _ := handler["command"].(string)
+			gotTimeout, _ := handler["timeout"].(float64)
+			if gotCommand == command && int(gotTimeout) == timeout {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func installSkill(r *report) error {
@@ -744,7 +803,7 @@ func verify(o opts) bool {
 	if !o.skipHooks {
 		hooksOK := false
 		if b, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json")); err == nil { //nolint:gosec // own config
-			hooksOK = strings.Contains(string(b), "ariadne-hook")
+			hooksOK = hooksConfigCurrent(b, home)
 		}
 		check(hooksOK, "session hooks registered (auto-recall + auto-capture)")
 	}

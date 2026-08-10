@@ -18,11 +18,13 @@ const qdrantLabel = "com.ariadne.qdrant"
 
 // control starts/stops the native Qdrant service. Ollama remains owned by its
 // platform installer on Linux and by Homebrew on macOS.
-func control(action string) {
+func control(action string) error {
 	if runtime.GOOS == "linux" {
-		run("systemctl", "--user", action, "ariadne-qdrant")
+		if err := run("systemctl", "--user", action, "ariadne-qdrant"); err != nil {
+			return fmt.Errorf("systemctl %s ariadne-qdrant: %w", action, err)
+		}
 		fmt.Println(action, "issued (ariadne-qdrant user unit; Ollama is a system service, left alone)")
-		return
+		return nil
 	}
 	home, _ := os.UserHomeDir()
 	uid := strconv.Itoa(os.Getuid())
@@ -32,21 +34,34 @@ func control(action string) {
 		labels := loadedAriadneQdrantAgents()
 		for _, label := range labels {
 			if label != qdrantLabel {
-				run("launchctl", "bootout", "gui/"+uid+"/"+label)
+				if err := run("launchctl", "bootout", "gui/"+uid+"/"+label); err != nil {
+					return fmt.Errorf("bootout obsolete Qdrant job %s: %w", label, err)
+				}
 			}
 		}
 		if !slices.Contains(labels, qdrantLabel) {
-			run("launchctl", "bootstrap", "gui/"+uid, plist)
+			if err := run("launchctl", "bootstrap", "gui/"+uid, plist); err != nil {
+				return fmt.Errorf("bootstrap Qdrant job: %w", err)
+			}
 		}
-		run("launchctl", "kickstart", "gui/"+uid+"/"+qdrantLabel)
-		run("brew", "services", "start", "ollama")
+		if err := run("launchctl", "kickstart", "gui/"+uid+"/"+qdrantLabel); err != nil {
+			return fmt.Errorf("kickstart Qdrant job: %w", err)
+		}
+		if err := run("brew", "services", "start", "ollama"); err != nil {
+			return fmt.Errorf("start Ollama service: %w", err)
+		}
 	case "stop":
 		for _, label := range loadedAriadneQdrantAgents() {
-			run("launchctl", "bootout", "gui/"+uid+"/"+label)
+			if err := run("launchctl", "bootout", "gui/"+uid+"/"+label); err != nil {
+				return fmt.Errorf("bootout Qdrant job %s: %w", label, err)
+			}
 		}
-		run("brew", "services", "stop", "ollama")
+		if err := run("brew", "services", "stop", "ollama"); err != nil {
+			return fmt.Errorf("stop Ollama service: %w", err)
+		}
 	}
 	fmt.Println(action, "issued (qdrant agent + ollama brew service)")
+	return nil
 }
 
 func loadedAriadneQdrantAgents() []string {
@@ -112,6 +127,6 @@ func freeGB(path string) int64 {
 	return availableKB / (1024 * 1024)
 }
 
-func run(bin string, args ...string) {
-	_ = exec.CommandContext(context.Background(), bin, args...).Run() //nolint:gosec,errcheck // fixed service controls
+func run(bin string, args ...string) error {
+	return exec.CommandContext(context.Background(), bin, args...).Run() //nolint:gosec // fixed service controls
 }

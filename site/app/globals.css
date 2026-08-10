@@ -665,12 +665,12 @@ footer {
 .social-card-page {
   background: var(--paper);
   color: var(--ink);
-  height: 640px;
+  height: 630px;
   left: 0;
   overflow: hidden;
   position: fixed;
   top: 0;
-  width: 1280px;
+  width: 1200px;
 }
 
 .social-card-copy {

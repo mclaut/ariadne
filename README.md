@@ -26,15 +26,41 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.5
+## What's New in v0.8.6
 
-**The macOS approval warning now comes to the foreground.** The native dialog
+### Fixed
+
+- **Tray restarts are reliable on macOS.** A launchd-managed tray now asks its
+  supervisor for one clean replacement instead of racing a second menu-bar
+  process and occasionally leaving no icon.
+- **Service failures are reported honestly.** `start`, `stop`, and `restart`
+  propagate platform errors to the CLI and tray instead of displaying success.
+- **Claude upgrades no longer leave stale integration files.** The installer
+  validates and refreshes the shipped skill plus exact hook paths, matchers, and
+  timeouts.
+
+### Added
+
+- **Persistent recall across Claude context transitions.** Auto-recall now runs
+  for `startup`, `resume`, `clear`, `compact`, and `fork`, and injects an explicit
+  reminder to save durable decisions, gotchas, and verified outcomes immediately.
+
+### Changed
+
+- **Approval is always a deliberate click.** System warnings contain only
+  **Approve** and **Deny**; neither is default or focused, and Return/Enter or
+  Escape cannot decide or dismiss the request.
+- **Hook installation is update-aware.** Existing Ariadne hooks are updated in
+  place while unrelated Claude hooks are preserved.
+
+## Previously in v0.8.5
+
+**The macOS approval warning comes to the foreground.** The native dialog
 activates before it is displayed, so an access request cannot sit unnoticed
-behind the active coding window. The decision path remains fail-closed and
-append-only: activation changes visibility, never authority.
+behind the active coding window. Activation changes visibility, never authority.
 
-**Hugging Face publishing is valid again.** The Space metadata now stays within
-the Hub's 60-character `short_description` limit.
+**Hugging Face publishing is valid.** The Space metadata stays within the Hub's
+60-character `short_description` limit.
 
 ## Previously in v0.8.4
 
@@ -667,7 +693,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.5 — current release. Foreground macOS approval warnings, human-approved cross-wing recall, origin weighting,
+v0.8.6 — current release. Deliberate two-button approval warnings, reliable supervised tray restarts,
+honest service-control errors, persistent Claude recall across context transitions, update-aware hooks and skills,
+foreground macOS approval warnings, human-approved cross-wing recall, origin weighting,
 one-time credential grants, append-only approval audit, default-deny project recall, deterministic credential
 blocking/redaction, append-only secret quarantine, stable project markers,
 runtime ownership diagnostics, repair-aware maintenance,

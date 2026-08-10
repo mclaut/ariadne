@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.5",
+  softwareVersion: "0.8.6",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.5</a>
+          <a href="#new">New in 0.8.6</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.5 brings the warning to the front
+            v0.8.6 makes approvals deliberate and Claude memory persistent
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.5</span>
-            <h2>A warning that cannot hide behind your work.</h2>
+            <span className="eyebrow">New in v0.8.6</span>
+            <h2>Reliable approval prompts. Persistent Claude memory.</h2>
             <p>
-              Project isolation is the default. Crossing a boundary requires a
-              visible, scoped decision from a human.
+              The release fixes desktop lifecycle failures, removes accidental
+              keyboard decisions, and keeps memory active through context changes.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <Check aria-hidden="true" />
-              <h3>Project-scoped by default</h3>
+              <h3>Fixed: tray restart</h3>
               <p>
-                Recall and saves require an active wing. A readable sibling
-                repository is not permission to reuse its memory or config.
+                A launchd-managed tray exits cleanly before its supervisor starts
+                one replacement, avoiding the race that could hide the icon.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>Foreground approval window</h3>
+              <h3>Changed: deliberate approval</h3>
               <p>
-                On macOS the native warning activates before display. Approve,
-                Deny, and safe-default Later remain explicit human choices.
+                Warnings show only Approve and Deny. Neither is selected, and
+                Return/Enter or Escape cannot decide or dismiss a request.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Credentials stay separate</h3>
+              <h3>Added: persistent Claude recall</h3>
               <p>
-                Protected resources need a second, exact five-minute grant.
-                It is consumed once and the credential value is never stored.
+                Auto-recall now follows startup, resume, clear, compact, and fork,
+                with an explicit workflow reminder inside the restored context.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Local context stays first</h3>
+              <h3>Fixed: honest service errors</h3>
               <p>
-                Approved external memories carry a 0.70 origin weight and are
-                labeled clearly. Local results retain ranking priority.
+                Start, stop, and restart failures now reach the CLI and tray;
+                stale Claude skills and hooks are detected and refreshed.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.5"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.6"
               target="_blank"
               rel="noreferrer"
             >
