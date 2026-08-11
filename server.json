@@ -9,12 +9,12 @@
     "source": "github",
     "id": "1289765011"
   },
-  "version": "0.8.6",
+  "version": "0.8.7",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/mclaut/ariadne/releases/download/v0.8.6/ariadne-v0.8.6.mcpb",
-      "version": "0.8.6",
+      "identifier": "https://github.com/mclaut/ariadne/releases/download/v0.8.7/ariadne-v0.8.7.mcpb",
+      "version": "0.8.7",
       "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "transport": {
         "type": "stdio"

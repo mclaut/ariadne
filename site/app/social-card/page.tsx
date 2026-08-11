@@ -13,7 +13,7 @@ export default function SocialCard() {
       <div className="social-card-copy">
         <div className="social-card-kicker">
           <span className="status-dot" />
-          Human-approved local memory
+          Verified local service lifecycle
         </div>
         <h1>ARIADNE</h1>
         <p>Local-first memory for AI agents</p>
@@ -24,7 +24,7 @@ export default function SocialCard() {
         aria-hidden="true"
       />
       <div className="social-card-footer">
-        <span>v0.8.6</span>
+        <span>v0.8.7</span>
         <span>Windows / macOS / Linux</span>
         <span>MIT + MCP</span>
       </div>

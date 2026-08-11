@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,33 +32,41 @@ func control(action string) error {
 	plist := filepath.Join(home, "Library", "LaunchAgents", qdrantLabel+".plist")
 	switch action {
 	case "start":
+		var errs []error
 		labels := loadedAriadneQdrantAgents()
 		for _, label := range labels {
 			if label != qdrantLabel {
 				if err := run("launchctl", "bootout", "gui/"+uid+"/"+label); err != nil {
-					return fmt.Errorf("bootout obsolete Qdrant job %s: %w", label, err)
+					errs = append(errs, fmt.Errorf("bootout obsolete Qdrant job %s: %w", label, err))
 				}
 			}
 		}
 		if !slices.Contains(labels, qdrantLabel) {
 			if err := run("launchctl", "bootstrap", "gui/"+uid, plist); err != nil {
-				return fmt.Errorf("bootstrap Qdrant job: %w", err)
+				errs = append(errs, fmt.Errorf("bootstrap Qdrant job: %w", err))
 			}
 		}
 		if err := run("launchctl", "kickstart", "gui/"+uid+"/"+qdrantLabel); err != nil {
-			return fmt.Errorf("kickstart Qdrant job: %w", err)
+			errs = append(errs, fmt.Errorf("kickstart Qdrant job: %w", err))
 		}
 		if err := run("brew", "services", "start", "ollama"); err != nil {
-			return fmt.Errorf("start Ollama service: %w", err)
+			errs = append(errs, fmt.Errorf("start Ollama service: %w", err))
+		}
+		if err := errors.Join(errs...); err != nil {
+			return err
 		}
 	case "stop":
+		var errs []error
 		for _, label := range loadedAriadneQdrantAgents() {
 			if err := run("launchctl", "bootout", "gui/"+uid+"/"+label); err != nil {
-				return fmt.Errorf("bootout Qdrant job %s: %w", label, err)
+				errs = append(errs, fmt.Errorf("bootout Qdrant job %s: %w", label, err))
 			}
 		}
 		if err := run("brew", "services", "stop", "ollama"); err != nil {
-			return fmt.Errorf("stop Ollama service: %w", err)
+			errs = append(errs, fmt.Errorf("stop Ollama service: %w", err))
+		}
+		if err := errors.Join(errs...); err != nil {
+			return err
 		}
 	}
 	fmt.Println(action, "issued (qdrant agent + ollama brew service)")
@@ -110,6 +119,42 @@ func rss(marker string) int64 {
 	return total / 1024
 }
 
+func pid(markers ...string) int {
+	out, err := exec.CommandContext(context.Background(), "ps", "axo", "pid=,args=").Output() //nolint:gosec // fixed command
+	if err != nil {
+		return 0
+	}
+	return parseProcessPID(string(out), markers...)
+}
+
+func parseProcessPID(output string, markers ...string) int {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, "ariadnectl") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		matched := false
+		for _, marker := range markers {
+			if marker != "" && strings.Contains(line, marker) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		value, parseErr := strconv.Atoi(fields[0])
+		if parseErr == nil {
+			return value
+		}
+	}
+	return 0
+}
+
 func freeGB(path string) int64 {
 	out, err := exec.CommandContext(context.Background(), "df", "-Pk", path).Output() //nolint:gosec // fixed command
 	if err != nil {
@@ -128,5 +173,41 @@ func freeGB(path string) int64 {
 }
 
 func run(bin string, args ...string) error {
-	return exec.CommandContext(context.Background(), bin, args...).Run() //nolint:gosec // fixed service controls
+	resolved := resolveServiceBinary(bin, exec.LookPath, isExecutableFile)
+	cmd := exec.CommandContext(context.Background(), resolved, args...) //nolint:gosec // fixed service controls
+	if bin == "brew" {
+		cmd.Env = append(os.Environ(), "HOMEBREW_NO_AUTO_UPDATE=1")
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if detail := strings.TrimSpace(string(output)); detail != "" {
+			return fmt.Errorf("%w: %s", err, detail)
+		}
+		return err
+	}
+	return nil
+}
+
+func resolveServiceBinary(
+	bin string,
+	lookPath func(string) (string, error),
+	executable func(string) bool,
+) string {
+	if path, err := lookPath(bin); err == nil {
+		return path
+	}
+	if bin != "brew" {
+		return bin
+	}
+	for _, candidate := range []string{"/opt/homebrew/bin/brew", "/usr/local/bin/brew"} {
+		if executable(candidate) {
+			return candidate
+		}
+	}
+	return bin
+}
+
+func isExecutableFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
 }

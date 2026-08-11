@@ -26,7 +26,39 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.6
+## What's New in v0.8.7
+
+### Fixed
+
+- **Tray restart now works under launchd's restricted environment.** Ariadne
+  resolves Homebrew from standard macOS locations when `brew` is absent from
+  launchd's minimal `PATH`, so both Qdrant and Ollama actually restart.
+- **Restart always attempts recovery.** `ariadnectl restart` runs the start
+  phase even when stopping one service reports an error, then returns every
+  failure instead of leaving the stack down after a partial stop.
+- **The completion message survives the tray restart.** The verified result is
+  appended before the old tray exits; its launchd replacement displays the
+  final notification and appends a delivered marker.
+
+### Added
+
+- **Verified service operations.** The tray observes Qdrant and Ollama before
+  and after Start, Stop, or Restart, waits for the requested state, verifies PID
+  changes on restart, and refuses to report success while the collection is
+  unhealthy.
+- **Visible PID and operation diagnostics.** Tray rows and `ariadnectl status`
+  expose service PIDs; structured logs include duration, before/after state,
+  command output, and the exact verification failure.
+
+### Changed
+
+- **Conflicting controls are locked during service work.** Start, Stop,
+  Restart, maintenance, update, backup, and export cannot overlap while a
+  service action is in progress.
+- **Platform command errors keep their useful output.** macOS, Linux, and
+  Windows service-control failures now preserve stderr/stdout for diagnosis.
+
+## Previously in v0.8.6
 
 ### Fixed
 
@@ -693,7 +725,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.6 — current release. Deliberate two-button approval warnings, reliable supervised tray restarts,
+v0.8.7 — current release. Verified Qdrant/Ollama lifecycle operations, launchd-safe Homebrew resolution,
+durable post-restart notifications, PID observability, conflict-free service controls,
+deliberate two-button approval warnings, reliable supervised tray restarts,
 honest service-control errors, persistent Claude recall across context transitions, update-aware hooks and skills,
 foreground macOS approval warnings, human-approved cross-wing recall, origin weighting,
 one-time credential grants, append-only approval audit, default-deny project recall, deterministic credential

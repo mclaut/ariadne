@@ -19,7 +19,7 @@
         Ariadne
       </a>
       <div class="nav-links">
-        <a href="#new">New in 0.8.6</a>
+        <a href="#new">New in 0.8.7</a>
         <a href="#architecture">Architecture</a>
         <a href="#install">Install</a>
       </div>
@@ -40,7 +40,7 @@
         <div class="hero-content">
           <div class="release-kicker">
             <span data-lucide="sparkles" aria-hidden="true"></span>
-            v0.8.6 makes approvals deliberate and Claude memory persistent
+            v0.8.7 verifies every service restart from click to completion
           </div>
           <h1>Ariadne</h1>
           <p class="hero-lead">
@@ -58,7 +58,7 @@
             </a>
             <a
               class="button button-secondary"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.6"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.7"
               target="_blank"
               rel="noreferrer"
             >
@@ -78,11 +78,11 @@
       <section class="new-band" id="new">
         <div class="section-shell">
           <div class="section-heading">
-            <span class="eyebrow">New in v0.8.6</span>
-            <h2>Reliable approval prompts. Persistent Claude memory.</h2>
+            <span class="eyebrow">New in v0.8.7</span>
+            <h2>Verified restarts. Durable completion signals.</h2>
             <p>
-              Fixed lifecycle failures, safer input handling, and an update-aware
-              memory workflow for Claude Code.
+              Observable Qdrant and Ollama control, recovery after partial
+              failures, and a completion message that survives tray relaunch.
             </p>
           </div>
           <div class="feature-grid">
@@ -90,24 +90,24 @@
               <span data-lucide="check-circle-2" aria-hidden="true"></span>
               <h3>Fixed</h3>
               <p>
-                Tray restarts no longer race, service errors are reported, and
-                stale Claude integration files are detected.
+                Launchd finds Homebrew outside the shell PATH, restart always
+                attempts recovery, and success requires fresh service PIDs.
               </p>
             </article>
             <article class="feature feature-blue">
               <span data-lucide="scan-search" aria-hidden="true"></span>
               <h3>Changed</h3>
               <p>
-                Warnings expose only Approve and Deny. Neither is a default;
-                Return/Enter and Escape cannot decide or dismiss the request.
+                Service, maintenance, update, backup, and export controls cannot
+                overlap while a lifecycle action is running.
               </p>
             </article>
             <article class="feature feature-coral">
               <span data-lucide="list-filter" aria-hidden="true"></span>
               <h3>Added</h3>
               <p>
-                Claude auto-recall now follows startup, resume, clear, compact,
-                and fork with explicit persistent-memory guidance.
+                The old tray appends a verified result; its replacement shows
+                completion and appends a delivered marker.
               </p>
             </article>
           </div>

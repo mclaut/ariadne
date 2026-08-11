@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.6",
+  softwareVersion: "0.8.7",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.6</a>
+          <a href="#new">New in 0.8.7</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.6 makes approvals deliberate and Claude memory persistent
+            v0.8.7 verifies every service restart from click to completion
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.6</span>
-            <h2>Reliable approval prompts. Persistent Claude memory.</h2>
+            <span className="eyebrow">New in v0.8.7</span>
+            <h2>Verified restarts. Durable completion signals.</h2>
             <p>
-              The release fixes desktop lifecycle failures, removes accidental
-              keyboard decisions, and keeps memory active through context changes.
+              The tray now proves that Qdrant and Ollama restarted, recovers
+              from partial failures, and confirms completion after its own relaunch.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <Check aria-hidden="true" />
-              <h3>Fixed: tray restart</h3>
+              <h3>Fixed: launchd service control</h3>
               <p>
-                A launchd-managed tray exits cleanly before its supervisor starts
-                one replacement, avoiding the race that could hide the icon.
+                Homebrew is found outside the shell PATH, restart always attempts
+                recovery, and service command diagnostics are preserved.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Server aria-hidden="true" />
-              <h3>Changed: deliberate approval</h3>
+              <h3>Added: verified PID changes</h3>
               <p>
-                Warnings show only Approve and Deny. Neither is selected, and
-                Return/Enter or Escape cannot decide or dismiss a request.
+                Success requires healthy Qdrant and Ollama state, fresh restart
+                PIDs, and a green collection before the tray reports done.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Added: persistent Claude recall</h3>
+              <h3>Added: durable completion</h3>
               <p>
-                Auto-recall now follows startup, resume, clear, compact, and fork,
-                with an explicit workflow reminder inside the restored context.
+                The old tray appends a verified result; its launchd replacement
+                shows the completion message and appends a delivered marker.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Fixed: honest service errors</h3>
+              <h3>Changed: conflict-free controls</h3>
               <p>
-                Start, stop, and restart failures now reach the CLI and tray;
-                stale Claude skills and hooks are detected and refreshed.
+                Service actions cannot overlap maintenance, update, backup, or
+                export, while tray rows and status output expose live PIDs.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.6"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.7"
               target="_blank"
               rel="noreferrer"
             >

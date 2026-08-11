@@ -13,7 +13,6 @@ import (
 	"ariadne/internal/version"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -57,6 +56,7 @@ func runtimeDir(sub string) string {
 // mirrors the JSON printed by `ariadnectl status -json`.
 type svc struct {
 	Up      bool   `json:"up"`
+	PID     int    `json:"pid"`
 	RSSMB   int64  `json:"rss_mb"`
 	Version string `json:"version"`
 }
@@ -94,6 +94,7 @@ var (
 	mApprove, mDeny                                                                              *systray.MenuItem
 	langItems                                                                                    map[i18n.Lang]*systray.MenuItem
 	maintenanceRunning                                                                           bool
+	serviceActionRunning                                                                         bool
 	approvalManager                                                                              = approval.New("")
 	currentApproval                                                                              approval.Request
 	hasCurrentApproval                                                                           bool
@@ -195,6 +196,7 @@ func onReady() {
 	go poll()
 	go loop()
 	go reportUpdateResult()
+	go reportPendingServiceNotification()
 	go checkForUpdates(false)
 	go updateLoop()
 }
@@ -207,15 +209,11 @@ func loop() {
 		case <-t.C:
 			poll()
 		case <-mStart.ClickedCh:
-			_ = ctl("start", "")
+			serviceActionClicked(serviceStart)
 		case <-mStop.ClickedCh:
-			_ = ctl("stop", "")
+			serviceActionClicked(serviceStop)
 		case <-mRestart.ClickedCh:
-			if ctl("restart", "") == nil {
-				if err := relaunchTray(); err != nil {
-					notify("ariadne", i18n.T(lang, "notify.failed")+": "+err.Error())
-				}
-			}
+			serviceActionClicked(serviceRestart)
 		case <-mMaintenance.ClickedCh:
 			go maintenanceClicked()
 		case <-mApprove.ClickedCh:
@@ -253,9 +251,7 @@ func switchLang(l i18n.Lang) {
 func relabel() {
 	mu.Lock()
 	defer mu.Unlock()
-	mStart.SetTitle(i18n.T(lang, "menu.start"))
-	mStop.SetTitle(i18n.T(lang, "menu.stop"))
-	mRestart.SetTitle(i18n.T(lang, "menu.restart"))
+	refreshServiceMenusLocked()
 	refreshMaintenanceMenuLocked()
 	mBackup.SetTitle(i18n.T(lang, "menu.backup"))
 	mExport.SetTitle(i18n.T(lang, "menu.export"))
@@ -300,8 +296,8 @@ func poll() {
 	systray.SetTooltip("Ariadne " + version.Tag + " — " + word)
 	rowVersion.SetTitle("Ariadne " + version.Tag)
 	rowHealth.SetTitle("ariadne — " + word)
-	rowQdrant.SetTitle(fmt.Sprintf("Qdrant: %s · %dMB", upWord(s.Qdrant.Up), s.Qdrant.RSSMB))
-	rowOllama.SetTitle(fmt.Sprintf("Ollama: %s · %dMB", upVer(s.Ollama), s.Ollama.RSSMB))
+	rowQdrant.SetTitle(serviceRow("Qdrant", upWord(s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB))
+	rowOllama.SetTitle(serviceRow("Ollama", upVer(s.Ollama), s.Ollama.PID, s.Ollama.RSSMB))
 	rowPoints.SetTitle(fmt.Sprintf("%s: %s (%s)", i18n.T(lang, "row.records"), grouped(s.Collection.Points), s.Collection.Status))
 	totals := s.TokenMetrics.AllTime
 	rowTokens.SetTitle(fmt.Sprintf("%s: ~%s", i18n.T(lang, "row.context_saved"), grouped(totals.ConfirmedSavedTokens)))
@@ -378,7 +374,32 @@ func refreshMaintenanceMenuLocked() {
 		return
 	}
 	mMaintenance.SetTitle(i18n.T(lang, "menu.maintenance"))
+	if serviceActionRunning {
+		mMaintenance.Disable()
+		return
+	}
 	mMaintenance.Enable()
+}
+
+func refreshServiceMenusLocked() {
+	if mStart == nil || mStop == nil || mRestart == nil {
+		return
+	}
+	mStart.SetTitle(i18n.T(lang, "menu.start"))
+	mStop.SetTitle(i18n.T(lang, "menu.stop"))
+	mRestart.SetTitle(i18n.T(lang, "menu.restart"))
+	busy := serviceActionRunning || maintenanceRunning || updates.installing
+	items := []*systray.MenuItem{mStart, mStop, mRestart, mBackup, mExport}
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		if busy {
+			item.Disable()
+		} else {
+			item.Enable()
+		}
+	}
 }
 
 func refreshApprovalMenuLocked() {
@@ -460,13 +481,14 @@ func shortApprovalDetail(request approval.Request, limit int) string {
 
 func maintenanceClicked() {
 	mu.Lock()
-	if maintenanceRunning {
+	if maintenanceRunning || serviceActionRunning {
 		mu.Unlock()
 		return
 	}
 	maintenanceRunning = true
 	activeLang := lang
 	refreshMaintenanceMenuLocked()
+	refreshServiceMenusLocked()
 	mu.Unlock()
 
 	notify("ariadne", i18n.T(activeLang, "notify.maintenance")+": "+i18n.T(activeLang, "notify.started"))
@@ -478,6 +500,7 @@ func maintenanceClicked() {
 	maintenanceRunning = false
 	activeLang = lang
 	refreshMaintenanceMenuLocked()
+	refreshServiceMenusLocked()
 	mu.Unlock()
 	result := i18n.T(activeLang, "notify.done")
 	if err != nil {
@@ -506,17 +529,9 @@ func runTrayMaintenance(ctx context.Context) error {
 }
 
 func fetch() status {
-	var s status
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, ctlPath(), "status", "-json").Output() //nolint:gosec // our own binary under $HOME
-	if err != nil {
-		return s
-	}
-	if json.Unmarshal(out, &s) != nil {
-		return s
-	}
-	s.reachable = true
+	s, _ := fetchStatus(ctx)
 	return s
 }
 
@@ -580,13 +595,21 @@ func openPath(p string) {
 }
 
 func notify(title, msg string) {
-	ctx := context.Background()
+	_ = notificationCommand(context.Background(), title, msg).Start()
+}
+
+func notifySync(title, msg string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return notificationCommand(ctx, title, msg).Run()
+}
+
+func notificationCommand(ctx context.Context, title, msg string) *exec.Cmd {
 	if runtime.GOOS == "darwin" {
 		script := "display notification " + qq(msg) + " with title " + qq(title)
-		_ = exec.CommandContext(ctx, "osascript", "-e", script).Start() //nolint:gosec // fixed argv
-		return
+		return exec.CommandContext(ctx, "osascript", "-e", script) //nolint:gosec // fixed argv
 	}
-	_ = exec.CommandContext(ctx, "notify-send", title, msg).Start() //nolint:gosec // fixed argv, our own text
+	return exec.CommandContext(ctx, "notify-send", title, msg) //nolint:gosec // fixed argv, our own text
 }
 
 // --- helpers ---
@@ -651,6 +674,13 @@ func upVer(o svc) string {
 		return i18n.T(lang, "status.up") + " " + o.Version
 	}
 	return i18n.T(lang, "status.up")
+}
+
+func serviceRow(name, state string, processID int, rssMB int64) string {
+	if processID > 0 {
+		return fmt.Sprintf("%s: %s · PID %d · %dMB", name, state, processID, rssMB)
+	}
+	return fmt.Sprintf("%s: %s · %dMB", name, state, rssMB)
 }
 
 // grouped formats an int with thin-space thousands separators.
