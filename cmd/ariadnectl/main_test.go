@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -27,5 +29,26 @@ func TestRestartServicesAlwaysAttemptsRecoveryStart(t *testing.T) {
 	want := []string{"stop", "pause", "start"}
 	if !reflect.DeepEqual(steps, want) {
 		t.Fatalf("steps = %#v, want %#v", steps, want)
+	}
+}
+
+func TestQdrantRequestLoadsKeyWithoutPuttingItInURL(t *testing.T) {
+	keyFile := filepath.Join(t.TempDir(), "qdrant.key")
+	if err := os.WriteFile(keyFile, []byte("request-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ARIADNE_QDRANT_API_KEY_FILE", keyFile)
+	t.Setenv("ARIADNE_QDRANT_API_KEY", "")
+	t.Setenv("ARIADNE_QDRANT_TLS", "1")
+	t.Setenv("ARIADNE_QDRANT_ALLOW_INSECURE_REMOTE", "")
+	req, err := newQdrantRequest(t.Context(), "GET", "https://qdrant.example/healthz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := req.Header.Get("api-key"); got != "request-secret" {
+		t.Fatalf("api-key header = %q", got)
+	}
+	if got := req.URL.String(); got != "https://qdrant.example/healthz" {
+		t.Fatalf("request URL = %q", got)
 	}
 }

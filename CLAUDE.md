@@ -12,7 +12,7 @@ sessions — Qdrant is a server, so the single-writer/lock-starvation class is g
 
 - Build everything: `go build ./...`
 - Install a runtime binary: `go build -o ~/.ariadne/bin/<name> ./cmd/<name>`
-  (`ariadne`, `ariadnectl`, `import`, `ariadne-hook`, `install`)
+  (`ariadne`, `ariadnectl`, `ariadne-tray`, `import`, `ariadne-hook`, `install`)
 - Lint (must be clean before every commit): `golangci-lint run` — config `.golangci.yml`
 - Format: `golangci-lint fmt`
 - The `poc/` experiments are a separate module: `cd poc && go build .`
@@ -23,22 +23,33 @@ sessions — Qdrant is a server, so the single-writer/lock-starvation class is g
   (pure Go tokenizer; Qdrant computes IDF) fused with RRF server-side. No MCP concerns.
 - `cmd/ariadne` — MCP server (stdio). Tools: `memory_save`, `memory_recall`
   (semantic by query with required wing, explicit all-wing audit opt-in, or exact
-  by id), `memory_delete`, `memory_move` (curate: delete by id, re-home/re-tag by id).
+  by id; optional room/collection scopes), `memory_delete`, `memory_move`
+  (curate: delete by id, re-home/re-tag by id).
 - `cmd/ariadnectl` — control/health core; `cmd/ariadne-tray` (localized system-tray
-  monitor, macOS/Linux/Windows) is a thin viewer over it.
+  monitor, macOS/Linux/Windows) is a thin viewer over it. The CLI owns status,
+  metrics, service control, backup/restore/export, maintenance/consolidation,
+  secret quarantine and pending-approval inspection.
 - `cmd/import` — backfill (chromadb sqlite / markdown memfiles / JSONL); `-sync`
   keeps memfile chunks true to disk.
 - `cmd/hook` (`ariadne-hook`) — Claude Code session hooks: SessionStart auto-recall,
   SessionEnd curated auto-capture (local chat model → one diary memory, never raw).
-- `cmd/install` — one-shot installer (macOS/Linux); reuses an existing Qdrant,
-  never restarts/reconfigures it.
+- `cmd/eval` — deterministic ranking regressions plus judged ranked-run
+  comparison (Recall/MRR/nDCG); it does not contact Qdrant, Ollama or remote services.
+- `cmd/install` — one-shot installer for macOS/Linux; `install.ps1` supplies the
+  Windows path. Both preserve/reuse existing infrastructure where possible.
+- `internal/approval`, `internal/metrics`, `internal/activity`,
+  `internal/maintenance`, `internal/qdrantauth`, `internal/retrievaleval`, and
+  `internal/secretguard` — shared approval, observability, retry, transport,
+  evaluation, operation-journal, and credential-detection primitives.
 
 ## Runtime layout (NOT the repo)
 
 Binaries, Qdrant data, backups and logs live in `~/.ariadne/` — never in the repo,
 never under `~/Desktop`/`~/Documents`. On macOS, launchd cannot exec programs or
 write logs from those folders (TCC → agents die with `EX_CONFIG`, empty logs).
-The repo holds only source.
+The repo holds only source. `site/` is an independent Node/Vinext project and
+has its own minimal `go.mod` fence so root `go build ./...` and `go test ./...`
+never traverse npm dependencies that happen to contain Go sources.
 
 ## Conventions
 

@@ -22,7 +22,7 @@
     <key>Hour</key><integer>4</integer>
     <key>Minute</key><integer>30</integer>
   </dict>
-  <key>EnvironmentVariables</key><dict><key>HOME</key><string>__HOME__</string></dict>
+  <key>EnvironmentVariables</key><dict><key>HOME</key><string>__HOME__</string><!-- __ARIADNE_ENV__ --></dict>
   <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/maintenance.log</string>
   <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/maintenance.log</string>
 </dict></plist>

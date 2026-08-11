@@ -11,6 +11,7 @@
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ThrottleInterval</key><integer>10</integer>
+  <key>EnvironmentVariables</key><dict><key>HOME</key><string>__HOME__</string><!-- __ARIADNE_ENV__ --></dict>
   <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/tray.log</string>
   <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/tray.log</string>
 </dict></plist>

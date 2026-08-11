@@ -2,6 +2,7 @@ package main
 
 import (
 	"ariadne/internal/activity"
+	maintenancecore "ariadne/internal/maintenance"
 	"context"
 	"errors"
 	"fmt"
@@ -146,13 +147,13 @@ func TestRunMaintenanceDoesNotRetryDeferredConsolidation(t *testing.T) {
 }
 
 func TestRetryBackoffIsBounded(t *testing.T) {
-	if got := retryBackoff(5*time.Minute, 12*time.Minute, 1); got != 5*time.Minute {
+	if got := maintenancecore.Backoff(5*time.Minute, 12*time.Minute, 1); got != 5*time.Minute {
 		t.Fatalf("first delay = %s", got)
 	}
-	if got := retryBackoff(5*time.Minute, 12*time.Minute, 2); got != 10*time.Minute {
+	if got := maintenancecore.Backoff(5*time.Minute, 12*time.Minute, 2); got != 10*time.Minute {
 		t.Fatalf("second delay = %s", got)
 	}
-	if got := retryBackoff(5*time.Minute, 12*time.Minute, 3); got != 12*time.Minute {
+	if got := maintenancecore.Backoff(5*time.Minute, 12*time.Minute, 3); got != 12*time.Minute {
 		t.Fatalf("bounded delay = %s", got)
 	}
 }

@@ -4,6 +4,7 @@
 package store
 
 import (
+	"ariadne/internal/qdrantauth"
 	"ariadne/internal/secretguard"
 	"bytes"
 	"context"
@@ -133,7 +134,16 @@ func (s *Store) GetByID(ctx context.Context, id uint64, collection string) (Resu
 
 // New connects to Qdrant (gRPC) and prepares the Ollama client.
 func New(qHost string, qPort int, ollamaURL, model, collection string) (*Store, error) {
-	qc, err := qdrant.NewClient(&qdrant.Config{Host: qHost, Port: qPort})
+	auth, err := qdrantauth.FromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("qdrant auth config: %w", err)
+	}
+	if err := auth.ValidateGRPC(qHost); err != nil {
+		return nil, fmt.Errorf("qdrant remote policy: %w", err)
+	}
+	qc, err := qdrant.NewClient(&qdrant.Config{
+		Host: qHost, Port: qPort, APIKey: auth.APIKey, UseTLS: auth.UseTLS,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("qdrant connect: %w", err)
 	}
@@ -1032,26 +1042,33 @@ func (s *Store) MemfileSourceStates(ctx context.Context) (map[string]MemfileSour
 	return out, nil
 }
 
-// WingRoomPairs returns point counts per (wing, room) pair. One payload-only
-// scroll — fine at local scale (revisit past ~100k points); used by
-// import -sync to find orphaned chunks of deleted/renamed files.
+// WingRoomPairs returns point counts per (wing, room) pair. It pages through
+// the complete collection with payload-only requests so import -sync remains
+// correct for large archival collections as well as the curated default.
 func (s *Store) WingRoomPairs(ctx context.Context) (map[[2]string]int, error) {
-	res, err := s.qc.Scroll(ctx, &qdrant.ScrollPoints{
+	const pageSize = uint32(512)
+	iterator := s.qc.ScrollAll(ctx, &qdrant.ScrollPoints{
 		CollectionName: s.collection,
-		Limit:          qdrant.PtrOf(uint32(200_000)),
+		Limit:          qdrant.PtrOf(pageSize),
 		WithPayload:    qdrant.NewWithPayloadInclude("wing", "room", "status"),
 	})
-	if err != nil {
-		return nil, err
-	}
 	out := map[[2]string]int{}
-	for _, p := range res {
-		pl := p.GetPayload()
-		switch pl["status"].GetStringValue() {
-		case StatusArchived, StatusSuperseded, StatusOrphaned, StatusQuarantined:
-			continue
+	for {
+		points, err := iterator.Next()
+		if errors.Is(err, io.EOF) {
+			break
 		}
-		out[[2]string{pl["wing"].GetStringValue(), pl["room"].GetStringValue()}]++
+		if err != nil {
+			return nil, err
+		}
+		for _, point := range points {
+			payload := point.GetPayload()
+			switch payload["status"].GetStringValue() {
+			case StatusArchived, StatusSuperseded, StatusOrphaned, StatusQuarantined:
+				continue
+			}
+			out[[2]string{payload["wing"].GetStringValue(), payload["room"].GetStringValue()}]++
+		}
 	}
 	return out, nil
 }

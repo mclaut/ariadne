@@ -32,6 +32,11 @@ fix and disclosure timeline with the reporter when the issue is confirmed.
 
 - Qdrant is bound to `127.0.0.1` by default. Its default server has no
   authentication, and memory payloads are stored as plaintext.
+- Intentional remote Qdrant clients fail closed unless an API key and TLS are
+  configured. A user-only key file is preferred because installers propagate
+  only its path to MCP, hooks, maintenance, and tray launchers. The explicit
+  insecure-remote override is reserved for an independently encrypted private
+  tunnel, never an ordinary LAN.
 - Semantic recall is project-scoped by default and requires `wing`.
   Cross-project recall requires `all_wings: true`, a stated purpose, and a
   human decision in Ariadne's system warning or tray fallback. The resulting grant is limited to 15 minutes, the MCP

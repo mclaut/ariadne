@@ -357,11 +357,14 @@ append-only outcomes live in
 |---|---|
 | `cmd/ariadne` | MCP server (stdio). Tools: `memory_save`, `memory_recall`, `credential_access`, `memory_delete`, `memory_move`. |
 | `cmd/import` | Backfill from a chromadb sqlite, markdown memory files or JSONL (batched embeds). |
-| `cmd/hook` | Claude Code session hooks (`ariadne-hook`): SessionStart auto-recall, SessionEnd auto-capture. |
+| `cmd/hook` | Claude Code session hooks (`ariadne-hook`): SessionStart auto-recall plus SessionEnd/PreCompact auto-capture. |
 | `cmd/install` | One-shot installer (macOS/Linux): preflight, reuse-or-install Qdrant, services, MCP, skill, hooks. Windows uses `install.ps1`. |
-| `cmd/ariadnectl` | Control + health core (`status -json`, `metrics -json`, start/stop, backup/export). |
-| `cmd/eval` | Read-only deterministic coding-memory ranking regression runner. |
+| `cmd/ariadnectl` | Control + health core: status/metrics, lifecycle, backup/restore/export, maintenance/consolidation, quarantine and approval inspection. |
+| `cmd/eval` | Read-only ranking regressions and judged retrieval-run comparison. |
 | `internal/store` | Storage core: embed (Ollama), BM25 sparse, Qdrant hybrid. |
+| `internal/maintenance` | UI-independent bounded retry engine for maintenance stages. |
+| `internal/qdrantauth` | API-key loading and fail-closed remote Qdrant transport policy. |
+| `internal/retrievaleval` | Recall/MRR/nDCG scoring for comparable ranked runs. |
 | `cmd/ariadne-tray` | Cross-platform tray monitor (macOS/Linux/Windows) — pure-Go, localized, over the `ariadnectl` core. |
 | `skills/ariadne` | Codex and Claude Code skill: scoped recall/save discipline + `doctor.sh`/`recall.sh`. |
 | `deploy/` | LaunchAgent / systemd templates: Qdrant service, daily memfiles-sync, tray autostart. |
@@ -412,8 +415,19 @@ for that prerequisite. Rerun the same install command after a cancelled prompt.
 If Qdrant still cannot start, the installer prints diagnostics and the tail of
 `~/.ariadne/logs/qdrant.log` directly in PowerShell.
 
-Qdrant is always bound to `127.0.0.1`. Ollama remains managed by its native
-Windows app and serves `http://localhost:11434`. Requirements: Windows 10 22H2
+Qdrant installed by Ariadne is always bound to `127.0.0.1`. An intentionally
+reused remote Qdrant can be configured without putting its key in client files:
+
+```powershell
+.\install.ps1 -QdrantHost qdrant.example -QdrantRestPort 6333 `
+  -QdrantGrpcPort 6334 -QdrantApiKeyFile C:\secure\qdrant.key -QdrantTls
+```
+
+The installer validates the authenticated health endpoint and propagates only
+the key-file path and transport settings to Codex, Claude, hooks, and the tray.
+`-AllowInsecureRemoteQdrant` is the explicit exception for an independently
+encrypted private tunnel. Ollama remains managed by its native Windows app and
+serves `http://localhost:11434`. Requirements: Windows 10 22H2
 or newer, x64, Windows PowerShell 5.1+, at least 8 GiB RAM and 15 GiB free disk
 for the default local models (16 GiB RAM recommended, 4+ CPU cores preferred).
 Virtual machines need the same guest resources; for Proxmox/KVM expose a modern
@@ -493,7 +507,9 @@ The installer is deliberately careful with existing infrastructure:
 - **An already-running Qdrant is REUSED, never restarted or reconfigured** —
   Ariadne only adds its own collection. A busy port that is *not* Qdrant aborts
   the install. Use `-qdrant-host/-qdrant-rest/-qdrant-grpc` to point at a
-  remote instance (e.g. a GPU workstation), `-ollama` for a remote embedder.
+  remote instance, `-ollama` for a remote embedder. Remote Qdrant is
+  fail-closed unless API-key authentication and TLS are configured (or the
+  explicit insecure override is set for an already-encrypted private tunnel).
 - **GPU / RAM / disk are checked up front** and insufficiencies are stated
   plainly (no GPU → an honest "embeddings on CPU, ~10x slower" warning;
   <6GiB RAM or <5GiB disk → hard FAIL).
@@ -548,11 +564,25 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ariadne.qdrant.plist
 
 **Security:** Qdrant has no auth by default — the template pins it to
 `127.0.0.1` (`QDRANT__SERVICE__HOST`). Never expose it on the LAN: your
-memories are stored in plaintext payloads.
+memories are stored in plaintext payloads. For an intentional remote Qdrant,
+set an admin or collection-scoped API key on the server and configure Ariadne
+with `ARIADNE_QDRANT_API_KEY_FILE` (recommended, mode `0600`) or the
+process-only `ARIADNE_QDRANT_API_KEY`, plus `ARIADNE_QDRANT_TLS=1`. The Go
+client sends the key through gRPC metadata and every Qdrant REST request uses
+the `api-key` header. Qdrant itself recommends TLS whenever an API key is used.
+The installer accepts the file form so generated MCP configuration retains
+only a path, never the secret value; generated maintenance, hook, and tray
+launchers receive the same non-secret client settings. `ARIADNE_QDRANT_ALLOW_INSECURE_REMOTE=1`
+is an explicit escape hatch for a separately encrypted transport such as a
+private tunnel; it must not be used on an ordinary LAN.
 
 Config via env (defaults in brackets): `ARIADNE_QDRANT_HOST` [localhost],
-`ARIADNE_QDRANT_PORT` [6334], `ARIADNE_OLLAMA` [http://localhost:11434],
-`ARIADNE_MODEL` [bge-m3], `ARIADNE_COLLECTION` [ariadne].
+`ARIADNE_QDRANT_PORT` [6334], `ARIADNE_QDRANT_REST`
+[http://localhost:6333], `ARIADNE_QDRANT_API_KEY_FILE`,
+`ARIADNE_QDRANT_API_KEY`, `ARIADNE_QDRANT_TLS` [0],
+`ARIADNE_QDRANT_ALLOW_INSECURE_REMOTE` [0], `ARIADNE_OLLAMA`
+[http://localhost:11434], `ARIADNE_MODEL` [bge-m3],
+`ARIADNE_COLLECTION` [ariadne].
 
 ## Codex and Claude Code skill
 
@@ -637,8 +667,22 @@ go run ./cmd/eval -cases evaluation/coding-memory.json
 
 It currently covers recency for explicitly temporal queries, no blind decay for
 durable decisions, semantic-dominance bounds, oversized legacy payloads, source
-quality, and multilingual temporal intent. This is a deterministic ranking
-regression suite, not yet an end-to-end embedding accuracy benchmark.
+quality, and multilingual temporal intent. To compare actual BM25 and
+learned-sparse outputs, export their ordered point IDs for the same judged
+queries and run:
+
+```bash
+go run ./cmd/eval \
+  -retrieval-runs evaluation/retrieval-runs.example.json \
+  -baseline bm25
+```
+
+The comparison reports macro-averaged Recall, MRR, nDCG, and nDCG delta at each
+cutoff; `-json` emits machine-readable scores. The checked-in file is an
+illustrative schema, not product evidence. A real conclusion requires frozen
+relevance judgments and runs from the same corpus, query set, filters, and
+cutoffs. The evaluator never contacts Qdrant, Ollama, or a remote model and
+never mutates memory.
 
 ## Monitor
 
@@ -680,7 +724,9 @@ estimate uses UTF-8 bytes because exact tokenizers vary by client and model; `~`
 marks a conservative context-reuse estimate, not provider billing or an A/B
 counterfactual. Metrics contain only numeric counters and opaque hashes, never
 memory or transcript text, and stay in `~/.ariadne/metrics.db` with user-only
-permissions. Set `ARIADNE_METRICS=0` to disable new records.
+permissions. Raw events remain append-only; schema v3 maintains transactional
+daily summaries for bounded lifetime reads and indexes the rolling time window.
+Set `ARIADNE_METRICS=0` to disable new records.
 
 - **`ariadne-tray`** (pure-Go, `fyne.io/systray`) is the monitor on every
   platform: the installer builds it into `~/.ariadne/bin` and registers autostart
@@ -755,6 +801,10 @@ requests are welcome through the
 [issue chooser](https://github.com/mclaut/ariadne/issues/new/choose). Setup and
 usage questions belong in [GitHub Discussions](https://github.com/mclaut/ariadne/discussions).
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and pull request guidance.
+
+Generated site artifacts can be cleared from the working tree without data
+loss: `make clean` moves build output to `~/.ariadne/archive/site/` with a
+recovery manifest, while `make clean-all` includes `site/node_modules`.
 
 Do not open a public issue for a vulnerability. Follow [SECURITY.md](SECURITY.md)
 and use GitHub's private vulnerability reporting instead.

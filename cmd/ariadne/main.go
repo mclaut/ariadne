@@ -9,6 +9,8 @@
 //
 //	ARIADNE_QDRANT_HOST  localhost
 //	ARIADNE_QDRANT_PORT  6334
+//	ARIADNE_QDRANT_API_KEY / ARIADNE_QDRANT_API_KEY_FILE  optional auth
+//	ARIADNE_QDRANT_TLS   1 for remote TLS
 //	ARIADNE_OLLAMA       http://localhost:11434
 //	ARIADNE_MODEL        bge-m3
 //	ARIADNE_COLLECTION   ariadne

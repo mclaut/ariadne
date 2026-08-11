@@ -177,7 +177,7 @@ func loadLegacyEmpty(ctx context.Context) ([]legacyEmptyPoint, error) {
 		}},
 		"limit": 10000, "with_payload": true, "with_vector": false,
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	req, err := newQdrantRequest(ctx, http.MethodPost,
 		strings.TrimRight(qdrantREST, "/")+"/collections/"+url.PathEscape(collection)+"/points/scroll",
 		bytes.NewReader(body))
 	if err != nil {
@@ -531,7 +531,7 @@ func loadDiary(ctx context.Context, cutoff int64) ([]diaryPoint, error) {
 		}},
 		"limit": 10000, "with_payload": true, "with_vector": false,
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	req, err := newQdrantRequest(ctx, http.MethodPost,
 		strings.TrimRight(qdrantREST, "/")+"/collections/"+url.PathEscape(collection)+"/points/scroll",
 		bytes.NewReader(body))
 	if err != nil {
