@@ -19,7 +19,7 @@
         Ariadne
       </a>
       <div class="nav-links">
-        <a href="#new">New in 0.8.7</a>
+        <a href="#new">New in 0.8.8</a>
         <a href="#architecture">Architecture</a>
         <a href="#install">Install</a>
       </div>
@@ -40,7 +40,7 @@
         <div class="hero-content">
           <div class="release-kicker">
             <span data-lucide="sparkles" aria-hidden="true"></span>
-            v0.8.7 verifies every service restart from click to completion
+            v0.8.8 hardens remote storage and scales append-only metrics
           </div>
           <h1>Ariadne</h1>
           <p class="hero-lead">
@@ -58,7 +58,7 @@
             </a>
             <a
               class="button button-secondary"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.7"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.8"
               target="_blank"
               rel="noreferrer"
             >
@@ -78,36 +78,36 @@
       <section class="new-band" id="new">
         <div class="section-shell">
           <div class="section-heading">
-            <span class="eyebrow">New in v0.8.7</span>
-            <h2>Verified restarts. Durable completion signals.</h2>
+            <span class="eyebrow">New in v0.8.8</span>
+            <h2>Authenticated remote storage. Append-only metrics at scale.</h2>
             <p>
-              Observable Qdrant and Ollama control, recovery after partial
-              failures, and a completion message that survives tray relaunch.
+              Fail-closed Qdrant transport, complete collection scans, and fast
+              lifetime observability without throwing raw history away.
             </p>
           </div>
           <div class="feature-grid">
             <article class="feature feature-green">
               <span data-lucide="check-circle-2" aria-hidden="true"></span>
-              <h3>Fixed</h3>
+              <h3>Protected</h3>
               <p>
-                Launchd finds Homebrew outside the shell PATH, restart always
-                attempts recovery, and success requires fresh service PIDs.
+                Remote Qdrant requires explicit API-key and TLS policy; client
+                configs retain only a protected key-file path.
               </p>
             </article>
             <article class="feature feature-blue">
               <span data-lucide="scan-search" aria-hidden="true"></span>
-              <h3>Changed</h3>
+              <h3>Scaled</h3>
               <p>
-                Service, maintenance, update, backup, and export controls cannot
-                overlap while a lifecycle action is running.
+                Metrics v3 preserves raw recall events while daily rollups and
+                an indexed recent window keep totals efficient.
               </p>
             </article>
             <article class="feature feature-coral">
               <span data-lucide="list-filter" aria-hidden="true"></span>
-              <h3>Added</h3>
+              <h3>Measured</h3>
               <p>
-                The old tray appends a verified result; its replacement shows
-                completion and appends a delivered marker.
+                Judged BM25 and learned-sparse runs now report deterministic
+                Recall, MRR, and nDCG instead of unverified claims.
               </p>
             </article>
           </div>

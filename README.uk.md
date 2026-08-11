@@ -24,7 +24,39 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## Нове у v0.8.7
+## Нове у v0.8.8
+
+### Додано
+
+- **Fail-closed автентифікація віддаленого Qdrant.** Remote gRPC потребує API
+  key і TLS, а REST — той самий key та HTTPS. Довготривалі клієнти зберігають
+  лише захищений шлях до key-файлу, а не саме значення. Явний insecure override
+  залишається для SSH або іншого тунелю під контролем користувача.
+- **Чесне порівняння retrieval.** `cmd/eval` обчислює детерміновані macro
+  Recall, MRR і nDCG для judged BM25 та learned-sparse runs без непідтверджених
+  заяв про перевагу SPLADE.
+
+### Змінено
+
+- **Metrics schema v3 масштабується без втрати історії.** Усі recall events
+  лишаються append-only, а індексований 30-денний шлях і транзакційні денні
+  rollups роблять lifetime totals швидкими. Міграція v2 не змінює raw rows або
+  підсумки.
+- **Collection scan став повним.** Memfile reconciliation читає всі сторінки
+  Qdrant замість фіксованої верхньої межі.
+- **Maintenance отримав reusable core.** Retry/backoff orchestration винесено в
+  `internal/maintenance` зі збереженням CLI та activity semantics.
+
+### Виправлено
+
+- **Remote settings переживають install і self-update.** macOS, Linux та
+  Windows launchers передають однакові не-секретні Qdrant settings, а явні
+  Windows installer arguments мають пріоритет.
+- **Go tooling більше не компілює залежності з `site/node_modules`.** Сайт має
+  окремий Go module, а `make clean` архівує generated assets з recovery
+  manifest замість видалення.
+
+## Раніше у v0.8.7
 
 ### Виправлено
 

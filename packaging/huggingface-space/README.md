@@ -35,15 +35,16 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.7 makes tray service controls observable and verifiable from click
-to completion, including across the tray process replacement itself.
+Version 0.8.8 hardens remote Qdrant connections and keeps local observability
+fast without discarding append-only recall history.
 
-- **Fixed:** launchd-safe Homebrew discovery, recovery start after partial stop
-  failures, and the missing completion message after a successful restart.
-- **Added:** before/after Qdrant and Ollama PID verification, green-collection
-  checks, visible PIDs, and append-only notification delivery records.
-- **Changed:** conflicting tray actions stay disabled during service work, and
-  platform command failures retain their diagnostic output.
+- **Added:** fail-closed Qdrant API-key/TLS policy and judged BM25 versus
+  learned-sparse Recall/MRR/nDCG evaluation.
+- **Changed:** metrics v3 retains every raw event while maintaining daily
+  rollups and an indexed recent window; collection reconciliation pages through
+  the complete dataset.
+- **Fixed:** remote settings survive installation and Windows self-update, and
+  repository Go tooling no longer enters site dependencies.
 
 ## Links
 

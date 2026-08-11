@@ -26,7 +26,40 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.7
+## What's New in v0.8.8
+
+### Added
+
+- **Fail-closed remote Qdrant authentication.** Remote gRPC requires an API key
+  plus TLS; REST requires the same key and HTTPS. Long-running clients retain
+  only a protected key-file path, never the key value. An explicit insecure
+  override remains available for a user-managed SSH or equivalent tunnel.
+- **Honest retrieval comparison.** `cmd/eval` now calculates deterministic
+  macro Recall, MRR, and nDCG for judged BM25 and learned-sparse runs instead of
+  claiming a SPLADE improvement without corpus evidence.
+
+### Changed
+
+- **Metrics schema v3 scales without discarding history.** Every recall event
+  remains append-only, while an indexed 30-day path and transactional daily
+  rollups make lifetime totals bounded and fast. Existing v2 databases migrate
+  without changing raw rows or totals.
+- **Collection scans are complete.** Memfile reconciliation now pages through
+  every Qdrant point instead of relying on a fixed upper limit.
+- **Maintenance has a reusable core.** Bounded retry/backoff orchestration lives
+  in `internal/maintenance`; `ariadnectl` retains its established CLI and
+  activity semantics.
+
+### Fixed
+
+- **Remote settings survive installation and self-update.** macOS, Linux, and
+  Windows launchers propagate the same non-secret Qdrant transport settings;
+  explicit Windows installer arguments still take precedence.
+- **Repository tooling no longer compiles dependencies from `site/node_modules`.**
+  The site is a separate Go module, and `make clean` archives generated assets
+  with a recovery manifest instead of deleting them.
+
+## Previously in v0.8.7
 
 ### Fixed
 
@@ -771,7 +804,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.7 — current release. Verified Qdrant/Ollama lifecycle operations, launchd-safe Homebrew resolution,
+v0.8.8 — current release. Fail-closed remote Qdrant authentication, append-only metrics v3 rollups,
+complete paginated collection scans, deterministic BM25/learned-sparse evaluation,
+reusable maintenance orchestration, and reversible site cleanup; verified Qdrant/Ollama lifecycle operations, launchd-safe Homebrew resolution,
 durable post-restart notifications, PID observability, conflict-free service controls,
 deliberate two-button approval warnings, reliable supervised tray restarts,
 honest service-control errors, persistent Claude recall across context transitions, update-aware hooks and skills,

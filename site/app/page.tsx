@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.7",
+  softwareVersion: "0.8.8",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.7</a>
+          <a href="#new">New in 0.8.8</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.7 verifies every service restart from click to completion
+            v0.8.8 hardens remote storage and scales append-only metrics
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.7</span>
-            <h2>Verified restarts. Durable completion signals.</h2>
+            <span className="eyebrow">New in v0.8.8</span>
+            <h2>Authenticated remote storage. Append-only metrics at scale.</h2>
             <p>
-              The tray now proves that Qdrant and Ollama restarted, recovers
-              from partial failures, and confirms completion after its own relaunch.
+              Fail-closed Qdrant transport, complete collection scans, and fast
+              lifetime observability without throwing raw history away.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
-              <Check aria-hidden="true" />
-              <h3>Fixed: launchd service control</h3>
+              <ShieldCheck aria-hidden="true" />
+              <h3>Protected: remote Qdrant</h3>
               <p>
-                Homebrew is found outside the shell PATH, restart always attempts
-                recovery, and service command diagnostics are preserved.
+                Remote gRPC requires an API key plus TLS; client configs retain
+                only a protected key-file path instead of the secret value.
               </p>
             </article>
             <article className="new-item accent-blue">
-              <Server aria-hidden="true" />
-              <h3>Added: verified PID changes</h3>
+              <Database aria-hidden="true" />
+              <h3>Scaled: metrics v3</h3>
               <p>
-                Success requires healthy Qdrant and Ollama state, fresh restart
-                PIDs, and a green collection before the tray reports done.
+                Raw recall events remain append-only while daily rollups and an
+                indexed recent window keep lifetime totals efficient.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Added: durable completion</h3>
+              <h3>Fixed: complete scans</h3>
               <p>
-                The old tray appends a verified result; its launchd replacement
-                shows the completion message and appends a delivered marker.
+                Memfile reconciliation pages through the entire Qdrant collection
+                instead of stopping at a fixed upper bound.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Changed: conflict-free controls</h3>
+              <h3>Measured: retrieval quality</h3>
               <p>
-                Service actions cannot overlap maintenance, update, backup, or
-                export, while tray rows and status output expose live PIDs.
+                Judged BM25 and learned-sparse runs report deterministic Recall,
+                MRR, and nDCG instead of relying on unverified claims.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.7"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.8"
               target="_blank"
               rel="noreferrer"
             >
