@@ -17,6 +17,7 @@ import (
 	"ariadne/internal/version"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -47,6 +48,7 @@ func envOr(k, def string) string {
 
 type svc struct {
 	Up      bool   `json:"up"`
+	PID     int    `json:"pid,omitempty"`
 	RSSMB   int64  `json:"rss_mb,omitempty"`
 	Version string `json:"version,omitempty"`
 }
@@ -99,13 +101,12 @@ func main() {
 			os.Exit(1)
 		}
 	case "restart":
-		if err := control("stop"); err != nil {
-			fmt.Fprintln(os.Stderr, "restart stop:", err)
-			os.Exit(1)
-		}
-		time.Sleep(2 * time.Second)
-		if err := control("start"); err != nil {
-			fmt.Fprintln(os.Stderr, "restart start:", err)
+		if err := restartServices(
+			func() error { return control("stop") },
+			func() error { return control("start") },
+			func() { time.Sleep(2 * time.Second) },
+		); err != nil {
+			fmt.Fprintln(os.Stderr, "restart:", err)
 			os.Exit(1)
 		}
 	case "backup":
@@ -131,6 +132,13 @@ func main() {
 			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | approvals [-json]}")
 		os.Exit(2)
 	}
+}
+
+func restartServices(stop, start func() error, pause func()) error {
+	stopErr := stop()
+	pause()
+	startErr := start()
+	return errors.Join(stopErr, startErr)
 }
 
 func hasFlag(f string) bool {
@@ -160,6 +168,7 @@ func gather() status {
 	// Qdrant
 	if getOK(qdrantREST + "/healthz") {
 		s.Qdrant.Up = true
+		s.Qdrant.PID = pid(".ariadne/bin/qdrant", "/bin/qdrant", "qdrant.exe")
 		s.Qdrant.RSSMB = rss(".ariadne/bin/qdrant") // the installed runtime binary
 		if s.Qdrant.RSSMB == 0 {
 			s.Qdrant.RSSMB = rss("/bin/qdrant") // dev runs from a repo checkout
@@ -175,6 +184,7 @@ func gather() status {
 	// Ollama
 	if body, ok := getJSON(ollamaURL + "/api/version"); ok {
 		s.Ollama.Up = true
+		s.Ollama.PID = pid("/ollama serve", "ollama.exe")
 		s.Ollama.Version, _ = body["version"].(string)
 		s.Ollama.RSSMB = rss("ollama") + rss("llama-server")
 	}
@@ -269,8 +279,9 @@ func printStatus(asJSON bool) {
 	} else {
 		fmt.Println(i18n.T(lang, "status.issues"))
 	}
-	fmt.Printf("  Qdrant : %s  (%dMB RSS)\n", upStr(lang, s.Qdrant.Up), s.Qdrant.RSSMB)
-	fmt.Printf("  Ollama : %s  %s  (%dMB RSS)\n", upStr(lang, s.Ollama.Up), s.Ollama.Version, s.Ollama.RSSMB)
+	fmt.Printf("  Qdrant : %s  (PID %d · %dMB RSS)\n", upStr(lang, s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB)
+	fmt.Printf("  Ollama : %s  %s  (PID %d · %dMB RSS)\n",
+		upStr(lang, s.Ollama.Up), s.Ollama.Version, s.Ollama.PID, s.Ollama.RSSMB)
 	fmt.Printf("  %s : %d  (%s)\n", i18n.T(lang, "row.records"), s.Collection.Points, s.Collection.Status)
 	fmt.Printf("  %s : qdrant %dMB · backups %dMB · logs %dMB · runtime %dMB · %s %dGB\n",
 		i18n.T(lang, "row.data"), s.DataMB, s.BackupsMB, s.LogsMB, s.RuntimeMB, i18n.T(lang, "row.free"), s.FreeGB)

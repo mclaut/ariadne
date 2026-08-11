@@ -35,16 +35,15 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.6 fixes the launchd tray-restart race, propagates service-control
-errors, and repairs stale Claude skills and hooks during upgrades. Claude
-auto-recall now covers startup, resume, clear, compact, and fork.
+Version 0.8.7 makes tray service controls observable and verifiable from click
+to completion, including across the tray process replacement itself.
 
-- **Fixed:** tray restarts, honest service failures, stale integration detection,
-  and warning copy that still described a removed action.
-- **Added:** persistent Claude recall after context transitions plus explicit
-  guidance to save durable decisions, gotchas, and verified outcomes.
-- **Changed:** system warnings now expose exactly Approve and Deny; neither is a
-  default keyboard action, and unrelated Claude hooks remain untouched.
+- **Fixed:** launchd-safe Homebrew discovery, recovery start after partial stop
+  failures, and the missing completion message after a successful restart.
+- **Added:** before/after Qdrant and Ollama PID verification, green-collection
+  checks, visible PIDs, and append-only notification delivery records.
+- **Changed:** conflicting tray actions stay disabled during service work, and
+  platform command failures retain their diagnostic output.
 
 ## Links
 

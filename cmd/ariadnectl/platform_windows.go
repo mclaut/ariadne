@@ -59,6 +59,45 @@ func rss(marker string) int64 {
 	return totalKB / 1024
 }
 
+func pid(markers ...string) int {
+	out, err := exec.CommandContext(context.Background(), "tasklist.exe", "/FO", "CSV", "/NH").Output() //nolint:gosec // fixed command
+	if err != nil {
+		return 0
+	}
+	needles := make([]string, 0, len(markers))
+	for _, marker := range markers {
+		parts := strings.FieldsFunc(marker, func(r rune) bool { return r == '/' || r == '\\' || r == ' ' })
+		if len(parts) == 0 {
+			continue
+		}
+		needle := strings.ToLower(parts[len(parts)-1])
+		if needle != "serve" {
+			needles = append(needles, needle)
+		}
+	}
+	reader := csv.NewReader(strings.NewReader(string(out)))
+	reader.FieldsPerRecord = -1
+	for {
+		record, readErr := reader.Read()
+		if readErr != nil {
+			return 0
+		}
+		if len(record) < 2 {
+			continue
+		}
+		name := strings.ToLower(record[0])
+		for _, needle := range needles {
+			if !strings.Contains(name, needle) {
+				continue
+			}
+			value, parseErr := strconv.Atoi(record[1])
+			if parseErr == nil {
+				return value
+			}
+		}
+	}
+}
+
 func freeGB(path string) int64 {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -77,5 +116,12 @@ func freeGB(path string) int64 {
 }
 
 func run(bin string, args ...string) error {
-	return exec.CommandContext(context.Background(), bin, args...).Run() //nolint:gosec // fixed task controls
+	output, err := exec.CommandContext(context.Background(), bin, args...).CombinedOutput() //nolint:gosec // fixed task controls
+	if err != nil {
+		if detail := strings.TrimSpace(string(output)); detail != "" {
+			return fmt.Errorf("%w: %s", err, detail)
+		}
+		return err
+	}
+	return nil
 }

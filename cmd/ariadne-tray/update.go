@@ -61,7 +61,7 @@ func updateLoop() {
 func updateClicked() {
 	mu.Lock()
 	release := updates.available
-	busy := updates.checking || updates.installing
+	busy := updates.checking || updates.installing || serviceActionRunning
 	mu.Unlock()
 	if busy {
 		return
@@ -125,6 +125,11 @@ func refreshUpdateMenuLocked() {
 	if mUpdate == nil {
 		return
 	}
+	defer func() {
+		if serviceActionRunning {
+			mUpdate.Disable()
+		}
+	}()
 	switch {
 	case updates.installing:
 		mUpdate.SetTitle(fmt.Sprintf(i18n.T(lang, "menu.updating"), updates.available.TagName))
@@ -154,6 +159,7 @@ func startUpdate(release releaseInfo) {
 	updates.installing = true
 	updates.available = release
 	refreshUpdateMenuLocked()
+	refreshServiceMenusLocked()
 	mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -205,6 +211,7 @@ func updateStartFailed(tag string, err error) {
 	updates.installing = false
 	activeLang := lang
 	refreshUpdateMenuLocked()
+	refreshServiceMenusLocked()
 	mu.Unlock()
 	notify(i18n.T(activeLang, "notify.update_title"),
 		fmt.Sprintf(i18n.T(activeLang, "notify.update_failed"), tag))
