@@ -52,3 +52,18 @@ func TestQdrantRequestLoadsKeyWithoutPuttingItInURL(t *testing.T) {
 		t.Fatalf("request URL = %q", got)
 	}
 }
+
+func TestFDPressurePercent(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		open, limit, want int
+	}{
+		{open: 192, limit: 256, want: 75},
+		{open: 255, limit: 256, want: 99},
+		{open: 1, limit: 0, want: 0},
+	} {
+		if got := fdPressurePercent(tc.open, tc.limit); got != tc.want {
+			t.Fatalf("fdPressurePercent(%d, %d) = %d, want %d", tc.open, tc.limit, got, tc.want)
+		}
+	}
+}

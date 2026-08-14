@@ -22,6 +22,19 @@ func TestParseInstallQdrantAgents(t *testing.T) {
 	}
 }
 
+func TestQdrantLaunchdTemplateRaisesDescriptorLimit(t *testing.T) {
+	t.Parallel()
+	template, err := os.ReadFile(filepath.Join("..", "..", "deploy", "com.ariadne.qdrant.plist")) //nolint:gosec // repo fixture
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(template)
+	if !strings.Contains(text, "<key>SoftResourceLimits</key>") ||
+		!strings.Contains(text, "<key>NumberOfFiles</key><integer>8192</integer>") {
+		t.Fatal("Qdrant launchd template does not set the required descriptor limit")
+	}
+}
+
 func TestClientRuntimeEnvPropagatesRemoteQdrantWithoutKeyValue(t *testing.T) {
 	keyFile := filepath.Join(t.TempDir(), "qdrant key")
 	if err := os.WriteFile(keyFile, []byte("test-key\n"), 0o600); err != nil {

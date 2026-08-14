@@ -35,16 +35,15 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.8 hardens remote Qdrant connections and keeps local observability
-fast without discarding append-only recall history.
+Version 0.8.9 prevents Qdrant file-descriptor exhaustion under many concurrent
+Codex and Claude Code sessions.
 
-- **Added:** fail-closed Qdrant API-key/TLS policy and judged BM25 versus
-  learned-sparse Recall/MRR/nDCG evaluation.
-- **Changed:** metrics v3 retains every raw event while maintaining daily
-  rollups and an indexed recent window; collection reconciliation pages through
-  the complete dataset.
-- **Fixed:** remote settings survive installation and Windows self-update, and
-  repository Go tooling no longer enters site dependencies.
+- **Fixed:** one gRPC connection per MCP process, an explicit 8192-descriptor
+  macOS launchd limit, and graceful Qdrant client shutdown.
+- **Changed:** startup reads the payload schema once and creates only missing
+  indexes; genuine storage errors are no longer ignored.
+- **Added:** status, tray, and doctor visibility for descriptor usage and early
+  warnings before exhaustion.
 
 ## Links
 

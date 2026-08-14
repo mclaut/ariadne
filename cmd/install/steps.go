@@ -667,6 +667,7 @@ func ensureCollection(o opts) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = st.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return st.EnsureCollection(ctx)

@@ -124,6 +124,7 @@ func captureRun(args []string) {
 		log.Printf("FAIL %s: store: %v", short(*session), err)
 		return
 	}
+	defer func() { _ = st.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	meta := captureMetadata(time.Now(), first, last, *session, condensed, text)

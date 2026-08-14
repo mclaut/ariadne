@@ -41,6 +41,10 @@ func env(k, def string) string {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	port, _ := strconv.Atoi(env("ARIADNE_QDRANT_PORT", "6334"))
 	st, err := store.New(
 		env("ARIADNE_QDRANT_HOST", "localhost"), port,
@@ -50,12 +54,18 @@ func main() {
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ariadne: store init:", err)
-		os.Exit(1)
+		return 1
 	}
 	if err := st.EnsureCollection(context.Background()); err != nil {
+		_ = st.Close()
 		fmt.Fprintln(os.Stderr, "ariadne: ensure collection:", err)
-		os.Exit(1)
+		return 1
 	}
+	defer func() {
+		if closeErr := st.Close(); closeErr != nil {
+			fmt.Fprintln(os.Stderr, "ariadne: close store:", closeErr)
+		}
+	}()
 
 	s := server.NewMCPServer("ariadne", version.Current,
 		server.WithToolCapabilities(false))
@@ -122,8 +132,9 @@ func main() {
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Fprintln(os.Stderr, "ariadne: serve:", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func recallHandler(st *store.Store, metricsSession string, approvals *approval.Manager) server.ToolHandlerFunc {

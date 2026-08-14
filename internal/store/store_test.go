@@ -4,7 +4,46 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/qdrant/go-client/qdrant"
 )
+
+func TestMissingPayloadIndexesSkipsExistingFields(t *testing.T) {
+	desired := []payloadIndex{
+		{field: "wing", fieldType: qdrant.FieldType_FieldTypeKeyword},
+		{field: "ts", fieldType: qdrant.FieldType_FieldTypeInteger},
+		{field: "status", fieldType: qdrant.FieldType_FieldTypeKeyword},
+	}
+	existing := map[string]*qdrant.PayloadSchemaInfo{
+		"wing": {DataType: qdrant.PayloadSchemaType_Keyword},
+		"ts":   {DataType: qdrant.PayloadSchemaType_Integer},
+	}
+	got := missingPayloadIndexes(desired, existing)
+	if len(got) != 1 || got[0].field != "status" {
+		t.Fatalf("missing indexes = %#v", got)
+	}
+}
+
+func TestQdrantClientUsesSingleConnection(t *testing.T) {
+	t.Parallel()
+	config := qdrantClientConfig("localhost", 6334, "", false)
+	if config.PoolSize != 1 {
+		t.Fatalf("Qdrant pool size = %d, want 1", config.PoolSize)
+	}
+}
+
+func TestDesiredPayloadIndexesAreUnique(t *testing.T) {
+	seen := make(map[string]struct{})
+	for _, index := range desiredPayloadIndexes() {
+		if _, exists := seen[index.field]; exists {
+			t.Fatalf("duplicate payload index %q", index.field)
+		}
+		seen[index.field] = struct{}{}
+	}
+	if len(seen) < 30 {
+		t.Fatalf("payload index plan unexpectedly small: %d", len(seen))
+	}
+}
 
 func TestBuildPayloadSkipsEmptyAndParsesTS(t *testing.T) {
 	payload := buildPayload("hello", map[string]string{

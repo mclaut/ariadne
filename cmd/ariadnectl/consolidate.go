@@ -144,6 +144,7 @@ func requeueEmptyCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "requeue-empty: store:", err)
 		return 1
 	}
+	defer func() { _ = st.Close() }()
 	now := time.Now().Unix()
 	for _, point := range points {
 		firstEmptyAt := point.ConsolidatedAt
@@ -307,6 +308,7 @@ func consolidateCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "consolidate: store:", err)
 		return 1
 	}
+	defer func() { _ = st.Close() }()
 	totals := consolidationOutcome{}
 	now := time.Now()
 	for _, item := range deferred {

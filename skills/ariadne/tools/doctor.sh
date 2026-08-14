@@ -129,6 +129,37 @@ case "$BIND" in
   *) bad "Qdrant bound to $BIND — EXPOSED to the network; set QDRANT__SERVICE__HOST=127.0.0.1" ;;
 esac
 
+echo "== descriptor capacity =="
+QDRANT_PID="$(lsof -nP -iTCP:6333 -sTCP:LISTEN -t 2>/dev/null | head -1)"
+FD_OPEN=""
+FD_LIMIT=""
+if [ -n "$QDRANT_PID" ]; then
+  if [ "$(uname -s)" = "Darwin" ]; then
+    FD_OPEN="$(lsof -nP -a -p "$QDRANT_PID" -Ff 2>/dev/null | awk '/^f[0-9]+$/{n++} END{print n+0}')"
+    QDRANT_PLIST="$HOME_DIR/Library/LaunchAgents/com.ariadne.qdrant.plist"
+    if [ -f "$QDRANT_PLIST" ]; then
+      FD_LIMIT="$(plutil -extract SoftResourceLimits.NumberOfFiles raw -o - "$QDRANT_PLIST" 2>/dev/null || true)"
+    fi
+  elif [ -d "/proc/$QDRANT_PID/fd" ]; then
+    FD_OPEN="$(find "/proc/$QDRANT_PID/fd" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
+    FD_LIMIT="$(awk '$1=="Max" && $2=="open" && $3=="files" {print $4; exit}' "/proc/$QDRANT_PID/limits" 2>/dev/null || true)"
+  fi
+fi
+if [ "$(uname -s)" = "Darwin" ] && { [ -z "$FD_LIMIT" ] || [ "$FD_LIMIT" -lt 1024 ] 2>/dev/null; }; then
+  bad "Qdrant launchd descriptor limit is missing or below 1024"
+elif [ -n "$FD_OPEN" ] && [ -n "$FD_LIMIT" ] && [ "$FD_LIMIT" -gt 0 ] 2>/dev/null; then
+  FD_PERCENT=$((FD_OPEN * 100 / FD_LIMIT))
+  if [ "$FD_PERCENT" -ge 90 ]; then
+    bad "Qdrant descriptors critical: $FD_OPEN/$FD_LIMIT (${FD_PERCENT}%)"
+  elif [ "$FD_PERCENT" -ge 75 ]; then
+    warn "Qdrant descriptors high: $FD_OPEN/$FD_LIMIT (${FD_PERCENT}%)"
+  else
+    ok "Qdrant descriptors: $FD_OPEN/$FD_LIMIT (${FD_PERCENT}%)"
+  fi
+else
+  warn "cannot determine Qdrant descriptor usage and limit"
+fi
+
 echo "== MCP registration =="
 if python3 - <<'PY' 2>/dev/null
 import json,os,sys

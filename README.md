@@ -26,7 +26,27 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.8
+## What's New in v0.8.9
+
+### Fixed
+
+- **Qdrant remains available with many concurrent agent sessions.** Each MCP
+  process now uses one persistent gRPC connection instead of the client
+  library's implicit pool of three, while the macOS launchd service receives an
+  explicit 8192-file descriptor limit instead of inheriting 256.
+- **Startup no longer hammers payload-index creation.** Ariadne inspects the
+  existing schema and creates only missing indexes. Real storage errors now
+  fail startup instead of being silently ignored.
+- **Every short-lived client closes cleanly.** Hooks, import, install, and
+  maintenance release their Qdrant connection when they finish.
+
+### Added
+
+- **Descriptor-pressure visibility.** `ariadnectl status`, the tray, and the
+  full-stack doctor report Qdrant's open descriptors and configured limit, with
+  a visible warning before exhaustion.
+
+## Previously in v0.8.8
 
 ### Added
 
@@ -804,7 +824,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.8 — current release. Fail-closed remote Qdrant authentication, append-only metrics v3 rollups,
+v0.8.9 — current release. Single-connection MCP clients, launchd descriptor capacity,
+payload-index reconciliation, graceful Qdrant client shutdown, and descriptor-pressure diagnostics;
+fail-closed remote Qdrant authentication, append-only metrics v3 rollups,
 complete paginated collection scans, deterministic BM25/learned-sparse evaluation,
 reusable maintenance orchestration, and reversible site cleanup; verified Qdrant/Ollama lifecycle operations, launchd-safe Homebrew resolution,
 durable post-restart notifications, PID observability, conflict-free service controls,

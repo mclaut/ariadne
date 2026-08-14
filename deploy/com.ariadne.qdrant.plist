@@ -18,6 +18,12 @@
     <key>QDRANT__STORAGE__STORAGE_PATH</key><string>__HOME__/.ariadne/qdrant-data</string>
     <key>QDRANT__STORAGE__SNAPSHOTS_PATH</key><string>__HOME__/.ariadne/qdrant-data/snapshots</string>
   </dict>
+  <!-- Qdrant keeps segment, WAL, HTTP, and one gRPC socket per active MCP
+       process open. The macOS launchd default of 256 descriptors is too low
+       for many concurrent Codex/Claude sessions. -->
+  <key>SoftResourceLimits</key><dict>
+    <key>NumberOfFiles</key><integer>8192</integer>
+  </dict>
   <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>__HOME__/.ariadne/logs/qdrant.log</string>
   <key>StandardErrorPath</key><string>__HOME__/.ariadne/logs/qdrant.err.log</string>

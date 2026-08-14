@@ -53,6 +53,8 @@ type svc struct {
 	PID     int    `json:"pid,omitempty"`
 	RSSMB   int64  `json:"rss_mb,omitempty"`
 	Version string `json:"version,omitempty"`
+	OpenFDs int    `json:"open_fds,omitempty"`
+	FDLimit int    `json:"fd_limit,omitempty"`
 }
 
 type coll struct {
@@ -176,6 +178,7 @@ func gather() status {
 	if qdrantUp {
 		s.Qdrant.Up = true
 		s.Qdrant.PID = pid(".ariadne/bin/qdrant", "/bin/qdrant", "qdrant.exe")
+		s.Qdrant.OpenFDs, s.Qdrant.FDLimit = processFDUsage(s.Qdrant.PID)
 		s.Qdrant.RSSMB = rss(".ariadne/bin/qdrant") // the installed runtime binary
 		if s.Qdrant.RSSMB == 0 {
 			s.Qdrant.RSSMB = rss("/bin/qdrant") // dev runs from a repo checkout
@@ -227,6 +230,10 @@ func gather() status {
 	if len(s.QdrantAgents) > 1 {
 		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.qdrant_duplicate_agents"),
 			len(s.QdrantAgents)))
+	}
+	if pressure := fdPressurePercent(s.Qdrant.OpenFDs, s.Qdrant.FDLimit); pressure >= 75 {
+		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.qdrant_fd_pressure"),
+			s.Qdrant.OpenFDs, s.Qdrant.FDLimit, pressure))
 	}
 	if !s.Ollama.Up {
 		s.Issues = append(s.Issues, i18n.T(lang, "issue.ollama_down"))
@@ -290,7 +297,11 @@ func printStatus(asJSON bool) {
 	} else {
 		fmt.Println(i18n.T(lang, "status.issues"))
 	}
-	fmt.Printf("  Qdrant : %s  (PID %d · %dMB RSS)\n", upStr(lang, s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB)
+	fdText := ""
+	if s.Qdrant.FDLimit > 0 {
+		fdText = fmt.Sprintf(" · FDs %d/%d", s.Qdrant.OpenFDs, s.Qdrant.FDLimit)
+	}
+	fmt.Printf("  Qdrant : %s  (PID %d · %dMB RSS%s)\n", upStr(lang, s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB, fdText)
 	fmt.Printf("  Ollama : %s  %s  (PID %d · %dMB RSS)\n",
 		upStr(lang, s.Ollama.Up), s.Ollama.Version, s.Ollama.PID, s.Ollama.RSSMB)
 	fmt.Printf("  %s : %d  (%s)\n", i18n.T(lang, "row.records"), s.Collection.Points, s.Collection.Status)
@@ -304,6 +315,13 @@ func printStatus(asJSON bool) {
 	for _, i := range s.Issues {
 		fmt.Printf("  ! %s\n", i)
 	}
+}
+
+func fdPressurePercent(open, limit int) int {
+	if open <= 0 || limit <= 0 {
+		return 0
+	}
+	return open * 100 / limit
 }
 
 // --- helpers ---

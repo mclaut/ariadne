@@ -127,6 +127,67 @@ func pid(markers ...string) int {
 	return parseProcessPID(string(out), markers...)
 }
 
+func processFDUsage(processID int) (int, int) {
+	if processID <= 0 {
+		return 0, 0
+	}
+	if runtime.GOOS == "darwin" {
+		out, err := exec.CommandContext(context.Background(), "lsof", "-nP", "-a", "-p", //nolint:gosec // fixed diagnostic
+			strconv.Itoa(processID), "-Ff").Output()
+		if err != nil {
+			return 0, 0
+		}
+		open := parseLsofFDCount(string(out))
+		home, _ := os.UserHomeDir()
+		plist := filepath.Join(home, "Library", "LaunchAgents", qdrantLabel+".plist")
+		limitOut, limitErr := exec.CommandContext(context.Background(), "plutil", "-extract", //nolint:gosec // fixed diagnostic
+			"SoftResourceLimits.NumberOfFiles", "raw", "-o", "-", plist).Output()
+		if limitErr != nil {
+			return open, 0
+		}
+		limit, _ := strconv.Atoi(strings.TrimSpace(string(limitOut)))
+		return open, limit
+	}
+
+	entries, err := os.ReadDir(filepath.Join("/proc", strconv.Itoa(processID), "fd"))
+	if err != nil {
+		return 0, 0
+	}
+	limits, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(processID), "limits")) //nolint:gosec // fixed proc path
+	if err != nil {
+		return len(entries), 0
+	}
+	return len(entries), parseProcOpenFilesLimit(string(limits))
+}
+
+func parseLsofFDCount(output string) int {
+	count := 0
+	for _, line := range strings.Split(output, "\n") {
+		if len(line) < 2 || line[0] != 'f' {
+			continue
+		}
+		if _, err := strconv.Atoi(line[1:]); err == nil {
+			count++
+		}
+	}
+	return count
+}
+
+func parseProcOpenFilesLimit(output string) int {
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "Max open files") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			return 0
+		}
+		limit, _ := strconv.Atoi(fields[3])
+		return limit
+	}
+	return 0
+}
+
 func parseProcessPID(output string, markers ...string) int {
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
