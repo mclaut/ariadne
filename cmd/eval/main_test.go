@@ -2,6 +2,7 @@ package main
 
 import (
 	"ariadne/internal/store"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -24,5 +25,18 @@ func TestCodingMemoryEvaluation(t *testing.T) {
 				t.Fatalf("want first id %d, got %#v", item.WantFirst, got)
 			}
 		})
+	}
+}
+
+func TestRetrievalEvaluationFixture(t *testing.T) {
+	path := filepath.Join("..", "..", "evaluation", "retrieval-runs.example.json")
+	if err := runRetrieval(path, "bm25", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRetrieval(path, "missing", false); err == nil {
+		t.Fatal("missing baseline accepted")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
 	}
 }

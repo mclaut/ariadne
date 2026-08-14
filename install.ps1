@@ -11,7 +11,13 @@ param(
     [switch]$SkipOllama,
     [switch]$SkipModels,
     [string]$EmbeddingModel = "bge-m3",
-    [string]$SummaryModel = "qwen2.5:7b"
+    [string]$SummaryModel = "qwen2.5:7b",
+    [string]$QdrantHost = "127.0.0.1",
+    [int]$QdrantRestPort = 6333,
+    [int]$QdrantGrpcPort = 6334,
+    [string]$QdrantApiKeyFile = "",
+    [switch]$QdrantTls,
+    [switch]$AllowInsecureRemoteQdrant
 )
 
 Set-StrictMode -Version Latest
@@ -32,7 +38,49 @@ $QdrantSHA256 = "b2b262cba6f78cf4fa794ae78d73a8f70a221c93c76c75ac8fd6fe95d809b14
 $VCRuntimeURL = "https://aka.ms/vc14/vc_redist.x64.exe"
 $VCRuntimeMinimum = [version]"14.44.0.0"
 $UserAgent = "ariadne-windows-installer"
+$InstallerBoundParameters = $PSBoundParameters
 $IntegrationWasSpecified = $PSBoundParameters.ContainsKey("Integration")
+$ResolvedQdrantApiKeyFile = ""
+
+function Import-QdrantEnvironmentDefaults {
+    if (-not $script:InstallerBoundParameters.ContainsKey("QdrantHost") -and $env:ARIADNE_QDRANT_HOST) {
+        $script:QdrantHost = $env:ARIADNE_QDRANT_HOST
+    }
+    if (-not $script:InstallerBoundParameters.ContainsKey("QdrantGrpcPort") -and $env:ARIADNE_QDRANT_PORT) {
+        $parsedPort = 0
+        if (-not [int]::TryParse($env:ARIADNE_QDRANT_PORT, [ref]$parsedPort)) {
+            throw "ARIADNE_QDRANT_PORT must be an integer."
+        }
+        $script:QdrantGrpcPort = $parsedPort
+    }
+    if (-not $script:InstallerBoundParameters.ContainsKey("QdrantRestPort") -and $env:ARIADNE_QDRANT_REST) {
+        $restURI = $null
+        if (-not [uri]::TryCreate($env:ARIADNE_QDRANT_REST, [UriKind]::Absolute, [ref]$restURI)) {
+            throw "ARIADNE_QDRANT_REST must be an absolute URL."
+        }
+        $script:QdrantRestPort = $restURI.Port
+        if (-not $script:InstallerBoundParameters.ContainsKey("QdrantHost") -and -not $env:ARIADNE_QDRANT_HOST) {
+            $script:QdrantHost = $restURI.Host
+        }
+        if (-not $script:InstallerBoundParameters.ContainsKey("QdrantTls") -and $restURI.Scheme -eq "https") {
+            $script:QdrantTls = $true
+        }
+    }
+    if (-not $script:InstallerBoundParameters.ContainsKey("QdrantApiKeyFile") -and
+        $env:ARIADNE_QDRANT_API_KEY_FILE) {
+        $script:QdrantApiKeyFile = $env:ARIADNE_QDRANT_API_KEY_FILE
+    }
+    if (-not $script:InstallerBoundParameters.ContainsKey("QdrantTls") -and
+        $env:ARIADNE_QDRANT_TLS -match "^(1|true|yes|on)$") {
+        $script:QdrantTls = $true
+    }
+    if (-not $script:InstallerBoundParameters.ContainsKey("AllowInsecureRemoteQdrant") -and
+        $env:ARIADNE_QDRANT_ALLOW_INSECURE_REMOTE -match "^(1|true|yes|on)$") {
+        $script:AllowInsecureRemoteQdrant = $true
+    }
+}
+
+Import-QdrantEnvironmentDefaults
 
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -212,6 +260,94 @@ function Test-HTTP([string]$Url) {
     }
 }
 
+function Test-LoopbackHost([string]$HostName) {
+    if ($HostName -ieq "localhost") { return $true }
+    $address = $null
+    if ([System.Net.IPAddress]::TryParse($HostName.Trim([char[]]"[]"), [ref]$address)) {
+        return [System.Net.IPAddress]::IsLoopback($address)
+    }
+    return $false
+}
+
+function Get-QdrantBaseURL {
+    $scheme = if ($QdrantTls) { "https" } else { "http" }
+    $hostPart = $QdrantHost.Trim([char[]]"[]")
+    if ($hostPart.Contains(":")) { $hostPart = "[$hostPart]" }
+    return "${scheme}://${hostPart}:$QdrantRestPort"
+}
+
+function Get-QdrantHeaders {
+    $headers = @{ "User-Agent" = $UserAgent }
+    if ($ResolvedQdrantApiKeyFile) {
+        $key = (Get-Content -Raw -Path $ResolvedQdrantApiKeyFile).Trim()
+        if (-not $key -or $key.Contains("`r") -or $key.Contains("`n")) {
+            throw "Qdrant API key file must contain one non-empty line."
+        }
+        $headers["api-key"] = $key
+    }
+    return $headers
+}
+
+function Assert-QdrantConfig {
+    if ($QdrantRestPort -lt 1 -or $QdrantRestPort -gt 65535 -or
+        $QdrantGrpcPort -lt 1 -or $QdrantGrpcPort -gt 65535) {
+        throw "Qdrant REST and gRPC ports must be between 1 and 65535."
+    }
+    if ($QdrantApiKeyFile) {
+        if (-not (Test-Path -Path $QdrantApiKeyFile -PathType Leaf)) {
+            throw "Qdrant API key file does not exist or is not a regular file."
+        }
+        $item = Get-Item -Path $QdrantApiKeyFile
+        if ($item.Length -gt 16384) { throw "Qdrant API key file exceeds 16384 bytes." }
+        $script:ResolvedQdrantApiKeyFile = $item.FullName
+        [void](Get-QdrantHeaders)
+    }
+    $remote = -not (Test-LoopbackHost $QdrantHost)
+    if ($remote -and -not $AllowInsecureRemoteQdrant) {
+        if (-not $ResolvedQdrantApiKeyFile) {
+            throw "Remote Qdrant requires -QdrantApiKeyFile."
+        }
+        if (-not $QdrantTls) {
+            throw "Remote Qdrant with an API key requires -QdrantTls."
+        }
+    }
+}
+
+function Test-QdrantHTTP([string]$Url) {
+    try {
+        $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3 -Headers (Get-QdrantHeaders)
+        return $response.StatusCode -lt 300
+    } catch {
+        return $false
+    }
+}
+
+function Wait-QdrantHTTP([string]$Url, [int]$Seconds) {
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-QdrantHTTP $Url) { return $true }
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
+
+function Get-AriadneMCPEnvironment {
+    $environment = [ordered]@{}
+    if ($QdrantHost -ne "127.0.0.1") { $environment["ARIADNE_QDRANT_HOST"] = $QdrantHost }
+    if ($QdrantGrpcPort -ne 6334) { $environment["ARIADNE_QDRANT_PORT"] = [string]$QdrantGrpcPort }
+    if ($QdrantHost -ne "127.0.0.1" -or $QdrantRestPort -ne 6333 -or $QdrantTls) {
+        $environment["ARIADNE_QDRANT_REST"] = Get-QdrantBaseURL
+    }
+    if ($ResolvedQdrantApiKeyFile) {
+        $environment["ARIADNE_QDRANT_API_KEY_FILE"] = $ResolvedQdrantApiKeyFile
+    }
+    if ($QdrantTls) { $environment["ARIADNE_QDRANT_TLS"] = "1" }
+    if ($AllowInsecureRemoteQdrant) {
+        $environment["ARIADNE_QDRANT_ALLOW_INSECURE_REMOTE"] = "1"
+    }
+    return $environment
+}
+
 function Wait-HTTP([string]$Url, [int]$Seconds) {
     $deadline = (Get-Date).AddSeconds($Seconds)
     while ((Get-Date) -lt $deadline) {
@@ -363,9 +499,14 @@ function Show-QdrantFailure([string]$LogPath) {
 }
 
 function Install-Qdrant([string]$TempDir) {
-    if (Test-HTTP "http://127.0.0.1:6333/healthz") {
+    $baseURL = Get-QdrantBaseURL
+    if (Test-QdrantHTTP "$baseURL/healthz") {
         Write-Host "Qdrant is already running; reusing it without reconfiguration."
         return
+    }
+
+    if (-not (Test-LoopbackHost $QdrantHost)) {
+        throw "The configured remote Qdrant does not answer its authenticated health check."
     }
 
     Install-VCRuntime $TempDir
@@ -415,7 +556,7 @@ function Install-Qdrant([string]$TempDir) {
     $taskArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcher`""
     Register-AriadneTask $TaskQdrant "powershell.exe" $taskArgs $RuntimeDir $true
     Start-ScheduledTask -TaskName $TaskQdrant
-    if (-not (Wait-HTTP "http://127.0.0.1:6333/healthz" 60)) {
+    if (-not (Wait-QdrantHTTP "$baseURL/healthz" 60)) {
         Show-QdrantFailure $qdrantLog
         throw "Qdrant did not become ready after 60 seconds. See $qdrantLog"
     }
@@ -461,7 +602,12 @@ function Install-Models {
 function Register-Codex([string]$AriadneExe, [string]$CodexPath) {
     Write-Step "Registering Ariadne with Codex"
     & $CodexPath mcp remove ariadne 2>$null | Out-Null
-    & $CodexPath mcp add ariadne -- $AriadneExe
+    $arguments = @("mcp", "add")
+    foreach ($entry in (Get-AriadneMCPEnvironment).GetEnumerator()) {
+        $arguments += @("--env", "$($entry.Key)=$($entry.Value)")
+    }
+    $arguments += @("ariadne", "--", $AriadneExe)
+    & $CodexPath @arguments
     if ($LASTEXITCODE -ne 0) { throw "Codex MCP registration failed." }
 }
 
@@ -482,6 +628,43 @@ function Set-ObjectProperty($Object, [string]$Name, $Value) {
     }
 }
 
+function Write-AriadneEnvironmentLauncher([string]$Path, [string]$Executable) {
+    $lines = @('$ErrorActionPreference = "Stop"')
+    foreach ($entry in (Get-AriadneMCPEnvironment).GetEnumerator()) {
+        $lines += ('$env:' + $entry.Key + ' = ' + (ConvertTo-PSLiteral ([string]$entry.Value)))
+    }
+    $lines += ('& ' + (ConvertTo-PSLiteral $Executable) + ' @args')
+    $lines += 'exit $LASTEXITCODE'
+    Set-Content -Path $Path -Value ($lines -join "`r`n") -Encoding UTF8
+}
+
+function Upsert-ClaudeHook($Hooks, [string]$Event, [string]$Matcher, [string]$Command, [int]$Timeout) {
+    $entries = if ($Hooks.PSObject.Properties[$Event]) { @($Hooks.$Event) } else { @() }
+    $found = $false
+    foreach ($entry in $entries) {
+        $handlers = if ($entry.PSObject.Properties["hooks"]) { @($entry.hooks) } else { @() }
+        foreach ($handler in $handlers) {
+            $existing = if ($handler.PSObject.Properties["command"]) { [string]$handler.command } else { "" }
+            if ($existing -notmatch "ariadne-hook") { continue }
+            Set-ObjectProperty $handler "type" "command"
+            Set-ObjectProperty $handler "command" $Command
+            Set-ObjectProperty $handler "timeout" $Timeout
+            if ($Matcher) {
+                Set-ObjectProperty $entry "matcher" $Matcher
+            }
+            $found = $true
+        }
+    }
+    if (-not $found) {
+        $newEntry = [pscustomobject]@{
+            hooks = @([pscustomobject]@{ type = "command"; command = $Command; timeout = $Timeout })
+        }
+        if ($Matcher) { Set-ObjectProperty $newEntry "matcher" $Matcher }
+        $entries = @($entries + $newEntry)
+    }
+    Set-ObjectProperty $Hooks $Event $entries
+}
+
 function Register-Claude([string]$AriadneExe, [string]$PackageRoot, [string]$ClaudePath) {
     $claudeHome = Join-Path $env:USERPROFILE ".claude"
     $claudeConfig = Join-Path $env:USERPROFILE ".claude.json"
@@ -494,11 +677,14 @@ function Register-Claude([string]$AriadneExe, [string]$PackageRoot, [string]$Cla
     }
     $config = Read-JsonObject $claudeConfig
     $servers = if ($config.PSObject.Properties["mcpServers"]) { $config.mcpServers } else { [pscustomobject]@{} }
-    Set-ObjectProperty $servers "ariadne" ([pscustomobject]@{
+    $server = [ordered]@{
         type = "stdio"
         command = $AriadneExe
         args = @()
-    })
+    }
+    $mcpEnvironment = Get-AriadneMCPEnvironment
+    if ($mcpEnvironment.Count -gt 0) { $server["env"] = [pscustomobject]$mcpEnvironment }
+    Set-ObjectProperty $servers "ariadne" ([pscustomobject]$server)
     Set-ObjectProperty $config "mcpServers" $servers
     $config | ConvertTo-Json -Depth 30 | Set-Content -Path $claudeConfig -Encoding UTF8
 
@@ -512,31 +698,33 @@ function Register-Claude([string]$AriadneExe, [string]$PackageRoot, [string]$Cla
 
     $settingsPath = Join-Path $claudeHome "settings.json"
     $settings = Read-JsonObject $settingsPath
-    $existing = if (Test-Path $settingsPath) { Get-Content -Raw -Path $settingsPath } else { "" }
-    if ($existing -notmatch "ariadne-hook") {
-        if (Test-Path $settingsPath) { Copy-Item $settingsPath "$settingsPath.bak-ariadne" -Force }
-        $hooks = if ($settings.PSObject.Properties["hooks"]) { $settings.hooks } else { [pscustomobject]@{} }
-        $hookExe = Join-Path $BinDir "ariadne-hook.exe"
-        $startHook = [pscustomobject]@{
-            matcher = "startup|resume|clear"
-            hooks = @([pscustomobject]@{ type = "command"; command = "`"$hookExe`" session-start"; timeout = 15 })
-        }
-        $endHook = [pscustomobject]@{
-            hooks = @([pscustomobject]@{ type = "command"; command = "`"$hookExe`" session-end"; timeout = 10 })
-        }
-        $starts = if ($hooks.PSObject.Properties["SessionStart"]) { @($hooks.SessionStart) } else { @() }
-        $ends = if ($hooks.PSObject.Properties["SessionEnd"]) { @($hooks.SessionEnd) } else { @() }
-        Set-ObjectProperty $hooks "SessionStart" @($starts + $startHook)
-        Set-ObjectProperty $hooks "SessionEnd" @($ends + $endHook)
-        Set-ObjectProperty $settings "hooks" $hooks
-        $settings | ConvertTo-Json -Depth 30 | Set-Content -Path $settingsPath -Encoding UTF8
+    if (Test-Path $settingsPath) { Copy-Item $settingsPath "$settingsPath.bak-ariadne" -Force }
+    $hooks = if ($settings.PSObject.Properties["hooks"]) { $settings.hooks } else { [pscustomobject]@{} }
+    $hookExe = Join-Path $BinDir "ariadne-hook.exe"
+    $hookCommand = "`"$hookExe`""
+    if ((Get-AriadneMCPEnvironment).Count -gt 0) {
+        $hookLauncher = Join-Path $RuntimeDir "ariadne-hook-env.ps1"
+        Write-AriadneEnvironmentLauncher $hookLauncher $hookExe
+        $hookCommand = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$hookLauncher`""
     }
+    Upsert-ClaudeHook $hooks "SessionStart" "startup|resume|clear|compact|fork" "$hookCommand session-start" 15
+    Upsert-ClaudeHook $hooks "SessionEnd" "" "$hookCommand session-end" 10
+    Upsert-ClaudeHook $hooks "PreCompact" "manual|auto" "$hookCommand session-end" 10
+    Set-ObjectProperty $settings "hooks" $hooks
+    $settings | ConvertTo-Json -Depth 30 | Set-Content -Path $settingsPath -Encoding UTF8
 }
 
 function Register-Tray {
     Write-Step "Registering the Ariadne tray monitor"
     $tray = Join-Path $BinDir "ariadne-tray.exe"
-    Register-AriadneTask $TaskTray $tray "" $RuntimeDir $false
+    if ((Get-AriadneMCPEnvironment).Count -gt 0) {
+        $launcher = Join-Path $RuntimeDir "start-tray.ps1"
+        Write-AriadneEnvironmentLauncher $launcher $tray
+        $arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcher`""
+        Register-AriadneTask $TaskTray "powershell.exe" $arguments $RuntimeDir $false
+    } else {
+        Register-AriadneTask $TaskTray $tray "" $RuntimeDir $false
+    }
     Start-ScheduledTask -TaskName $TaskTray
 }
 
@@ -578,6 +766,7 @@ if ($ConfigureClients) {
 } else {
     Test-SystemRequirements
 }
+Assert-QdrantConfig
 $codexPath = Find-Codex
 $claudePath = Find-Claude
 $clientSelection = Resolve-Integration $codexPath $claudePath
@@ -639,7 +828,11 @@ try {
 
     Write-Host "`nAriadne $tag is installed." -ForegroundColor Green
     Write-Host "Runtime: $RuntimeDir"
-    Write-Host "Qdrant is bound to 127.0.0.1 and Ollama remains managed by its Windows app."
+    if (Test-LoopbackHost $QdrantHost) {
+        Write-Host "Qdrant is bound to loopback and Ollama remains managed by its Windows app."
+    } else {
+        Write-Host "Remote Qdrant is configured with explicit transport and client authentication policy."
+    }
 } finally {
     Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 }

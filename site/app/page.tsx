@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.7",
+  softwareVersion: "0.8.9",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.7</a>
+          <a href="#new">New in 0.8.9</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.7 verifies every service restart from click to completion
+            v0.8.9 keeps Qdrant healthy under many agent sessions
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.7</span>
-            <h2>Verified restarts. Durable completion signals.</h2>
+            <span className="eyebrow">New in v0.8.9</span>
+            <h2>Concurrent agents without descriptor exhaustion.</h2>
             <p>
-              The tray now proves that Qdrant and Ollama restarted, recovers
-              from partial failures, and confirms completion after its own relaunch.
+              Bounded connection pools, production-sized launchd limits, and
+              visible pressure before Qdrant can become unavailable.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
-              <Check aria-hidden="true" />
-              <h3>Fixed: launchd service control</h3>
+              <ShieldCheck aria-hidden="true" />
+              <h3>Fixed: descriptor capacity</h3>
               <p>
-                Homebrew is found outside the shell PATH, restart always attempts
-                recovery, and service command diagnostics are preserved.
+                macOS Qdrant receives an explicit 8192-file limit and reports
+                usage before the server reaches resource exhaustion.
               </p>
             </article>
             <article className="new-item accent-blue">
-              <Server aria-hidden="true" />
-              <h3>Added: verified PID changes</h3>
+              <Database aria-hidden="true" />
+              <h3>Reduced: MCP connections</h3>
               <p>
-                Success requires healthy Qdrant and Ollama state, fresh restart
-                PIDs, and a green collection before the tray reports done.
+                Each stdio MCP process keeps one Qdrant gRPC socket instead of
+                the client library&apos;s implicit pool of three.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Added: durable completion</h3>
+              <h3>Reconciled: payload indexes</h3>
               <p>
-                The old tray appends a verified result; its launchd replacement
-                shows the completion message and appends a delivered marker.
+                Startup creates only missing indexes and refuses to hide real
+                storage failures behind idempotent setup.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Changed: conflict-free controls</h3>
+              <h3>Verified: database recovery</h3>
               <p>
-                Service actions cannot overlap maintenance, update, backup, or
-                export, while tray rows and status output expose live PIDs.
+                Live activation checks WAL recovery, a green collection,
+                stable point counts, recall/save, and metrics integrity.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.7"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.9"
               target="_blank"
               rel="noreferrer"
             >

@@ -4,6 +4,7 @@
 package store
 
 import (
+	"ariadne/internal/qdrantauth"
 	"ariadne/internal/secretguard"
 	"bytes"
 	"context"
@@ -133,7 +134,14 @@ func (s *Store) GetByID(ctx context.Context, id uint64, collection string) (Resu
 
 // New connects to Qdrant (gRPC) and prepares the Ollama client.
 func New(qHost string, qPort int, ollamaURL, model, collection string) (*Store, error) {
-	qc, err := qdrant.NewClient(&qdrant.Config{Host: qHost, Port: qPort})
+	auth, err := qdrantauth.FromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("qdrant auth config: %w", err)
+	}
+	if err := auth.ValidateGRPC(qHost); err != nil {
+		return nil, fmt.Errorf("qdrant remote policy: %w", err)
+	}
+	qc, err := qdrant.NewClient(qdrantClientConfig(qHost, qPort, auth.APIKey, auth.UseTLS))
 	if err != nil {
 		return nil, fmt.Errorf("qdrant connect: %w", err)
 	}
@@ -146,8 +154,70 @@ func New(qHost string, qPort int, ollamaURL, model, collection string) (*Store, 
 	}, nil
 }
 
+func qdrantClientConfig(host string, port int, apiKey string, useTLS bool) *qdrant.Config {
+	return &qdrant.Config{
+		Host: host, Port: port, APIKey: apiKey, UseTLS: useTLS,
+		// MCP clients are long-lived but issue one tool call at a time. The
+		// qdrant client defaults to a pool of three persistent gRPC sockets,
+		// which multiplied the connection count across desktop sessions and
+		// exhausted macOS launchd's file-descriptor limit.
+		PoolSize: 1,
+	}
+}
+
+// Close releases the Qdrant gRPC connection owned by the store.
+func (s *Store) Close() error {
+	if s == nil || s.qc == nil {
+		return nil
+	}
+	return s.qc.Close()
+}
+
+type payloadIndex struct {
+	field     string
+	fieldType qdrant.FieldType
+}
+
+func desiredPayloadIndexes() []payloadIndex {
+	indexes := make([]payloadIndex, 0, 35)
+	indexes = append(indexes,
+		payloadIndex{field: "wing", fieldType: qdrant.FieldType_FieldTypeKeyword},
+		payloadIndex{field: "ts", fieldType: qdrant.FieldType_FieldTypeInteger},
+	)
+	for _, field := range []string{
+		"room", "status", "provenance", "memory_type", "consolidation_status", "source_revision",
+		"source_kind", "source_key", "content_hash", "identity_version", "superseded_by", "superseded_reason",
+		"consolidation_deferred_key", "consolidation_deferred_reason", "quarantine_reason",
+		"pre_quarantine_status", "quarantine_state", "quarantine_clear_reason", "secret_redacted", "redaction_rules",
+	} {
+		indexes = append(indexes, payloadIndex{field: field, fieldType: qdrant.FieldType_FieldTypeKeyword})
+	}
+	for _, field := range []string{
+		"observed_at", "occurred_at", "last_seen_at", "source_modified_at",
+		"consolidated_at", "consolidation_checked_at", "consolidation_first_empty_at",
+		"consolidation_deferred_at", "consolidation_attempts", "superseded_at", "orphaned_at", "quarantined_at",
+		"quarantine_cleared_at",
+	} {
+		indexes = append(indexes, payloadIndex{field: field, fieldType: qdrant.FieldType_FieldTypeInteger})
+	}
+	return indexes
+}
+
+func missingPayloadIndexes(
+	desired []payloadIndex,
+	existing map[string]*qdrant.PayloadSchemaInfo,
+) []payloadIndex {
+	missing := make([]payloadIndex, 0, len(desired))
+	for _, index := range desired {
+		if _, ok := existing[index.field]; !ok {
+			missing = append(missing, index)
+		}
+	}
+	return missing
+}
+
 // EnsureCollection creates the hybrid collection (dense + IDF sparse) if absent
-// and makes sure the "wing" payload index exists (used for filtered recall).
+// and creates only payload indexes that are not already present.
 func (s *Store) EnsureCollection(ctx context.Context) error {
 	ok, err := s.qc.CollectionExists(ctx, s.collection)
 	if err != nil {
@@ -166,41 +236,29 @@ func (s *Store) EnsureCollection(ctx context.Context) error {
 			return err
 		}
 	}
-	// idempotent; an "already exists" error is fine
-	_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
-		CollectionName: s.collection,
-		FieldName:      "wing",
-		FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
-	})
-	// "ts" (unix seconds) — range index so diary can be ordered/filtered by time
-	_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
-		CollectionName: s.collection,
-		FieldName:      "ts",
-		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
-	})
-	for _, field := range []string{
-		"room", "status", "provenance", "memory_type", "consolidation_status", "source_revision",
-		"source_kind", "source_key", "content_hash", "identity_version", "superseded_by", "superseded_reason",
-		"consolidation_deferred_key", "consolidation_deferred_reason", "quarantine_reason",
-		"pre_quarantine_status", "quarantine_state", "quarantine_clear_reason", "secret_redacted", "redaction_rules",
-	} {
-		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
-			CollectionName: s.collection,
-			FieldName:      field,
-			FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
-		})
+	info, err := s.qc.GetCollectionInfo(ctx, s.collection)
+	if err != nil {
+		return fmt.Errorf("inspect payload indexes: %w", err)
 	}
-	for _, field := range []string{
-		"observed_at", "occurred_at", "last_seen_at", "source_modified_at",
-		"consolidated_at", "consolidation_checked_at", "consolidation_first_empty_at",
-		"consolidation_deferred_at", "consolidation_attempts", "superseded_at", "orphaned_at", "quarantined_at",
-		"quarantine_cleared_at",
-	} {
-		_, _ = s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+	for _, index := range missingPayloadIndexes(desiredPayloadIndexes(), info.GetPayloadSchema()) {
+		_, createErr := s.qc.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 			CollectionName: s.collection,
-			FieldName:      field,
-			FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
+			FieldName:      index.field,
+			FieldType:      index.fieldType.Enum(),
 		})
+		if createErr == nil {
+			continue
+		}
+		// Another concurrently starting MCP process may have created the same
+		// index after our collection-info read. Confirm that race explicitly;
+		// every other storage error must fail startup instead of being hidden.
+		refreshed, refreshErr := s.qc.GetCollectionInfo(ctx, s.collection)
+		if refreshErr == nil {
+			if _, exists := refreshed.GetPayloadSchema()[index.field]; exists {
+				continue
+			}
+		}
+		return fmt.Errorf("create payload index %q: %w", index.field, createErr)
 	}
 	return nil
 }
@@ -1032,26 +1090,33 @@ func (s *Store) MemfileSourceStates(ctx context.Context) (map[string]MemfileSour
 	return out, nil
 }
 
-// WingRoomPairs returns point counts per (wing, room) pair. One payload-only
-// scroll — fine at local scale (revisit past ~100k points); used by
-// import -sync to find orphaned chunks of deleted/renamed files.
+// WingRoomPairs returns point counts per (wing, room) pair. It pages through
+// the complete collection with payload-only requests so import -sync remains
+// correct for large archival collections as well as the curated default.
 func (s *Store) WingRoomPairs(ctx context.Context) (map[[2]string]int, error) {
-	res, err := s.qc.Scroll(ctx, &qdrant.ScrollPoints{
+	const pageSize = uint32(512)
+	iterator := s.qc.ScrollAll(ctx, &qdrant.ScrollPoints{
 		CollectionName: s.collection,
-		Limit:          qdrant.PtrOf(uint32(200_000)),
+		Limit:          qdrant.PtrOf(pageSize),
 		WithPayload:    qdrant.NewWithPayloadInclude("wing", "room", "status"),
 	})
-	if err != nil {
-		return nil, err
-	}
 	out := map[[2]string]int{}
-	for _, p := range res {
-		pl := p.GetPayload()
-		switch pl["status"].GetStringValue() {
-		case StatusArchived, StatusSuperseded, StatusOrphaned, StatusQuarantined:
-			continue
+	for {
+		points, err := iterator.Next()
+		if errors.Is(err, io.EOF) {
+			break
 		}
-		out[[2]string{pl["wing"].GetStringValue(), pl["room"].GetStringValue()}]++
+		if err != nil {
+			return nil, err
+		}
+		for _, point := range points {
+			payload := point.GetPayload()
+			switch payload["status"].GetStringValue() {
+			case StatusArchived, StatusSuperseded, StatusOrphaned, StatusQuarantined:
+				continue
+			}
+			out[[2]string{payload["wing"].GetStringValue(), payload["room"].GetStringValue()}]++
+		}
 	}
 	return out, nil
 }

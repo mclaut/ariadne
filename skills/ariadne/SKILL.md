@@ -142,6 +142,13 @@ when both scoped associations are intentionally useful.
 ~/.ariadne/bin/ariadnectl approvals       # read-only pending human requests
 ```
 
+Remote Qdrant is fail-closed. Use `ARIADNE_QDRANT_API_KEY_FILE` (a user-only,
+single-line file) plus `ARIADNE_QDRANT_TLS=1`; keep `ARIADNE_QDRANT_REST` on
+`https://`. `ARIADNE_QDRANT_API_KEY` is process-only and must never be written
+to MCP, hook, tray, or maintenance configuration. The explicit
+`ARIADNE_QDRANT_ALLOW_INSECURE_REMOTE=1` exception is only for an independently
+encrypted private tunnel, never an ordinary LAN.
+
 New saves containing deterministic credential material are rejected. Import and
 hook paths redact detected values before saving. Normal recall always excludes
 `quarantined` points; exact-id output is redacted defensively. The quarantine

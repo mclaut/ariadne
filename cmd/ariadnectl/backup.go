@@ -253,7 +253,7 @@ func postJSON(url string, payload any) (map[string]any, bool) {
 func httpDo(method, url string, body io.Reader, out any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	req, err := newQdrantRequest(ctx, method, url, body)
 	if err != nil {
 		return err
 	}
@@ -280,7 +280,10 @@ func httpDo(method, url string, body io.Reader, out any) error {
 func download(url, dest string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := newQdrantRequest(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
 	resp, err := (&http.Client{Timeout: 300 * time.Second}).Do(req)
 	if err != nil {
 		return err
@@ -316,7 +319,10 @@ func uploadMultipart(url, field, path string) error {
 	_ = mw.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
+	req, err := newQdrantRequest(ctx, http.MethodPost, url, &buf)
+	if err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	resp, err := (&http.Client{Timeout: 300 * time.Second}).Do(req)
 	if err != nil {

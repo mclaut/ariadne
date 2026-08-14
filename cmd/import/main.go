@@ -184,7 +184,14 @@ func main() {
 	fmt.Printf("\n=== IMPORT DONE ===\n  fed=%d saved=%d failed=%d redacted=%d\n  wall=%s (%.0f docs/s)\n",
 		feed, done.Load(), failed.Load(), redacted.Load(), time.Since(start).Round(time.Second),
 		float64(done.Load())/time.Since(start).Seconds())
-	if importResultCode(failed.Load()) != 0 {
+	exitCode := importResultCode(failed.Load())
+	if closeErr := st.Close(); closeErr != nil {
+		fmt.Fprintln(os.Stderr, "import: close store:", closeErr)
+		if exitCode == 0 {
+			exitCode = 1
+		}
+	}
+	if exitCode != 0 {
 		os.Exit(1)
 	}
 }

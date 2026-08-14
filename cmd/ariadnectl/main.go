@@ -14,11 +14,13 @@ import (
 	"ariadne/internal/approval"
 	"ariadne/internal/i18n"
 	"ariadne/internal/metrics"
+	"ariadne/internal/qdrantauth"
 	"ariadne/internal/version"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -51,6 +53,8 @@ type svc struct {
 	PID     int    `json:"pid,omitempty"`
 	RSSMB   int64  `json:"rss_mb,omitempty"`
 	Version string `json:"version,omitempty"`
+	OpenFDs int    `json:"open_fds,omitempty"`
+	FDLimit int    `json:"fd_limit,omitempty"`
 }
 
 type coll struct {
@@ -62,6 +66,7 @@ type status struct {
 	TS            string                    `json:"ts"`
 	OK            bool                      `json:"ok"`
 	Qdrant        svc                       `json:"qdrant"`
+	QdrantError   string                    `json:"qdrant_error,omitempty"`
 	QdrantAgents  []string                  `json:"qdrant_agents,omitempty"`
 	Ollama        svc                       `json:"ollama"`
 	Collection    coll                      `json:"collection"`
@@ -166,18 +171,25 @@ func gather() status {
 	s.QdrantAgents = loadedAriadneQdrantAgents()
 
 	// Qdrant
-	if getOK(qdrantREST + "/healthz") {
+	qdrantUp, qdrantErr := qdrantGetOK(qdrantREST + "/healthz")
+	if qdrantErr != nil {
+		s.QdrantError = qdrantErr.Error()
+	}
+	if qdrantUp {
 		s.Qdrant.Up = true
 		s.Qdrant.PID = pid(".ariadne/bin/qdrant", "/bin/qdrant", "qdrant.exe")
+		s.Qdrant.OpenFDs, s.Qdrant.FDLimit = processFDUsage(s.Qdrant.PID)
 		s.Qdrant.RSSMB = rss(".ariadne/bin/qdrant") // the installed runtime binary
 		if s.Qdrant.RSSMB == 0 {
 			s.Qdrant.RSSMB = rss("/bin/qdrant") // dev runs from a repo checkout
 		}
-		if body, ok := getJSON(qdrantREST + "/collections/" + collection); ok {
+		if body, err := qdrantGetJSON(qdrantREST + "/collections/" + collection); err == nil {
 			if r, k := body["result"].(map[string]any); k {
 				s.Collection.Points = toInt(r["points_count"])
 				s.Collection.Status, _ = r["status"].(string)
 			}
+		} else {
+			s.QdrantError = err.Error()
 		}
 	}
 
@@ -210,12 +222,18 @@ func gather() status {
 
 	// issues (localized — the tray surfaces these verbatim)
 	lang := i18n.Current()
-	if !s.Qdrant.Up {
+	if s.QdrantError != "" {
+		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.qdrant_config"), s.QdrantError))
+	} else if !s.Qdrant.Up {
 		s.Issues = append(s.Issues, i18n.T(lang, "issue.qdrant_down"))
 	}
 	if len(s.QdrantAgents) > 1 {
 		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.qdrant_duplicate_agents"),
 			len(s.QdrantAgents)))
+	}
+	if pressure := fdPressurePercent(s.Qdrant.OpenFDs, s.Qdrant.FDLimit); pressure >= 75 {
+		s.Issues = append(s.Issues, fmt.Sprintf(i18n.T(lang, "issue.qdrant_fd_pressure"),
+			s.Qdrant.OpenFDs, s.Qdrant.FDLimit, pressure))
 	}
 	if !s.Ollama.Up {
 		s.Issues = append(s.Issues, i18n.T(lang, "issue.ollama_down"))
@@ -279,7 +297,11 @@ func printStatus(asJSON bool) {
 	} else {
 		fmt.Println(i18n.T(lang, "status.issues"))
 	}
-	fmt.Printf("  Qdrant : %s  (PID %d · %dMB RSS)\n", upStr(lang, s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB)
+	fdText := ""
+	if s.Qdrant.FDLimit > 0 {
+		fdText = fmt.Sprintf(" · FDs %d/%d", s.Qdrant.OpenFDs, s.Qdrant.FDLimit)
+	}
+	fmt.Printf("  Qdrant : %s  (PID %d · %dMB RSS%s)\n", upStr(lang, s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB, fdText)
 	fmt.Printf("  Ollama : %s  %s  (PID %d · %dMB RSS)\n",
 		upStr(lang, s.Ollama.Up), s.Ollama.Version, s.Ollama.PID, s.Ollama.RSSMB)
 	fmt.Printf("  %s : %d  (%s)\n", i18n.T(lang, "row.records"), s.Collection.Points, s.Collection.Status)
@@ -295,20 +317,71 @@ func printStatus(asJSON bool) {
 	}
 }
 
+func fdPressurePercent(open, limit int) int {
+	if open <= 0 || limit <= 0 {
+		return 0
+	}
+	return open * 100 / limit
+}
+
 // --- helpers ---
 
 func httpClient() *http.Client { return &http.Client{Timeout: 3 * time.Second} }
 
-func getOK(url string) bool {
+func newQdrantRequest(ctx context.Context, method, rawURL string, body io.Reader) (*http.Request, error) {
+	auth, err := qdrantauth.FromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("qdrant authentication: %w", err)
+	}
+	if err := auth.ValidateURL(rawURL); err != nil {
+		return nil, fmt.Errorf("qdrant remote policy: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
+	if err != nil {
+		return nil, err
+	}
+	auth.Apply(req)
+	return req, nil
+}
+
+func qdrantGetOK(rawURL string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := newQdrantRequest(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return false, err
+	}
 	resp, err := httpClient().Do(req)
 	if err != nil {
-		return false
+		return false, nil
 	}
 	_ = resp.Body.Close()
-	return resp.StatusCode < 300
+	if resp.StatusCode >= 300 {
+		return false, fmt.Errorf("qdrant HTTP %d", resp.StatusCode)
+	}
+	return true, nil
+}
+
+func qdrantGetJSON(rawURL string) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := newQdrantRequest(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := httpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("qdrant HTTP %d", resp.StatusCode)
+	}
+	var m map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func getJSON(url string) (map[string]any, bool) {

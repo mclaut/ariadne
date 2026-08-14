@@ -59,6 +59,8 @@ type svc struct {
 	PID     int    `json:"pid"`
 	RSSMB   int64  `json:"rss_mb"`
 	Version string `json:"version"`
+	OpenFDs int    `json:"open_fds"`
+	FDLimit int    `json:"fd_limit"`
 }
 
 type coll struct {
@@ -296,7 +298,11 @@ func poll() {
 	systray.SetTooltip("Ariadne " + version.Tag + " — " + word)
 	rowVersion.SetTitle("Ariadne " + version.Tag)
 	rowHealth.SetTitle("ariadne — " + word)
-	rowQdrant.SetTitle(serviceRow("Qdrant", upWord(s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB))
+	qdrantRow := serviceRow("Qdrant", upWord(s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB)
+	if s.Qdrant.FDLimit > 0 {
+		qdrantRow += fmt.Sprintf(" · FDs %d/%d", s.Qdrant.OpenFDs, s.Qdrant.FDLimit)
+	}
+	rowQdrant.SetTitle(qdrantRow)
 	rowOllama.SetTitle(serviceRow("Ollama", upVer(s.Ollama), s.Ollama.PID, s.Ollama.RSSMB))
 	rowPoints.SetTitle(fmt.Sprintf("%s: %s (%s)", i18n.T(lang, "row.records"), grouped(s.Collection.Points), s.Collection.Status))
 	totals := s.TokenMetrics.AllTime

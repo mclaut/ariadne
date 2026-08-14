@@ -144,6 +144,7 @@ func requeueEmptyCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "requeue-empty: store:", err)
 		return 1
 	}
+	defer func() { _ = st.Close() }()
 	now := time.Now().Unix()
 	for _, point := range points {
 		firstEmptyAt := point.ConsolidatedAt
@@ -177,7 +178,7 @@ func loadLegacyEmpty(ctx context.Context) ([]legacyEmptyPoint, error) {
 		}},
 		"limit": 10000, "with_payload": true, "with_vector": false,
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	req, err := newQdrantRequest(ctx, http.MethodPost,
 		strings.TrimRight(qdrantREST, "/")+"/collections/"+url.PathEscape(collection)+"/points/scroll",
 		bytes.NewReader(body))
 	if err != nil {
@@ -307,6 +308,7 @@ func consolidateCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "consolidate: store:", err)
 		return 1
 	}
+	defer func() { _ = st.Close() }()
 	totals := consolidationOutcome{}
 	now := time.Now()
 	for _, item := range deferred {
@@ -531,7 +533,7 @@ func loadDiary(ctx context.Context, cutoff int64) ([]diaryPoint, error) {
 		}},
 		"limit": 10000, "with_payload": true, "with_vector": false,
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	req, err := newQdrantRequest(ctx, http.MethodPost,
 		strings.TrimRight(qdrantREST, "/")+"/collections/"+url.PathEscape(collection)+"/points/scroll",
 		bytes.NewReader(body))
 	if err != nil {

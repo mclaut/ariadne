@@ -58,6 +58,7 @@ func sessionStart() {
 	if err != nil {
 		return
 	}
+	defer func() { _ = st.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	hits, err := st.Recall(ctx,

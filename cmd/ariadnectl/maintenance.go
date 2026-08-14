@@ -2,6 +2,7 @@ package main
 
 import (
 	"ariadne/internal/activity"
+	maintenancecore "ariadne/internal/maintenance"
 	"context"
 	"errors"
 	"flag"
@@ -64,7 +65,7 @@ func maintenanceCmd(args []string) int {
 	config.ctlPath, _ = os.Executable()
 	deps := maintenanceDeps{
 		run:    runMaintenanceCommand,
-		sleep:  sleepContext,
+		sleep:  maintenancecore.SleepContext,
 		append: activity.Append,
 		now:    time.Now,
 	}
@@ -76,15 +77,13 @@ func maintenanceCmd(args []string) int {
 }
 
 func validateMaintenanceConfig(config maintenanceConfig) error {
+	if err := maintenancecore.ValidateRetryPolicy(maintenancecore.RetryPolicy{
+		Attempts: config.attempts, Delay: config.retryDelay,
+		MaxDelay: config.maxRetryDelay, Timeout: config.commandTimeout,
+	}); err != nil {
+		return err
+	}
 	switch {
-	case config.attempts < 1 || config.attempts > 10:
-		return fmt.Errorf("attempts must be between 1 and 10")
-	case config.retryDelay < 0:
-		return fmt.Errorf("retry-delay must not be negative")
-	case config.maxRetryDelay < 0:
-		return fmt.Errorf("max-retry-delay must not be negative")
-	case config.commandTimeout <= 0:
-		return fmt.Errorf("command-timeout must be positive")
 	case config.before <= 0:
 		return fmt.Errorf("before must be positive")
 	case config.importPath == "":
@@ -165,49 +164,28 @@ func runMaintenanceStage(
 	path string,
 	args ...string,
 ) (int, error) {
-	var lastErr error
-	for attempt := 1; attempt <= config.attempts; attempt++ {
-		_ = appendMaintenanceEvent(deps, "running", stage+" attempt in progress", map[string]int64{
-			"attempt": int64(attempt), "max_attempts": int64(config.attempts),
-		})
-		attemptCtx, cancel := context.WithTimeout(ctx, config.commandTimeout)
-		lastErr = deps.run(attemptCtx, path, args...)
-		cancel()
-		if lastErr == nil {
-			return attempt, nil
-		}
-		if errors.Is(lastErr, errMaintenanceDeferred) {
-			return attempt, lastErr
-		}
-		fmt.Fprintf(os.Stderr, "maintenance: %s attempt %d/%d failed: %v\n",
-			stage, attempt, config.attempts, lastErr)
-		if attempt == config.attempts {
-			break
-		}
-		delay := retryBackoff(config.retryDelay, config.maxRetryDelay, attempt)
-		_ = appendMaintenanceEvent(deps, "retrying", stage+" failed; retry scheduled", map[string]int64{
-			"attempt": int64(attempt), "max_attempts": int64(config.attempts),
-			"retry_delay_seconds": int64(delay / time.Second),
-		})
-		if err := deps.sleep(ctx, delay); err != nil {
-			return attempt, err
-		}
-	}
-	return config.attempts, lastErr
-}
-
-func retryBackoff(initial, maximum time.Duration, failedAttempt int) time.Duration {
-	delay := initial
-	for i := 1; i < failedAttempt; i++ {
-		if maximum > 0 && delay >= maximum/2 {
-			return maximum
-		}
-		delay *= 2
-	}
-	if maximum > 0 && delay > maximum {
-		return maximum
-	}
-	return delay
+	return maintenancecore.RunStage(ctx, maintenancecore.RetryPolicy{
+		Attempts: config.attempts, Delay: config.retryDelay,
+		MaxDelay: config.maxRetryDelay, Timeout: config.commandTimeout,
+	}, maintenancecore.StageHooks{
+		Run:   func(attemptCtx context.Context) error { return deps.run(attemptCtx, path, args...) },
+		Sleep: deps.sleep,
+		Stop:  func(err error) bool { return errors.Is(err, errMaintenanceDeferred) },
+		OnAttempt: func(attempt, maximum int) {
+			_ = appendMaintenanceEvent(deps, "running", stage+" attempt in progress", map[string]int64{
+				"attempt": int64(attempt), "max_attempts": int64(maximum),
+			})
+		},
+		OnFailure: func(attempt, maximum int, err error) {
+			fmt.Fprintf(os.Stderr, "maintenance: %s attempt %d/%d failed: %v\n", stage, attempt, maximum, err)
+		},
+		OnRetry: func(attempt, maximum int, delay time.Duration, err error) {
+			_ = appendMaintenanceEvent(deps, "retrying", stage+" failed; retry scheduled", map[string]int64{
+				"attempt": int64(attempt), "max_attempts": int64(maximum),
+				"retry_delay_seconds": int64(delay / time.Second),
+			})
+		},
+	})
 }
 
 func appendMaintenanceEvent(
@@ -231,18 +209,4 @@ func runMaintenanceCommand(ctx context.Context, path string, args ...string) err
 		return fmt.Errorf("%w: %w", errMaintenanceDeferred, err)
 	}
 	return err
-}
-
-func sleepContext(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return nil
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }

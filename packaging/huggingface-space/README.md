@@ -35,15 +35,15 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.7 makes tray service controls observable and verifiable from click
-to completion, including across the tray process replacement itself.
+Version 0.8.9 prevents Qdrant file-descriptor exhaustion under many concurrent
+Codex and Claude Code sessions.
 
-- **Fixed:** launchd-safe Homebrew discovery, recovery start after partial stop
-  failures, and the missing completion message after a successful restart.
-- **Added:** before/after Qdrant and Ollama PID verification, green-collection
-  checks, visible PIDs, and append-only notification delivery records.
-- **Changed:** conflicting tray actions stay disabled during service work, and
-  platform command failures retain their diagnostic output.
+- **Fixed:** one gRPC connection per MCP process, an explicit 8192-descriptor
+  macOS launchd limit, and graceful Qdrant client shutdown.
+- **Changed:** startup reads the payload schema once and creates only missing
+  indexes; genuine storage errors are no longer ignored.
+- **Added:** status, tray, and doctor visibility for descriptor usage and early
+  warnings before exhaustion.
 
 ## Links
 

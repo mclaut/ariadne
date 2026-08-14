@@ -4,6 +4,7 @@ package main
 
 import (
 	"archive/tar"
+	"ariadne/internal/qdrantauth"
 	"ariadne/internal/store"
 	"compress/gzip"
 	"context"
@@ -11,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"os"
@@ -74,22 +76,24 @@ func makePlan(r *report, o opts) []action {
 		{
 			title: "register session hooks in ~/.claude/settings.json (auto-recall + auto-capture; backup kept)",
 			skip:  o.skipHooks || r.hooksOK,
-			run:   func() error { return registerHooks(home) },
+			run:   func() error { return registerHooks(home, o) },
 		},
 		{
 			title: "register daily maintenance agent (sync notes + consolidate diary)",
-			run:   func() error { return installSyncAgent(r) },
+			run:   func() error { return installSyncAgent(r, o) },
 		},
 		{
 			title: "install tray-monitor autostart (Linux: autostart entry; macOS: LaunchAgent)",
-			skip:  fileExists(trayAutostartPath(r)),
-			run:   func() error { return installTrayAutostart(r) },
+			skip:  fileExists(trayAutostartPath(r)) && defaultsOnly(o),
+			run:   func() error { return installTrayAutostart(r, o) },
 		},
 	}
 }
 
 func defaultsOnly(o opts) bool {
-	return (o.qdrantHost == "127.0.0.1" || o.qdrantHost == "localhost") &&
+	auth, err := qdrantauth.FromEnv()
+	return err == nil && auth.APIKey == "" && !auth.UseTLS && !auth.AllowInsecureRemote &&
+		(o.qdrantHost == "127.0.0.1" || o.qdrantHost == "localhost") &&
 		o.qdrantGRPC == 6334 && o.ollamaURL == "http://localhost:11434" &&
 		o.model == "bge-m3" && o.collection == "ariadne"
 }
@@ -149,9 +153,9 @@ func installQdrant(r *report, o opts) error {
 		return err
 	}
 	// wait for it
-	base := fmt.Sprintf("http://%s:%d", o.qdrantHost, o.qdrantREST)
+	base := qdrantBaseURL(o)
 	for i := 0; i < 40; i++ {
-		if getOK(base + "/healthz") {
+		if qdrantGetOK(base + "/healthz") {
 			return nil
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -161,7 +165,7 @@ func installQdrant(r *report, o opts) error {
 
 // installSyncAgent registers the daily memfiles-sync: a launchd agent on macOS,
 // a systemd user timer+oneshot on Linux. Mirrors installService.
-func installSyncAgent(r *report) error {
+func installSyncAgent(r *report, o opts) error {
 	dst := syncAgentPath(r)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { //nolint:gosec // user-owned
 		return err
@@ -171,7 +175,7 @@ func installSyncAgent(r *report) error {
 		if err != nil {
 			return err
 		}
-		rendered := strings.ReplaceAll(string(tpl), "__HOME__", r.home)
+		rendered := renderPlistTemplate(string(tpl), r.home, clientRuntimeEnv(o))
 		if err := os.WriteFile(dst, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
 			return err
 		}
@@ -186,7 +190,11 @@ func installSyncAgent(r *report) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(unitDir, name), tpl, 0o644); err != nil { //nolint:gosec // systemd reads it
+		rendered := string(tpl)
+		if name == "ariadne-sync.service" {
+			rendered = strings.ReplaceAll(rendered, "# __ARIADNE_ENV__", systemdEnvironment(clientRuntimeEnv(o)))
+		}
+		if err := os.WriteFile(filepath.Join(unitDir, name), []byte(rendered), 0o644); err != nil { //nolint:gosec // systemd reads it
 			return err
 		}
 	}
@@ -323,7 +331,7 @@ func runVisible(bin string, args ...string) {
 // installTrayAutostart makes the Go tray start with the desktop session: a
 // LaunchAgent on macOS (migrating off the legacy Swift monitor), a
 // ~/.config/autostart entry on Linux.
-func installTrayAutostart(r *report) error {
+func installTrayAutostart(r *report, o opts) error {
 	dst := trayAutostartPath(r)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { //nolint:gosec // user-owned
 		return err
@@ -337,7 +345,7 @@ func installTrayAutostart(r *report) error {
 		if err != nil {
 			return err
 		}
-		rendered := strings.ReplaceAll(string(tpl), "__HOME__", r.home)
+		rendered := renderPlistTemplate(string(tpl), r.home, clientRuntimeEnv(o))
 		if err := os.WriteFile(dst, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
 			return err
 		}
@@ -349,7 +357,85 @@ func installTrayAutostart(r *report) error {
 		return err
 	}
 	rendered := strings.ReplaceAll(string(tpl), "__HOME__", r.home)
+	rendered = strings.ReplaceAll(rendered, "Exec=", "Exec="+desktopEnvironment(clientRuntimeEnv(o)))
 	return os.WriteFile(dst, []byte(rendered), 0o644) //nolint:gosec // desktop entry, not a secret
+}
+
+func clientRuntimeEnv(o opts) map[string]string {
+	env := map[string]string{}
+	if o.qdrantHost != "127.0.0.1" && o.qdrantHost != "localhost" {
+		env["ARIADNE_QDRANT_HOST"] = o.qdrantHost
+	}
+	if o.qdrantGRPC != 6334 {
+		env["ARIADNE_QDRANT_PORT"] = strconv.Itoa(o.qdrantGRPC)
+	}
+	auth, err := qdrantauth.FromEnv()
+	if err == nil {
+		if (o.qdrantHost != "127.0.0.1" && o.qdrantHost != "localhost") || o.qdrantREST != 6333 || auth.UseTLS {
+			env["ARIADNE_QDRANT_REST"] = qdrantBaseURL(o)
+		}
+		if auth.APIKeyFile != "" {
+			env[qdrantauth.EnvAPIKeyFile] = auth.APIKeyFile
+		}
+		if auth.UseTLS {
+			env[qdrantauth.EnvTLS] = "1"
+		}
+		if auth.AllowInsecureRemote {
+			env[qdrantauth.EnvAllowInsecureRemote] = "1"
+		}
+	}
+	if o.ollamaURL != "http://localhost:11434" {
+		env["ARIADNE_OLLAMA"] = o.ollamaURL
+	}
+	if o.model != "bge-m3" {
+		env["ARIADNE_MODEL"] = o.model
+	}
+	if o.collection != "ariadne" {
+		env["ARIADNE_COLLECTION"] = o.collection
+	}
+	return env
+}
+
+func renderPlistTemplate(template, home string, env map[string]string) string {
+	rendered := strings.ReplaceAll(template, "__HOME__", html.EscapeString(home))
+	keys := sortedEnvKeys(env)
+	var entries strings.Builder
+	for _, key := range keys {
+		fmt.Fprintf(&entries, "<key>%s</key><string>%s</string>", html.EscapeString(key), html.EscapeString(env[key]))
+	}
+	return strings.ReplaceAll(rendered, "<!-- __ARIADNE_ENV__ -->", entries.String())
+}
+
+func systemdEnvironment(env map[string]string) string {
+	keys := sortedEnvKeys(env)
+	lines := make([]string, 0, len(keys))
+	replacer := strings.NewReplacer("\\", "\\\\", "\"", "\\\"", "%", "%%")
+	for _, key := range keys {
+		lines = append(lines, fmt.Sprintf("Environment=\"%s=%s\"", key, replacer.Replace(env[key])))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func desktopEnvironment(env map[string]string) string {
+	keys := sortedEnvKeys(env)
+	if len(keys) == 0 {
+		return ""
+	}
+	args := []string{"env"}
+	replacer := strings.NewReplacer("\\", "\\\\", "\"", "\\\"")
+	for _, key := range keys {
+		args = append(args, fmt.Sprintf("\"%s=%s\"", key, replacer.Replace(env[key])))
+	}
+	return strings.Join(args, " ") + " "
+}
+
+func sortedEnvKeys(env map[string]string) []string {
+	keys := make([]string, 0, len(env))
+	for key := range env {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 func qdrantAssetDigest(version, asset string) (string, error) {
@@ -581,6 +667,7 @@ func ensureCollection(o opts) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = st.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return st.EnsureCollection(ctx)
@@ -603,20 +690,8 @@ func registerMCP(home string, o opts) error {
 		srv = map[string]any{}
 	}
 	env := map[string]any{}
-	if o.qdrantHost != "127.0.0.1" && o.qdrantHost != "localhost" {
-		env["ARIADNE_QDRANT_HOST"] = o.qdrantHost
-	}
-	if o.qdrantGRPC != 6334 {
-		env["ARIADNE_QDRANT_PORT"] = strconv.Itoa(o.qdrantGRPC)
-	}
-	if o.ollamaURL != "http://localhost:11434" {
-		env["ARIADNE_OLLAMA"] = o.ollamaURL
-	}
-	if o.model != "bge-m3" {
-		env["ARIADNE_MODEL"] = o.model
-	}
-	if o.collection != "ariadne" {
-		env["ARIADNE_COLLECTION"] = o.collection
+	for key, value := range clientRuntimeEnv(o) {
+		env[key] = value
 	}
 	srv["ariadne"] = map[string]any{
 		"type":    "stdio",
@@ -635,7 +710,7 @@ func registerMCP(home string, o opts) error {
 // registerHooks merges Ariadne's session hooks into ~/.claude/settings.json:
 // SessionStart (startup|resume|clear|compact|fork) → auto-recall, SessionEnd → auto-capture,
 // PreCompact (manual|auto) → mid-session capture before context is compacted.
-func registerHooks(home string) error {
+func registerHooks(home string, o opts) error {
 	path := filepath.Join(home, ".claude", "settings.json")
 	m := map[string]any{}
 	if b, err := os.ReadFile(path); err == nil { //nolint:gosec // own config
@@ -651,7 +726,10 @@ func registerHooks(home string) error {
 	if hooks == nil {
 		hooks = map[string]any{}
 	}
-	bin := filepath.Join(home, ".ariadne", "bin", "ariadne-hook")
+	bin, err := writeHookEnvironmentWrapper(home, o)
+	if err != nil {
+		return err
+	}
 	upsertClaudeHook(hooks, "SessionStart", claudeSessionStartMatcher, bin+" session-start", 15)
 	upsertClaudeHook(hooks, "SessionEnd", "", bin+" session-end", 10)
 	// PreCompact fires right before Claude Code compacts the context — the
@@ -705,15 +783,51 @@ func upsertClaudeHook(hooks map[string]any, event, matcher, command string, time
 }
 
 func hooksConfigCurrent(data []byte, home string) bool {
+	return hooksConfigCurrentForCommand(data, filepath.Join(home, ".ariadne", "bin", "ariadne-hook"))
+}
+
+func hooksConfigCurrentForOpts(data []byte, home string, o opts) bool {
+	return hooksConfigCurrentForCommand(data, hookCommandPath(home, o))
+}
+
+func hooksConfigCurrentForCommand(data []byte, bin string) bool {
 	var settings map[string]any
 	if json.Unmarshal(data, &settings) != nil {
 		return false
 	}
 	hooks, _ := settings["hooks"].(map[string]any)
-	bin := filepath.Join(home, ".ariadne", "bin", "ariadne-hook")
 	return claudeHookCurrent(hooks, "SessionStart", claudeSessionStartMatcher, bin+" session-start", 15) &&
 		claudeHookCurrent(hooks, "SessionEnd", "", bin+" session-end", 10) &&
 		claudeHookCurrent(hooks, "PreCompact", "manual|auto", bin+" session-end", 10)
+}
+
+func hookCommandPath(home string, o opts) string {
+	if len(clientRuntimeEnv(o)) == 0 {
+		return filepath.Join(home, ".ariadne", "bin", "ariadne-hook")
+	}
+	return filepath.Join(home, ".ariadne", "bin", "ariadne-hook-env")
+}
+
+func writeHookEnvironmentWrapper(home string, o opts) (string, error) {
+	target := hookCommandPath(home, o)
+	env := clientRuntimeEnv(o)
+	if len(env) == 0 {
+		return target, nil
+	}
+	var script strings.Builder
+	script.WriteString("#!/bin/sh\n")
+	for _, key := range sortedEnvKeys(env) {
+		fmt.Fprintf(&script, "export %s=%s\n", key, shellQuote(env[key]))
+	}
+	fmt.Fprintf(&script, "exec %s \"$@\"\n", shellQuote(filepath.Join(home, ".ariadne", "bin", "ariadne-hook")))
+	if err := os.WriteFile(target, []byte(script.String()), 0o700); err != nil { //nolint:gosec // user-owned wrapper
+		return "", err
+	}
+	return target, nil
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func claudeHookCurrent(hooks map[string]any, event, matcher, command string, timeout int) bool {
@@ -776,12 +890,12 @@ func verify(o opts) bool {
 		}
 		fmt.Printf("  %s %s\n", mark, s)
 	}
-	base := fmt.Sprintf("http://%s:%d", o.qdrantHost, o.qdrantREST)
-	check(getOK(base+"/healthz"), "Qdrant answers /healthz")
+	base := qdrantBaseURL(o)
+	check(qdrantGetOK(base+"/healthz"), "Qdrant answers /healthz")
 	check(tcpOpen(o.qdrantHost, o.qdrantGRPC), "Qdrant gRPC reachable")
 	pts := int64(-1)
 	status := ""
-	if info, k := getJSON(base + "/collections/" + o.collection); k {
+	if info, k := qdrantGetJSON(base + "/collections/" + o.collection); k {
 		if res, k2 := info["result"].(map[string]any); k2 {
 			if f, k3 := res["points_count"].(float64); k3 {
 				pts = int64(f)
@@ -803,7 +917,7 @@ func verify(o opts) bool {
 	if !o.skipHooks {
 		hooksOK := false
 		if b, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json")); err == nil { //nolint:gosec // own config
-			hooksOK = hooksConfigCurrent(b, home)
+			hooksOK = hooksConfigCurrentForOpts(b, home, o)
 		}
 		check(hooksOK, "session hooks registered (auto-recall + auto-capture)")
 	}

@@ -1,0 +1,23 @@
+{
+  "cutoffs": [1, 3, 5],
+  "queries": [
+    {
+      "name": "morphology-example",
+      "query": "відновлення після перезапуску",
+      "relevant": ["restart-recovery", "restart-notification"],
+      "runs": {
+        "bm25": ["unrelated", "restart-recovery", "restart-notification"],
+        "learned_sparse": ["restart-recovery", "restart-notification", "unrelated"]
+      }
+    },
+    {
+      "name": "exact-identifier-example",
+      "query": "WouldBlock",
+      "relevant": ["qdrant-wal-lock"],
+      "runs": {
+        "bm25": ["qdrant-wal-lock", "unrelated"],
+        "learned_sparse": ["unrelated", "qdrant-wal-lock"]
+      }
+    }
+  ]
+}

@@ -9,6 +9,7 @@ After=ariadne-qdrant.service
 
 [Service]
 Type=oneshot
+# __ARIADNE_ENV__
 ExecStart=%h/.ariadne/bin/ariadnectl maintenance
 TimeoutStartSec=4h
 WorkingDirectory=%h/.ariadne

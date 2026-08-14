@@ -23,7 +23,7 @@ const (
 	// Estimator identifies the deliberately model-independent approximation.
 	Estimator       = "utf8-bytes/4-v2"
 	month           = 30 * 24 * time.Hour
-	dbSchemaVersion = 2
+	dbSchemaVersion = 3
 )
 
 // Representation is one source-backed memory portion returned by a recall.
@@ -302,7 +302,7 @@ func ReadAt(ctx context.Context, path string, now time.Time) (Summary, error) {
 		}
 	}
 	defer func() { _ = db.Close() }()
-	if out.AllTime, err = totals(ctx, db, 0); err != nil {
+	if out.AllTime, err = rollupTotals(ctx, db); err != nil {
 		return out, err
 	}
 	out.Last30Days, err = totals(ctx, db, now.Add(-month).Unix())
@@ -366,6 +366,10 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS recall_events_ts
+		ON recall_events (ts)`); err != nil {
+		return err
+	}
 
 	migrated := false
 	columns := []struct{ name, definition string }{
@@ -410,10 +414,130 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 		END`); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS metric_daily (
+		day INTEGER PRIMARY KEY,
+		recalls INTEGER NOT NULL,
+		memories INTEGER NOT NULL,
+		attributed_memories INTEGER NOT NULL,
+		unattributed_memories INTEGER NOT NULL,
+		delivered_tokens INTEGER NOT NULL,
+		represented_tokens INTEGER NOT NULL,
+		attributed_tokens INTEGER NOT NULL,
+		unattributed_tokens INTEGER NOT NULL,
+		confirmed_saved_tokens INTEGER NOT NULL,
+		recall_overhead_tokens INTEGER NOT NULL
+	)`); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO metric_daily
+		(day, recalls, memories, attributed_memories, unattributed_memories,
+		 delivered_tokens, represented_tokens, attributed_tokens, unattributed_tokens,
+		 confirmed_saved_tokens, recall_overhead_tokens)
+		SELECT (ts / 86400) * 86400, COUNT(*), COALESCE(SUM(memories), 0),
+			COALESCE(SUM(CASE
+				WHEN memories > 0 AND attributed_memories = 0 AND unattributed_memories = 0
+				THEN CASE WHEN represented_tokens > 0 THEN memories ELSE 0 END
+				ELSE attributed_memories END), 0),
+			COALESCE(SUM(CASE
+				WHEN memories > 0 AND attributed_memories = 0 AND unattributed_memories = 0
+				THEN CASE WHEN represented_tokens > 0 THEN 0 ELSE memories END
+				ELSE unattributed_memories END), 0),
+			COALESCE(SUM(delivered_tokens), 0), COALESCE(SUM(represented_tokens), 0),
+			COALESCE(SUM(CASE
+				WHEN delivered_tokens > 0 AND attributed_tokens = 0 AND unattributed_tokens = 0
+				THEN CASE WHEN represented_tokens > 0 THEN delivered_tokens ELSE 0 END
+				ELSE attributed_tokens END), 0),
+			COALESCE(SUM(CASE
+				WHEN delivered_tokens > 0 AND attributed_tokens = 0 AND unattributed_tokens = 0
+				THEN CASE WHEN represented_tokens > 0 THEN 0 ELSE delivered_tokens END
+				ELSE unattributed_tokens END), 0),
+			COALESCE(SUM(MAX(represented_tokens - CASE
+				WHEN delivered_tokens > 0 AND attributed_tokens = 0 AND unattributed_tokens = 0
+				THEN CASE WHEN represented_tokens > 0 THEN delivered_tokens ELSE 0 END
+				ELSE attributed_tokens END, 0)), 0),
+			COALESCE(SUM(MAX(CASE
+				WHEN delivered_tokens > 0 AND attributed_tokens = 0 AND unattributed_tokens = 0
+				THEN CASE WHEN represented_tokens > 0 THEN delivered_tokens ELSE 0 END
+				ELSE attributed_tokens END - represented_tokens, 0)), 0)
+		FROM recall_events
+		WHERE NOT EXISTS (SELECT 1 FROM metric_daily)
+		GROUP BY (ts / 86400) * 86400`); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `CREATE TRIGGER IF NOT EXISTS rollup_recall_event
+		AFTER INSERT ON recall_events
+		BEGIN
+			INSERT INTO metric_daily
+				(day, recalls, memories, attributed_memories, unattributed_memories,
+				 delivered_tokens, represented_tokens, attributed_tokens, unattributed_tokens,
+				 confirmed_saved_tokens, recall_overhead_tokens)
+			VALUES (
+				(NEW.ts / 86400) * 86400,
+				1,
+				NEW.memories,
+				CASE
+					WHEN NEW.memories > 0 AND NEW.attributed_memories = 0 AND NEW.unattributed_memories = 0
+					THEN CASE WHEN NEW.represented_tokens > 0 THEN NEW.memories ELSE 0 END
+					ELSE NEW.attributed_memories END,
+				CASE
+					WHEN NEW.memories > 0 AND NEW.attributed_memories = 0 AND NEW.unattributed_memories = 0
+					THEN CASE WHEN NEW.represented_tokens > 0 THEN 0 ELSE NEW.memories END
+					ELSE NEW.unattributed_memories END,
+				NEW.delivered_tokens,
+				NEW.represented_tokens,
+				CASE
+					WHEN NEW.delivered_tokens > 0 AND NEW.attributed_tokens = 0 AND NEW.unattributed_tokens = 0
+					THEN CASE WHEN NEW.represented_tokens > 0 THEN NEW.delivered_tokens ELSE 0 END
+					ELSE NEW.attributed_tokens END,
+				CASE
+					WHEN NEW.delivered_tokens > 0 AND NEW.attributed_tokens = 0 AND NEW.unattributed_tokens = 0
+					THEN CASE WHEN NEW.represented_tokens > 0 THEN 0 ELSE NEW.delivered_tokens END
+					ELSE NEW.unattributed_tokens END,
+				MAX(NEW.represented_tokens - CASE
+					WHEN NEW.delivered_tokens > 0 AND NEW.attributed_tokens = 0 AND NEW.unattributed_tokens = 0
+					THEN CASE WHEN NEW.represented_tokens > 0 THEN NEW.delivered_tokens ELSE 0 END
+					ELSE NEW.attributed_tokens END, 0),
+				MAX(CASE
+					WHEN NEW.delivered_tokens > 0 AND NEW.attributed_tokens = 0 AND NEW.unattributed_tokens = 0
+					THEN CASE WHEN NEW.represented_tokens > 0 THEN NEW.delivered_tokens ELSE 0 END
+					ELSE NEW.attributed_tokens END - NEW.represented_tokens, 0)
+			)
+			ON CONFLICT(day) DO UPDATE SET
+				recalls = recalls + excluded.recalls,
+				memories = memories + excluded.memories,
+				attributed_memories = attributed_memories + excluded.attributed_memories,
+				unattributed_memories = unattributed_memories + excluded.unattributed_memories,
+				delivered_tokens = delivered_tokens + excluded.delivered_tokens,
+				represented_tokens = represented_tokens + excluded.represented_tokens,
+				attributed_tokens = attributed_tokens + excluded.attributed_tokens,
+				unattributed_tokens = unattributed_tokens + excluded.unattributed_tokens,
+				confirmed_saved_tokens = confirmed_saved_tokens + excluded.confirmed_saved_tokens,
+				recall_overhead_tokens = recall_overhead_tokens + excluded.recall_overhead_tokens;
+		END`); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", dbSchemaVersion)); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func rollupTotals(ctx context.Context, db *sql.DB) (Totals, error) {
+	var out Totals
+	row := db.QueryRowContext(ctx, `SELECT
+		COALESCE(SUM(recalls), 0), COALESCE(SUM(memories), 0),
+		COALESCE(SUM(attributed_memories), 0), COALESCE(SUM(unattributed_memories), 0),
+		COALESCE(SUM(delivered_tokens), 0), COALESCE(SUM(represented_tokens), 0),
+		COALESCE(SUM(attributed_tokens), 0), COALESCE(SUM(unattributed_tokens), 0),
+		COALESCE(SUM(confirmed_saved_tokens), 0), COALESCE(SUM(recall_overhead_tokens), 0)
+	FROM metric_daily`)
+	if err := row.Scan(&out.Recalls, &out.Memories, &out.AttributedMemories, &out.UnattributedMemories,
+		&out.DeliveredTokens, &out.RepresentedTokens, &out.AttributedTokens, &out.UnattributedTokens,
+		&out.ConfirmedSavedTokens, &out.RecallOverheadTokens); err != nil {
+		return out, err
+	}
+	finishTotals(&out)
+	return out, nil
 }
 
 func hasColumn(ctx context.Context, tx *sql.Tx, table, column string) (bool, error) {
@@ -473,9 +597,13 @@ func totals(ctx context.Context, db *sql.DB, since int64) (Totals, error) {
 		&out.ConfirmedSavedTokens, &out.RecallOverheadTokens); err != nil {
 		return out, err
 	}
+	finishTotals(&out)
+	return out, nil
+}
+
+func finishTotals(out *Totals) {
 	out.NetAvoidedTokens = out.RepresentedTokens - out.AttributedTokens
 	if out.DeliveredTokens > 0 {
 		out.AttributionPercent = float64(out.AttributedTokens) * 100 / float64(out.DeliveredTokens)
 	}
-	return out, nil
 }

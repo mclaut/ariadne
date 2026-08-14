@@ -45,6 +45,23 @@ func TestParseProcessPID(t *testing.T) {
 	}
 }
 
+func TestParseLsofFDCount(t *testing.T) {
+	t.Parallel()
+	output := "p123\nfcwd\nf0\nf1\nf12\nf255\n"
+	if got := parseLsofFDCount(output); got != 4 {
+		t.Fatalf("open descriptors = %d, want 4", got)
+	}
+}
+
+func TestParseProcOpenFilesLimit(t *testing.T) {
+	t.Parallel()
+	output := "Limit                     Soft Limit           Hard Limit           Units\n" +
+		"Max open files            8192                 8192                 files\n"
+	if got := parseProcOpenFilesLimit(output); got != 8192 {
+		t.Fatalf("open-file limit = %d, want 8192", got)
+	}
+}
+
 func TestResolveServiceBinaryUsesHomebrewFallbackOutsideShellPATH(t *testing.T) {
 	t.Parallel()
 	notFound := func(string) (string, error) { return "", errors.New("not found") }

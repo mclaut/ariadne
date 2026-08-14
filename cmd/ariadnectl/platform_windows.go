@@ -18,6 +18,8 @@ const qdrantTask = `\Ariadne Qdrant`
 
 func loadedAriadneQdrantAgents() []string { return nil }
 
+func processFDUsage(int) (int, int) { return 0, 0 }
+
 func control(action string) error {
 	switch action {
 	case "start":

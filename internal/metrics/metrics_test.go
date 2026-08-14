@@ -246,3 +246,49 @@ func TestReadMigratesV1UnknownDelivery(t *testing.T) {
 		t.Fatalf("old-client totals = %+v", got.AllTime)
 	}
 }
+
+func TestMetricsV3BuildsAppendOnlyRollupsAndTimeIndex(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "metrics.db")
+	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+	for _, event := range []Event{
+		{ID: "day-one", At: now.Add(-48 * time.Hour), DeliveredTokens: 20, RepresentedTokens: 100, Memories: 1},
+		{ID: "day-three-a", At: now, DeliveredTokens: 30, RepresentedTokens: 0, Memories: 1},
+		{ID: "day-three-b", At: now.Add(time.Hour), DeliveredTokens: 40, RepresentedTokens: 200, Memories: 2},
+	} {
+		if err := RecordRecallAt(ctx, path, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var version, rawRows, rollupRows, indexes int
+	if err = db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM recall_events`).Scan(&rawRows); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM metric_daily`).Scan(&rollupRows); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master
+		WHERE type = 'index' AND name = 'recall_events_ts'`).Scan(&indexes); err != nil {
+		t.Fatal(err)
+	}
+	if version != dbSchemaVersion || rawRows != 3 || rollupRows != 2 || indexes != 1 {
+		t.Fatalf("schema=%d raw=%d rollups=%d indexes=%d", version, rawRows, rollupRows, indexes)
+	}
+
+	got, err := ReadAt(ctx, path, now.Add(2*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AllTime.Recalls != 3 || got.AllTime.DeliveredTokens != 90 || got.AllTime.RepresentedTokens != 300 {
+		t.Fatalf("rollup totals = %+v", got.AllTime)
+	}
+}

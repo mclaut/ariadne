@@ -24,7 +24,59 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## Нове у v0.8.7
+## Нове у v0.8.9
+
+### Виправлено
+
+- **Qdrant залишається доступним за багатьох паралельних agent sessions.** Кожен
+  MCP-процес тепер використовує одне постійне gRPC-з’єднання замість неявного
+  пулу з трьох, а macOS launchd отримує явний ліміт 8192 descriptors замість
+  успадкованих 256.
+- **Startup більше не повторює створення всіх payload indexes.** Ariadne читає
+  наявну schema та створює лише відсутні indexes. Реальні storage errors тепер
+  зупиняють startup, а не ігноруються.
+- **Короткотривалі клієнти закриваються коректно.** Hooks, import, install і
+  maintenance звільняють Qdrant connection після завершення.
+
+### Додано
+
+- **Видимість descriptor pressure.** `ariadnectl status`, tray і doctor
+  показують відкриті descriptors та налаштований limit і попереджають до
+  вичерпання ресурсу.
+
+## Раніше у v0.8.8
+
+### Додано
+
+- **Fail-closed автентифікація віддаленого Qdrant.** Remote gRPC потребує API
+  key і TLS, а REST — той самий key та HTTPS. Довготривалі клієнти зберігають
+  лише захищений шлях до key-файлу, а не саме значення. Явний insecure override
+  залишається для SSH або іншого тунелю під контролем користувача.
+- **Чесне порівняння retrieval.** `cmd/eval` обчислює детерміновані macro
+  Recall, MRR і nDCG для judged BM25 та learned-sparse runs без непідтверджених
+  заяв про перевагу SPLADE.
+
+### Змінено
+
+- **Metrics schema v3 масштабується без втрати історії.** Усі recall events
+  лишаються append-only, а індексований 30-денний шлях і транзакційні денні
+  rollups роблять lifetime totals швидкими. Міграція v2 не змінює raw rows або
+  підсумки.
+- **Collection scan став повним.** Memfile reconciliation читає всі сторінки
+  Qdrant замість фіксованої верхньої межі.
+- **Maintenance отримав reusable core.** Retry/backoff orchestration винесено в
+  `internal/maintenance` зі збереженням CLI та activity semantics.
+
+### Виправлено
+
+- **Remote settings переживають install і self-update.** macOS, Linux та
+  Windows launchers передають однакові не-секретні Qdrant settings, а явні
+  Windows installer arguments мають пріоритет.
+- **Go tooling більше не компілює залежності з `site/node_modules`.** Сайт має
+  окремий Go module, а `make clean` архівує generated assets з recovery
+  manifest замість видалення.
+
+## Раніше у v0.8.7
 
 ### Виправлено
 
@@ -241,6 +293,13 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 - встановлює skill негайного збереження довготривалої пам’яті;
 - налаштовує резервні копії та retry-bounded maintenance щодня о 04:30.
 
+Локальний Qdrant, встановлений Ariadne, завжди loopback-only. Для навмисно
+віддаленого Qdrant Windows installer приймає `-QdrantHost`,
+`-QdrantRestPort`, `-QdrantGrpcPort`, `-QdrantApiKeyFile` і `-QdrantTls`;
+у конфіги Codex/Claude, hooks і tray потрапляє лише шлях до key-файлу.
+`-AllowInsecureRemoteQdrant` дозволений лише для окремо зашифрованого приватного
+тунелю.
+
 ## Використання MCP
 
 Зберегти рішення:
@@ -323,6 +382,22 @@ ariadnectl quarantine-secrets --collections ariadne,sessions
 go run ./cmd/eval -cases evaluation/coding-memory.json
 ```
 
+Для чесного порівняння справжніх BM25 і learned-sparse ранжувань збережіть
+впорядковані ID результатів для того самого набору оцінених запитів і запустіть:
+
+```bash
+go run ./cmd/eval \
+  -retrieval-runs evaluation/retrieval-runs.example.json \
+  -baseline bm25
+```
+
+Команда рахує macro Recall, MRR, nDCG та різницю nDCG на кожному cutoff;
+`-json` повертає машинозчитуваний результат. Файл у репозиторії — лише приклад
+формату, не доказ переваги будь-якого методу. Реальний висновок потребує
+зафіксованих relevance judgments і запусків на однаковому корпусі, запитах,
+фільтрах та cutoff. Eval не звертається до Qdrant, Ollama чи віддаленої моделі й
+не змінює памʼять.
+
 Метрики показують:
 
 - **measured saved / net** — економію лише для пам’ятей із відомим розміром джерела;
@@ -335,9 +410,20 @@ credit за джерело, але його вартість рахується.
 `source_tokens` для інтеграцій, які знають розмір конкретного стисненого джерела;
 capture і consolidate додають provenance автоматично.
 
+Сирі metrics-події залишаються append-only. Схема v3 транзакційно підтримує
+денні підсумки для швидкого lifetime-звіту та індекс для 30-денного вікна, не
+видаляючи історію.
+
 ## Приватність
 
 - Qdrant працює лише на loopback і не має автентифікації за замовчуванням.
+- Навмисно віддалений Qdrant працює fail-closed: потрібні API key і TLS.
+  Рекомендований клієнтський параметр — `ARIADNE_QDRANT_API_KEY_FILE` із правами
+  `0600`; також підтримується process-only `ARIADNE_QDRANT_API_KEY`.
+  `ARIADNE_QDRANT_TLS=1` вмикає TLS для gRPC, а REST URL має використовувати
+  `https://`. Інсталер переносить у MCP-конфіг лише шлях до key-файлу, не саме
+  значення. `ARIADNE_QDRANT_ALLOW_INSECURE_REMOTE=1` — явний виняток лише для
+  окремо зашифрованого приватного тунелю, не для звичайної LAN.
 - Пам’ять зберігається у plaintext payload, тому секрети записувати не можна.
 - Нові записи з детерміновано виявленими credentials відхиляються; import і
   hooks редагують значення, а старі збіги можна append-only ізолювати командою
@@ -357,3 +443,8 @@ cd site && npm test
 
 Повна англомовна документація й усі деталі архітектури доступні в
 [README.md](README.md). Проєкт поширюється за ліцензією [MIT](LICENSE).
+
+Згенеровані артефакти сайту можна прибрати з working tree без втрати даних:
+`make clean` переносить build output у `~/.ariadne/archive/site/` разом із
+manifest для відновлення, а `make clean-all` додатково переносить
+`site/node_modules`.

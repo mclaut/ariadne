@@ -3,6 +3,7 @@
 package main
 
 import (
+	"ariadne/internal/qdrantauth"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -33,6 +34,7 @@ const (
 	qdForeign                        // healthy Qdrant we did NOT install → reuse, never touch
 	qdBusyNot                        // port busy by something that is not Qdrant → abort
 	qdUnreachable                    // remote host given but not answering → abort
+	qdAuthInvalid                    // auth/transport policy is incomplete or unsafe
 )
 
 type report struct {
@@ -53,6 +55,7 @@ type report struct {
 		remote   bool
 		grpcOK   bool
 		bindWide bool // foreign instance listens beyond loopback
+		authErr  string
 	}
 	ollama struct {
 		up         bool
@@ -73,6 +76,7 @@ type report struct {
 func (r *report) fatal() bool {
 	return r.ramFatal || r.diskFatal || r.gpuFatal ||
 		r.qdrant.state == qdBusyNot || r.qdrant.state == qdUnreachable ||
+		r.qdrant.state == qdAuthInvalid ||
 		!r.ollama.up || r.repoRoot == "" || !r.goOK
 }
 
@@ -98,7 +102,7 @@ func preflight(o opts) *report {
 		filepath.Join(r.home, ".claude", "skills", "ariadne"),
 	)
 	if b, err := os.ReadFile(filepath.Join(r.home, ".claude", "settings.json")); err == nil { //nolint:gosec // own config
-		r.hooksOK = hooksConfigCurrent(b, r.home)
+		r.hooksOK = hooksConfigCurrentForOpts(b, r.home, o)
 	}
 	return r
 }
@@ -167,6 +171,8 @@ func printReport(r *report) {
 			"free the port or pass -qdrant-rest/-qdrant-grpc", 6333))
 	case qdUnreachable:
 		line(false, true, "the Qdrant host you passed does not answer /healthz — check host/port")
+	case qdAuthInvalid:
+		line(false, true, "Qdrant authentication/transport configuration: "+r.qdrant.authErr)
 	}
 	if r.qdrant.state == qdOurs || r.qdrant.state == qdForeign {
 		if r.qdrant.points >= 0 {
@@ -193,11 +199,33 @@ func printReport(r *report) {
 // --- detection helpers ---
 
 func detectQdrant(r *report, o opts) {
-	base := fmt.Sprintf("http://%s:%d", o.qdrantHost, o.qdrantREST)
-	r.qdrant.remote = o.qdrantHost != "127.0.0.1" && o.qdrantHost != "localhost"
+	auth, err := qdrantauth.FromEnv()
+	if err != nil {
+		r.qdrant.state = qdAuthInvalid
+		r.qdrant.authErr = err.Error()
+		return
+	}
+	if auth.APIKey != "" && auth.APIKeyFile == "" {
+		r.qdrant.state = qdAuthInvalid
+		r.qdrant.authErr = qdrantauth.EnvAPIKey + " is process-only; the installer requires " +
+			qdrantauth.EnvAPIKeyFile + " so generated client configs never contain the secret"
+		return
+	}
+	if err := auth.ValidateGRPC(o.qdrantHost); err != nil {
+		r.qdrant.state = qdAuthInvalid
+		r.qdrant.authErr = err.Error()
+		return
+	}
+	base := qdrantBaseURL(o)
+	if err := auth.ValidateURL(base); err != nil {
+		r.qdrant.state = qdAuthInvalid
+		r.qdrant.authErr = err.Error()
+		return
+	}
+	r.qdrant.remote = !qdrantauth.IsLoopbackHost(o.qdrantHost)
 	r.qdrant.points = -1
 
-	if !getOK(base + "/healthz") {
+	if !qdrantGetOK(base + "/healthz") {
 		if r.qdrant.remote {
 			r.qdrant.state = qdUnreachable
 			return
@@ -210,10 +238,10 @@ func detectQdrant(r *report, o opts) {
 		return
 	}
 	// healthy Qdrant answered
-	if root, ok := getJSON(base + "/"); ok {
+	if root, ok := qdrantGetJSON(base + "/"); ok {
 		r.qdrant.version, _ = root["version"].(string)
 	}
-	if cl, ok := getJSON(base + "/collections"); ok {
+	if cl, ok := qdrantGetJSON(base + "/collections"); ok {
 		if res, k := cl["result"].(map[string]any); k {
 			if arr, k2 := res["collections"].([]any); k2 {
 				for _, c := range arr {
@@ -226,7 +254,7 @@ func detectQdrant(r *report, o opts) {
 			}
 		}
 	}
-	if info, ok := getJSON(base + "/collections/" + o.collection); ok {
+	if info, ok := qdrantGetJSON(base + "/collections/" + o.collection); ok {
 		if res, k := info["result"].(map[string]any); k {
 			if f, k2 := res["points_count"].(float64); k2 {
 				r.qdrant.points = int64(f)
@@ -376,6 +404,67 @@ func mcpRegistered(home string) bool {
 // --- tiny probes ---
 
 func httpc() *http.Client { return &http.Client{Timeout: 3 * time.Second} }
+
+func qdrantBaseURL(o opts) string {
+	scheme := "http"
+	if auth, err := qdrantauth.FromEnv(); err == nil && auth.UseTLS {
+		scheme = "https"
+	}
+	return scheme + "://" + net.JoinHostPort(strings.Trim(o.qdrantHost, "[]"), strconv.Itoa(o.qdrantREST))
+}
+
+func qdrantRequest(ctx context.Context, rawURL string) (*http.Request, error) {
+	auth, err := qdrantauth.FromEnv()
+	if err != nil {
+		return nil, err
+	}
+	if err := auth.ValidateURL(rawURL); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	auth.Apply(req)
+	return req, nil
+}
+
+func qdrantGetOK(rawURL string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := qdrantRequest(ctx, rawURL)
+	if err != nil {
+		return false
+	}
+	resp, err := httpc().Do(req)
+	if err != nil {
+		return false
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode < 300
+}
+
+func qdrantGetJSON(rawURL string) (map[string]any, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := qdrantRequest(ctx, rawURL)
+	if err != nil {
+		return nil, false
+	}
+	resp, err := httpc().Do(req)
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return nil, false
+	}
+	var m map[string]any
+	if json.NewDecoder(resp.Body).Decode(&m) != nil {
+		return nil, false
+	}
+	return m, true
+}
 
 func getOK(url string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
