@@ -35,15 +35,15 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.10 makes Ariadne's memory-economics metrics explainable from the
-recallable corpus through each delivered result.
+Version 0.8.11 guarantees one desktop tray even when historical autostart jobs
+or a manual launch try to start more copies.
 
-- **Fixed:** Qdrant pagination preserves unsigned 64-bit offsets exactly, and
-  corpus coverage no longer mixes active memories with inactive history.
-- **Changed:** measured source attribution, conservative legacy estimates, and
-  diary, consolidation, or manual gaps are reported separately.
-- **Safer:** attribution backfill is read-only by default, requires an explicit
-  `--apply`, and excludes inactive or quarantined records.
+- **Fixed:** macOS/Linux use a non-blocking file lock and Windows uses a named
+  mutex, so a duplicate exits before creating another icon.
+- **Self-healing:** every install reconciles canonical and historical macOS
+  launchd jobs before bootstrapping one owner for each shared service.
+- **Preserved:** superseded plist files move to a collision-safe runtime archive
+  instead of being deleted; doctor also verifies the real tray-process count.
 
 ## Links
 

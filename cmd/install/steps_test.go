@@ -22,6 +22,63 @@ func TestParseInstallQdrantAgents(t *testing.T) {
 	}
 }
 
+func TestParseInstallLaunchAgentsScopesByCanonicalPrefix(t *testing.T) {
+	t.Parallel()
+	output := `101 0 com.ariadne.tray.v0-8-7
+102 0 com.ariadne.tray
+103 0 com.ariadne.tray-helper
+104 0 com.ariadne.sync.v0-8-7
+101 0 com.ariadne.tray.v0-8-7`
+	want := []string{"com.ariadne.tray", "com.ariadne.tray.v0-8-7"}
+	if got := parseInstallLaunchAgents(output, "com.ariadne.tray"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("agents = %#v, want %#v", got, want)
+	}
+}
+
+func TestArchiveLegacyLaunchAgentPlistsPreservesCanonicalAndCollisions(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	agents := filepath.Join(home, "Library", "LaunchAgents")
+	archive := filepath.Join(home, ".ariadne", "archive", "launchagents")
+	if err := os.MkdirAll(agents, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(archive, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"com.ariadne.tray.plist":        "canonical",
+		"com.ariadne.tray.v0-8-9.plist": "legacy-current",
+		"com.example.tray.plist":        "unrelated",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(agents, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(archive, "com.ariadne.tray.v0-8-9.plist"), []byte("older"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := archiveLegacyLaunchAgentPlists(home, "com.ariadne.tray"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"com.ariadne.tray.plist", "com.example.tray.plist"} {
+		if _, err := os.Stat(filepath.Join(agents, name)); err != nil {
+			t.Fatalf("preserved %s: %v", name, err)
+		}
+	}
+	for name, want := range map[string]string{
+		"com.ariadne.tray.v0-8-9.plist":   "older",
+		"com.ariadne.tray.v0-8-9.1.plist": "legacy-current",
+	} {
+		got, err := os.ReadFile(filepath.Join(archive, name)) //nolint:gosec // test fixture
+		if err != nil || string(got) != want {
+			t.Fatalf("archive %s = %q, %v; want %q", name, got, err, want)
+		}
+	}
+}
+
 func TestQdrantLaunchdTemplateRaisesDescriptorLimit(t *testing.T) {
 	t.Parallel()
 	template, err := os.ReadFile(filepath.Join("..", "..", "deploy", "com.ariadne.qdrant.plist")) //nolint:gosec // repo fixture

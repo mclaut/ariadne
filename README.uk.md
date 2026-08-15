@@ -24,30 +24,30 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## Нове у v0.8.10
+## Нове у v0.8.11
 
 ### Виправлено
 
-- **Attribution scan більше не втрачає великі Qdrant offsets.** Pagination точно
-  зберігає unsigned 64-bit `next_page_offset` сервера замість перетворення через
-  floating-point, яке могло пропускати або повторювати сторінки вище `2^53`.
-- **Coverage описує пам’ять, яку агенти справді можуть отримати.** Corpus profile
-  відокремлює активні recallable memories від archived, superseded, orphaned і
-  quarantined історії замість змішування їх в одному KPI.
-- **Backfill не може випадково змінити дані.**
-  `ariadnectl backfill-attribution` тепер read-only за замовчуванням, потребує
-  явного `--apply`, відхиляє суперечливі flags і не торкається inactive або
-  security-quarantined records.
+- **Desktop tray тепер справді single-instance.** Перед створенням status item
+  Ariadne бере OS-level lock: неблокувальний `flock` на macOS/Linux і named
+  mutex на Windows. Друга копія коректно завершується, не додаючи іконку.
+- **Старі launchd jobs більше не множаться після входу.** Інсталер узгоджує всі
+  canonical і versioned jobs для tray, maintenance та Ariadne-owned Qdrant,
+  залишаючи активними лише canonical labels.
 
-### Змінено
+### Додано
 
-- **Measured і estimated provenance видно окремо.** Metrics розрізняють
-  source-backed token attribution та консервативні legacy estimates, а решту
-  прогалин класифікують окремо як diary, consolidation і manual.
-- **Agent guidance захищає метрику.** Skills для Codex і Claude додають
-  `source_tokens` лише для обмеженого джерела, яке справді було опрацьовано.
-  Подальший recall пам’яті без attribution лишається видимим як unattributed
-  delivery, а не маскується під measured savings або pure overhead.
+- **History-preserving cleanup launchd.** Застарілі plist переносяться до runtime
+  archive Ariadne замість видалення, включно зі старим monitor plist.
+- **Діагностика на рівні процесів.** Full-stack doctor тепер показує фактичну
+  кількість tray-процесів разом із launchd ownership, тому ручні дублікати не
+  сховаються за одним service label.
+
+## Раніше у v0.8.10
+
+v0.8.10 зробила token attribution аудитованою завдяки lossless Qdrant pagination,
+відокремленню recallable memory від history, measured provenance від estimates,
+явній класифікації gaps і безпечному opt-in attribution backfill.
 
 ## Раніше у v0.8.9
 

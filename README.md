@@ -26,29 +26,30 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.10
+## What's New in v0.8.11
 
 ### Fixed
 
-- **Attribution scans no longer lose large Qdrant offsets.** Pagination preserves
-  the server's unsigned 64-bit `next_page_offset` exactly instead of decoding it
-  through a floating-point value that can skip or repeat pages above `2^53`.
-- **Coverage describes the memory agents can actually recall.** The corpus
-  profile separates active, recallable memories from archived, superseded,
-  orphaned, and quarantined history instead of blending them into one KPI.
-- **Backfill cannot mutate data by accident.** `ariadnectl backfill-attribution`
-  is now read-only by default, requires an explicit `--apply`, rejects conflicting
-  flags, and excludes inactive or security-quarantined records.
+- **The desktop tray is now truly single-instance.** Before creating a status
+  item, Ariadne takes an OS-level lock: non-blocking `flock` on macOS/Linux and
+  a named mutex on Windows. A duplicate exits cleanly without adding an icon.
+- **Old launchd jobs no longer multiply after login.** The installer reconciles
+  every canonical and versioned tray, maintenance, and Ariadne-owned Qdrant job,
+  then keeps only the canonical labels active.
 
-### Changed
+### Added
 
-- **Measured and estimated provenance are visible separately.** Metrics distinguish
-  source-backed token attribution from conservative legacy estimates and classify
-  remaining diary, consolidation, and manual gaps independently.
-- **Agent guidance protects the metric.** Codex and Claude skills attach
-  `source_tokens` only to a bounded source that was actually processed. Later
-  recall of an unattributed memory stays visible as unattributed delivery rather
-  than being mislabeled as measured savings or pure overhead.
+- **History-preserving launchd cleanup.** Superseded plist files move to Ariadne's
+  runtime archive instead of being deleted, including the legacy monitor plist.
+- **Process-level diagnostics.** The full-stack doctor now reports the actual
+  tray-process count as well as launchd ownership, so manual duplicates cannot
+  hide behind one service label.
+
+## Previously in v0.8.10
+
+v0.8.10 made token attribution auditable with lossless Qdrant pagination,
+recallable-versus-history coverage, separated measured and estimated provenance,
+explicit gap classification, and safe opt-in attribution backfill.
 
 ## Previously in v0.8.9
 
@@ -848,7 +849,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.10 — current release. Lossless Qdrant attribution pagination, recallable-versus-history
+v0.8.11 — current release. Cross-platform single-instance tray enforcement,
+canonical launchd ownership reconciliation, history-preserving legacy plist archival,
+and actual tray-process diagnostics; lossless Qdrant attribution pagination, recallable-versus-history
 corpus accounting, measured-versus-estimated provenance, explicit safe attribution backfill,
 and bounded agent-side source accounting; single-connection MCP clients, launchd descriptor capacity,
 payload-index reconciliation, graceful Qdrant client shutdown, and descriptor-pressure diagnostics;

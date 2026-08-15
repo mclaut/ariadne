@@ -84,7 +84,6 @@ func makePlan(r *report, o opts) []action {
 		},
 		{
 			title: "install tray-monitor autostart (Linux: autostart entry; macOS: LaunchAgent)",
-			skip:  fileExists(trayAutostartPath(r)) && defaultsOnly(o),
 			run:   func() error { return installTrayAutostart(r, o) },
 		},
 	}
@@ -180,7 +179,12 @@ func installSyncAgent(r *report, o opts) error {
 			return err
 		}
 		uid := strconv.Itoa(os.Getuid())
-		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.sync") // ignore: may not be loaded
+		for _, label := range loadedInstallLaunchAgents("com.ariadne.sync") {
+			_ = runCmd("launchctl", "bootout", "gui/"+uid+"/"+label) // ignore: job may exit concurrently
+		}
+		if err := archiveLegacyLaunchAgentPlists(r.home, "com.ariadne.sync"); err != nil {
+			return err
+		}
 		return runCmd("launchctl", "bootstrap", "gui/"+uid, dst)
 	}
 	// linux: oneshot service + daily timer (systemd user units use %h natively)
@@ -339,9 +343,11 @@ func installTrayAutostart(r *report, o opts) error {
 	if r.os == osDarwin {
 		uid := strconv.Itoa(os.Getuid())
 		// migrate off the legacy Swift monitor so the menu bar shows one icon
-		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.monitor")                        // ignore: may not be loaded
-		_ = os.Remove(filepath.Join(r.home, "Library", "LaunchAgents", "com.ariadne.monitor.plist")) //nolint:errcheck // may not exist
-		tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "com.ariadne.tray.plist"))       //nolint:gosec // repo file
+		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.monitor") // ignore: may not be loaded
+		if err := archiveLaunchAgentPlist(r.home, "com.ariadne.monitor.plist"); err != nil {
+			return err
+		}
+		tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "com.ariadne.tray.plist")) //nolint:gosec // repo file
 		if err != nil {
 			return err
 		}
@@ -349,7 +355,12 @@ func installTrayAutostart(r *report, o opts) error {
 		if err := os.WriteFile(dst, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
 			return err
 		}
-		_ = runCmd("launchctl", "bootout", "gui/"+uid+"/com.ariadne.tray") // ignore: may not be loaded
+		for _, label := range loadedInstallLaunchAgents("com.ariadne.tray") {
+			_ = runCmd("launchctl", "bootout", "gui/"+uid+"/"+label) // ignore: job may exit concurrently
+		}
+		if err := archiveLegacyLaunchAgentPlists(r.home, "com.ariadne.tray"); err != nil {
+			return err
+		}
 		return runCmd("launchctl", "bootstrap", "gui/"+uid, dst)
 	}
 	tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "ariadne-tray.desktop")) //nolint:gosec // repo file
@@ -560,6 +571,9 @@ func installService(r *report) error {
 		for _, label := range loadedInstallQdrantAgents() {
 			_ = runCmd("launchctl", "bootout", "gui/"+uid+"/"+label) // ignore: job may exit concurrently
 		}
+		if err := archiveLegacyLaunchAgentPlists(r.home, "com.ariadne.qdrant"); err != nil {
+			return err
+		}
 		return runCmd("launchctl", "bootstrap", "gui/"+uid, svc)
 	}
 	// linux: systemd user unit (uses %h natively — copy as-is)
@@ -581,15 +595,22 @@ func installService(r *report) error {
 }
 
 func loadedInstallQdrantAgents() []string {
+	return loadedInstallLaunchAgents("com.ariadne.qdrant")
+}
+
+func loadedInstallLaunchAgents(canonical string) []string {
 	out, err := exec.CommandContext(context.Background(), "launchctl", "list").Output() //nolint:gosec // fixed command
 	if err != nil {
 		return nil
 	}
-	return parseInstallQdrantAgents(string(out))
+	return parseInstallLaunchAgents(string(out), canonical)
 }
 
 func parseInstallQdrantAgents(output string) []string {
-	const canonical = "com.ariadne.qdrant"
+	return parseInstallLaunchAgents(output, "com.ariadne.qdrant")
+}
+
+func parseInstallLaunchAgents(output, canonical string) []string {
 	labels := make([]string, 0, 1)
 	for _, line := range strings.Split(output, "\n") {
 		fields := strings.Fields(line)
@@ -603,6 +624,47 @@ func parseInstallQdrantAgents(output string) []string {
 	}
 	slices.Sort(labels)
 	return slices.Compact(labels)
+}
+
+func archiveLegacyLaunchAgentPlists(home, canonical string) error {
+	matches, err := filepath.Glob(filepath.Join(home, "Library", "LaunchAgents", canonical+".*.plist"))
+	if err != nil {
+		return fmt.Errorf("find legacy %s launch agents: %w", canonical, err)
+	}
+	for _, source := range matches {
+		if err := archiveLaunchAgentPlist(home, filepath.Base(source)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func archiveLaunchAgentPlist(home, name string) error {
+	source := filepath.Join(home, "Library", "LaunchAgents", name)
+	if _, err := os.Stat(source); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect legacy launch agent %s: %w", name, err)
+	}
+	archiveDir := filepath.Join(home, ".ariadne", "archive", "launchagents")
+	if err := os.MkdirAll(archiveDir, 0o700); err != nil {
+		return fmt.Errorf("create launch-agent archive: %w", err)
+	}
+	destination := filepath.Join(archiveDir, name)
+	for suffix := 1; ; suffix++ {
+		if _, err := os.Stat(destination); errors.Is(err, os.ErrNotExist) {
+			break
+		} else if err != nil {
+			return fmt.Errorf("inspect launch-agent archive %s: %w", destination, err)
+		}
+		extension := filepath.Ext(name)
+		base := strings.TrimSuffix(name, extension)
+		destination = filepath.Join(archiveDir, fmt.Sprintf("%s.%d%s", base, suffix, extension))
+	}
+	if err := os.Rename(source, destination); err != nil {
+		return fmt.Errorf("archive legacy launch agent %s: %w", name, err)
+	}
+	return nil
 }
 
 func buildBinaries(r *report) error {
