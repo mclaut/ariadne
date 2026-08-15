@@ -137,7 +137,7 @@ func main() {
 			"start | stop | restart | backup | restore <file> | export [file] | "+
 			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
 			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | "+
-			"backfill-attribution [--dry-run] [--multiplier 8] | approvals [-json]}")
+			"backfill-attribution [--apply] [--multiplier 8] | approvals [-json]}")
 		os.Exit(2)
 	}
 }

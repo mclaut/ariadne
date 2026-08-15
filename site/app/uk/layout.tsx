@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 const siteUrl = "https://mclaut.github.io/ariadne";
 const description =
-  "Ariadne — локальна багатомовна довготривала пам’ять для Codex, Claude Code та MCP-клієнтів.";
+  "Ariadne — локальна багатомовна пам’ять для Codex, Claude Code та MCP-клієнтів із аудитованою attribution і межами проєктів.";
 
 export const metadata: Metadata = {
   title: "Ariadne — локальна пам’ять для AI-агентів",

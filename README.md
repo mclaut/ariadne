@@ -26,7 +26,31 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.9
+## What's New in v0.8.10
+
+### Fixed
+
+- **Attribution scans no longer lose large Qdrant offsets.** Pagination preserves
+  the server's unsigned 64-bit `next_page_offset` exactly instead of decoding it
+  through a floating-point value that can skip or repeat pages above `2^53`.
+- **Coverage describes the memory agents can actually recall.** The corpus
+  profile separates active, recallable memories from archived, superseded,
+  orphaned, and quarantined history instead of blending them into one KPI.
+- **Backfill cannot mutate data by accident.** `ariadnectl backfill-attribution`
+  is now read-only by default, requires an explicit `--apply`, rejects conflicting
+  flags, and excludes inactive or security-quarantined records.
+
+### Changed
+
+- **Measured and estimated provenance are visible separately.** Metrics distinguish
+  source-backed token attribution from conservative legacy estimates and classify
+  remaining diary, consolidation, and manual gaps independently.
+- **Agent guidance protects the metric.** Codex and Claude skills attach
+  `source_tokens` only to a bounded source that was actually processed. Later
+  recall of an unattributed memory stays visible as unattributed delivery rather
+  than being mislabeled as measured savings or pure overhead.
+
+## Previously in v0.8.9
 
 ### Fixed
 
@@ -824,7 +848,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.9 — current release. Single-connection MCP clients, launchd descriptor capacity,
+v0.8.10 — current release. Lossless Qdrant attribution pagination, recallable-versus-history
+corpus accounting, measured-versus-estimated provenance, explicit safe attribution backfill,
+and bounded agent-side source accounting; single-connection MCP clients, launchd descriptor capacity,
 payload-index reconciliation, graceful Qdrant client shutdown, and descriptor-pressure diagnostics;
 fail-closed remote Qdrant authentication, append-only metrics v3 rollups,
 complete paginated collection scans, deterministic BM25/learned-sparse evaluation,
