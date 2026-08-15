@@ -6,6 +6,7 @@ require (
 	fyne.io/systray v1.12.2
 	github.com/mark3labs/mcp-go v0.55.1
 	github.com/qdrant/go-client v1.18.3
+	golang.org/x/sys v0.45.0
 	modernc.org/sqlite v1.53.0
 )
 
@@ -21,7 +22,6 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/net v0.53.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
 	google.golang.org/grpc v1.81.1 // indirect

@@ -112,14 +112,31 @@ func main() {
 	if len(os.Args) == 4 && os.Args[1] == "--apply-update" {
 		os.Exit(applyUpdate(os.Args[2], os.Args[3]))
 	}
+	if code := runTray(); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func runTray() int {
+	releaseInstance, acquired, err := acquireTrayInstance()
+	if err != nil {
+		log.Printf("Ariadne tray single-instance guard failed: %v", err)
+		return 1
+	}
+	if !acquired {
+		log.Printf("Ariadne tray already running; duplicate exits")
+		return 0
+	}
+	defer releaseInstance()
 	log.Printf("Ariadne %s tray starting", version.Tag)
 	systray.Run(onReady, onExit)
 	trayExitMu.Lock()
 	restart := trayRestartRequested
 	trayExitMu.Unlock()
 	if restart {
-		os.Exit(trayRestartExitCode)
+		return trayRestartExitCode
 	}
+	return 0
 }
 
 func onExit() {

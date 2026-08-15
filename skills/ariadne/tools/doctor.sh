@@ -224,6 +224,11 @@ if [ "$(uname -s)" = "Darwin" ]; then
   elif [ "$(printf '%s\n' "$TRAY_LINE" | awk '{print $1}')" = "-" ]; then warn "Ariadne tray job is loaded but not running"
   else ok "Ariadne tray is running"; fi
 
+  TRAY_PROCESS_COUNT="$(ps -axo comm= 2>/dev/null | awk '$0 ~ /(^|\/)ariadne-tray$/ {n++} END{print n+0}')"
+  if [ "$TRAY_PROCESS_COUNT" -eq 1 ]; then ok "one Ariadne tray process running"
+  elif [ "$TRAY_PROCESS_COUNT" -gt 1 ]; then bad "$TRAY_PROCESS_COUNT Ariadne tray processes running"
+  else warn "no Ariadne tray process detected"; fi
+
   SYNC_LINE="$(printf '%s\n' "$LAUNCHD" | awk '$3=="com.ariadne.sync" || $3 ~ /^com[.]ariadne[.]sync[.]/ {print; n++} END{if(n>1) exit 2}')"
   SYNC_RC=$?
   if [ "$SYNC_RC" -eq 2 ]; then bad "multiple Ariadne maintenance jobs loaded"

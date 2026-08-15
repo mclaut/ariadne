@@ -31,9 +31,9 @@ test("server-renders the Ariadne product page and discovery metadata", async () 
   const html = await response.text();
   assert.match(html, /<title>Ariadne - Local-first memory for AI agents<\/title>/i);
   assert.match(html, /<h1>Ariadne<\/h1>/);
-  assert.match(html, /New in v0\.8\.10/);
-  assert.match(html, /Scoped: recallable corpus/);
-  assert.match(html, /Exact: 64-bit pagination/);
+  assert.match(html, /New in v0\.8\.11/);
+  assert.match(html, /Locked: one tray process/);
+  assert.match(html, /Reconciled: launchd ownership/);
   assert.match(html, /application\/ld\+json/);
   assert.match(html, /SoftwareApplication/);
   assert.match(html, /og:image/);
@@ -47,8 +47,8 @@ test("server-renders the Ukrainian localized route", async () => {
 
   const html = await response.text();
   assert.match(html, /локальна пам’ять для AI-агентів/i);
-  assert.match(html, /Нове у v0\.8\.10/);
-  assert.match(html, /Відокремлено: recallable corpus/);
+  assert.match(html, /Нове у v0\.8\.11/);
+  assert.match(html, /Заблоковано: один tray/);
   assert.match(html, /hrefLang="en"|hreflang="en"/i);
 });
 
@@ -57,7 +57,7 @@ test("keeps install, hosting, and social assets in the validated source", async 
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
-    access(new URL("../public/og-v0.8.10.png", import.meta.url)),
+    access(new URL("../public/og-v0.8.11.png", import.meta.url)),
   ]);
 
   assert.match(page, /install\.ps1/);
@@ -66,7 +66,7 @@ test("keeps install, hosting, and social assets in the validated source", async 
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview/);
   assert.match(layout, /summary_large_image/);
   assert.match(layout, /1200/);
-  assert.match(layout, /og-v0\.8\.10\.png/);
+  assert.match(layout, /og-v0\.8\.11\.png/);
   assert.equal(og, undefined);
 
   const config = JSON.parse(hosting);
