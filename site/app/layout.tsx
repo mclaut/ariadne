@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 const description =
-  "Ariadne is local-first multilingual memory for Codex, Claude Code, and MCP clients, with project isolation and human-approved cross-project access.";
+  "Ariadne is local-first multilingual memory for Codex, Claude Code, and MCP clients, with auditable attribution, project isolation, and human-approved cross-project access.";
 const siteUrl = "https://mclaut.github.io/ariadne";
-const socialImage = `${siteUrl}/og-v0.8.9.png`;
+const socialImage = `${siteUrl}/og-v0.8.10.png`;
 const favicon = `${siteUrl}/favicon.svg`;
 
 export const metadata: Metadata = {

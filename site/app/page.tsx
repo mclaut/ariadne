@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.9",
+  softwareVersion: "0.8.10",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.9</a>
+          <a href="#new">New in 0.8.10</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.9 keeps Qdrant healthy under many agent sessions
+            v0.8.10 makes memory economics auditable
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.9</span>
-            <h2>Concurrent agents without descriptor exhaustion.</h2>
+            <span className="eyebrow">New in v0.8.10</span>
+            <h2>Honest attribution, from corpus to recall.</h2>
             <p>
-              Bounded connection pools, production-sized launchd limits, and
-              visible pressure before Qdrant can become unavailable.
+              Lossless scans, explicit provenance, and a safe read-only default
+              make every coverage number explainable.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <ShieldCheck aria-hidden="true" />
-              <h3>Fixed: descriptor capacity</h3>
+              <h3>Scoped: recallable corpus</h3>
               <p>
-                macOS Qdrant receives an explicit 8192-file limit and reports
-                usage before the server reaches resource exhaustion.
+                Active memories and inactive append-only history are reported
+                separately, so coverage reflects what agents can retrieve.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Database aria-hidden="true" />
-              <h3>Reduced: MCP connections</h3>
+              <h3>Exact: 64-bit pagination</h3>
               <p>
-                Each stdio MCP process keeps one Qdrant gRPC socket instead of
-                the client library&apos;s implicit pool of three.
+                Qdrant offsets remain byte-exact instead of passing through
+                floating-point values that can lose large identifiers.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Reconciled: payload indexes</h3>
+              <h3>Separated: provenance</h3>
               <p>
-                Startup creates only missing indexes and refuses to hide real
-                storage failures behind idempotent setup.
+                Measured source context, conservative estimates, and diary,
+                consolidation, or manual gaps stay visibly distinct.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Verified: database recovery</h3>
+              <h3>Safe: explicit backfill</h3>
               <p>
-                Live activation checks WAL recovery, a green collection,
-                stable point counts, recall/save, and metrics integrity.
+                Attribution backfill is read-only by default, requires
+                <code> --apply</code>, and excludes inactive or quarantined records.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.9"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.10"
               target="_blank"
               rel="noreferrer"
             >

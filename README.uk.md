@@ -24,7 +24,32 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## Нове у v0.8.9
+## Нове у v0.8.10
+
+### Виправлено
+
+- **Attribution scan більше не втрачає великі Qdrant offsets.** Pagination точно
+  зберігає unsigned 64-bit `next_page_offset` сервера замість перетворення через
+  floating-point, яке могло пропускати або повторювати сторінки вище `2^53`.
+- **Coverage описує пам’ять, яку агенти справді можуть отримати.** Corpus profile
+  відокремлює активні recallable memories від archived, superseded, orphaned і
+  quarantined історії замість змішування їх в одному KPI.
+- **Backfill не може випадково змінити дані.**
+  `ariadnectl backfill-attribution` тепер read-only за замовчуванням, потребує
+  явного `--apply`, відхиляє суперечливі flags і не торкається inactive або
+  security-quarantined records.
+
+### Змінено
+
+- **Measured і estimated provenance видно окремо.** Metrics розрізняють
+  source-backed token attribution та консервативні legacy estimates, а решту
+  прогалин класифікують окремо як diary, consolidation і manual.
+- **Agent guidance захищає метрику.** Skills для Codex і Claude додають
+  `source_tokens` лише для обмеженого джерела, яке справді було опрацьовано.
+  Подальший recall пам’яті без attribution лишається видимим як unattributed
+  delivery, а не маскується під measured savings або pure overhead.
+
+## Раніше у v0.8.9
 
 ### Виправлено
 

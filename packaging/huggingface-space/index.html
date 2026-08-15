@@ -19,7 +19,7 @@
         Ariadne
       </a>
       <div class="nav-links">
-        <a href="#new">New in 0.8.9</a>
+        <a href="#new">New in 0.8.10</a>
         <a href="#architecture">Architecture</a>
         <a href="#install">Install</a>
       </div>
@@ -40,7 +40,7 @@
         <div class="hero-content">
           <div class="release-kicker">
             <span data-lucide="sparkles" aria-hidden="true"></span>
-            v0.8.9 keeps Qdrant healthy under many agent sessions
+            v0.8.10 makes memory economics auditable
           </div>
           <h1>Ariadne</h1>
           <p class="hero-lead">
@@ -58,7 +58,7 @@
             </a>
             <a
               class="button button-secondary"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.9"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.10"
               target="_blank"
               rel="noreferrer"
             >
@@ -78,36 +78,36 @@
       <section class="new-band" id="new">
         <div class="section-shell">
           <div class="section-heading">
-            <span class="eyebrow">New in v0.8.9</span>
-            <h2>Concurrent agents without descriptor exhaustion.</h2>
+            <span class="eyebrow">New in v0.8.10</span>
+            <h2>Honest attribution, from corpus to recall.</h2>
             <p>
-              Bounded connection pools, production-sized launchd limits, and
-              visible pressure before Qdrant can become unavailable.
+              Lossless scans, explicit provenance, and a safe read-only default
+              make every coverage number explainable.
             </p>
           </div>
           <div class="feature-grid">
             <article class="feature feature-green">
               <span data-lucide="check-circle-2" aria-hidden="true"></span>
-              <h3>Capacity</h3>
+              <h3>Recallable</h3>
               <p>
-                macOS launchd grants Qdrant 8192 descriptors and surfaces
-                pressure before resource exhaustion.
+                Active memory and inactive append-only history have separate
+                coverage, so the headline KPI describes real recall.
               </p>
             </article>
             <article class="feature feature-blue">
               <span data-lucide="scan-search" aria-hidden="true"></span>
-              <h3>Reduced</h3>
+              <h3>Exact</h3>
               <p>
-                Every stdio MCP process keeps one gRPC socket instead of the
-                client library's implicit pool of three.
+                Unsigned 64-bit Qdrant offsets stay byte-exact instead of
+                losing precision through floating-point decoding.
               </p>
             </article>
             <article class="feature feature-coral">
               <span data-lucide="list-filter" aria-hidden="true"></span>
-              <h3>Verified</h3>
+              <h3>Safe</h3>
               <p>
-                Startup reconciles missing indexes and live activation verifies
-                WAL recovery, point counts, recall/save, and metrics integrity.
+                Measured and estimated provenance stay distinct; backfill is
+                read-only until an explicit <code>--apply</code>.
               </p>
             </article>
           </div>

@@ -9,7 +9,7 @@ fullWidth: true
 header: mini
 pinned: true
 license: mit
-short_description: Local-first memory with human-approved boundaries.
+short_description: Local-first memory with auditable attribution and approved boundaries.
 models:
   - BAAI/bge-m3
 tags:
@@ -35,15 +35,15 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.9 prevents Qdrant file-descriptor exhaustion under many concurrent
-Codex and Claude Code sessions.
+Version 0.8.10 makes Ariadne's memory-economics metrics explainable from the
+recallable corpus through each delivered result.
 
-- **Fixed:** one gRPC connection per MCP process, an explicit 8192-descriptor
-  macOS launchd limit, and graceful Qdrant client shutdown.
-- **Changed:** startup reads the payload schema once and creates only missing
-  indexes; genuine storage errors are no longer ignored.
-- **Added:** status, tray, and doctor visibility for descriptor usage and early
-  warnings before exhaustion.
+- **Fixed:** Qdrant pagination preserves unsigned 64-bit offsets exactly, and
+  corpus coverage no longer mixes active memories with inactive history.
+- **Changed:** measured source attribution, conservative legacy estimates, and
+  diary, consolidation, or manual gaps are reported separately.
+- **Safer:** attribution backfill is read-only by default, requires an explicit
+  `--apply`, and excludes inactive or quarantined records.
 
 ## Links
 
