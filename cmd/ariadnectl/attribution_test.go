@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"encoding/json"
+	"testing"
+)
 
 func TestAttributionClass(t *testing.T) {
 	cases := []struct {
@@ -28,29 +32,75 @@ func TestAttributionClass(t *testing.T) {
 func TestComputeAttributionProfile(t *testing.T) {
 	points := []attributionPoint{
 		{Room: "diary", Provenance: "capture", SourceTokens: 800, MemoryTokens: 100},
+		{Room: "diary", Provenance: "capture", SourceTokens: 160, MemoryTokens: 20, Estimate: "x8-v1"},
 		{Room: "diary", MemoryTokens: 50},                           // gap, diary
 		{Room: "decisions", Provenance: "manual", Text: "abcdefgh"}, // gap, manual, 2 tokens from text
 		{Room: "memory:notes.md", Provenance: "import", MemoryTokens: 300},
+		{Room: "reference", Provenance: "consolidate", Status: "archived", MemoryTokens: 30},
 	}
 	p := computeAttributionProfile(points)
-	if p.ScannedPoints != 4 {
-		t.Fatalf("scanned = %d, want 4", p.ScannedPoints)
+	if p.ScannedPoints != 6 || p.Recallable.Memories != 5 || p.Inactive.Memories != 1 {
+		t.Fatalf("profile sizes = scanned %d, recallable %d, inactive %d",
+			p.ScannedPoints, p.Recallable.Memories, p.Inactive.Memories)
 	}
-	if p.Attributed.Memories != 1 || p.Attributed.Tokens != 100 {
-		t.Fatalf("attributed = %+v", p.Attributed)
+	if p.Recallable.Attributed.Memories != 2 || p.Recallable.Attributed.Tokens != 120 ||
+		p.Recallable.AttributedMeasured.Memories != 1 || p.Recallable.AttributedEstimated.Memories != 1 {
+		t.Fatalf("recallable attribution = %+v / measured %+v / estimated %+v",
+			p.Recallable.Attributed, p.Recallable.AttributedMeasured, p.Recallable.AttributedEstimated)
 	}
-	if p.AttributableGap.Memories != 2 || p.AttributableGap.Tokens != 52 {
-		t.Fatalf("gap = %+v", p.AttributableGap)
+	if p.Recallable.AttributableGap.Memories != 2 || p.Recallable.AttributableGap.Tokens != 52 {
+		t.Fatalf("gap = %+v", p.Recallable.AttributableGap)
 	}
-	if p.GapDiaryMemories != 1 || p.GapManualMemories != 1 {
-		t.Fatalf("gap split = diary %d / manual %d", p.GapDiaryMemories, p.GapManualMemories)
+	if p.Recallable.GapDiaryMemories != 1 || p.Recallable.GapConsolidatedMemories != 0 ||
+		p.Recallable.GapManualMemories != 1 {
+		t.Fatalf("recallable gap split = diary %d / consolidated %d / manual %d",
+			p.Recallable.GapDiaryMemories, p.Recallable.GapConsolidatedMemories, p.Recallable.GapManualMemories)
 	}
-	if p.Sourceless.Memories != 1 || p.Sourceless.Tokens != 300 {
-		t.Fatalf("sourceless = %+v", p.Sourceless)
+	if p.Recallable.Sourceless.Memories != 1 || p.Recallable.Sourceless.Tokens != 300 {
+		t.Fatalf("sourceless = %+v", p.Recallable.Sourceless)
 	}
-	want := float64(100) * 100 / float64(152)
-	if diff := p.AttributableCoveragePercent - want; diff > 0.01 || diff < -0.01 {
-		t.Fatalf("coverage = %.3f, want %.3f", p.AttributableCoveragePercent, want)
+	want := float64(120) * 100 / float64(172)
+	if diff := p.Recallable.AttributableCoveragePercent - want; diff > 0.01 || diff < -0.01 {
+		t.Fatalf("coverage = %.3f, want %.3f", p.Recallable.AttributableCoveragePercent, want)
+	}
+	if p.Inactive.GapConsolidatedMemories != 1 || p.Inactive.GapDiaryMemories != 0 {
+		t.Fatalf("inactive gap split = diary %d / consolidated %d",
+			p.Inactive.GapDiaryMemories, p.Inactive.GapConsolidatedMemories)
+	}
+}
+
+func TestAttributionStatusRecallable(t *testing.T) {
+	for _, status := range []string{"", "active", "future-state"} {
+		if !attributionStatusRecallable(status) {
+			t.Fatalf("status %q should be recallable", status)
+		}
+	}
+	for _, status := range []string{"archived", "superseded", "orphaned", "quarantined"} {
+		if attributionStatusRecallable(status) {
+			t.Fatalf("status %q should be excluded", status)
+		}
+	}
+}
+
+func TestAttributionScrollOffsetPreservesUint64Precision(t *testing.T) {
+	const pointID = "3584067001156640090"
+	var page attributionScrollResponse
+	if err := json.Unmarshal([]byte(`{"result":{"next_page_offset":`+pointID+`}}`), &page); err != nil {
+		t.Fatal(err)
+	}
+	next := bytes.TrimSpace(page.Result.NextPageOffset)
+	body, err := json.Marshal(map[string]any{"offset": json.RawMessage(next)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != `{"offset":`+pointID+`}` {
+		t.Fatalf("offset lost precision: %s", body)
+	}
+}
+
+func TestBackfillRejectsConflictingModes(t *testing.T) {
+	if got := backfillAttributionCmd([]string{"--apply", "--dry-run"}); got != 2 {
+		t.Fatalf("exit = %d, want 2", got)
 	}
 }
 

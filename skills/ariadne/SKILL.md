@@ -101,13 +101,16 @@ Metadata: `wing` = required stable project slug (e.g. `myapp`, `backend`),
 `room` = category (`decisions`, `gotchas`, `reference`, `diary`). Use
 `reference` for reports and verified outcomes; `diary` is temporary chronology.
 `memory_save` also accepts optional `source_tokens` — **pass it whenever the
-memory condenses a bounded source you actually processed**: the discussion span
-that produced the decision, the log or file you distilled into a gotcha, the
-work behind a report. Estimate conservatively (UTF-8 bytes of that bounded
-source ÷ 4, round down; when unsure, halve it). Omit it only when there is
-genuinely no bounded source to point at — an unattributed save is counted as
-pure overhead by `ariadnectl metrics`, so an honest conservative estimate beats
-omission. Never send raw source text merely to obtain a count.
+memory condenses a bounded source you actually processed**: the selected
+discussion span that produced a decision, or the specific log/file/tool output
+distilled into a gotcha or report. When an exact tokenizer count is unavailable,
+use the deterministic conservative estimate of that bounded source's UTF-8
+bytes ÷ 4, rounded down; count only the selected source material, never the
+whole session by default. Omit it when no bounded source can be identified or
+the estimate cannot be defended. A later recall without this metadata is shown
+separately as `unattributed`, not as measured savings or recall overhead. Never
+send raw source text merely to obtain a count, and never inflate `source_tokens`
+to improve coverage.
 
 ## Curate — delete / move (by id)
 
@@ -132,7 +135,7 @@ when both scoped associations are intentionally useful.
 ~/.ariadne/bin/ariadnectl status        # health, points, storage, maintenance freshness
 ~/.ariadne/bin/ariadnectl version       # active runtime release tag
 ~/.ariadne/bin/ariadnectl metrics       # tokens saved by recalls + corpus attribution profile
-~/.ariadne/bin/ariadnectl backfill-attribution --dry-run  # stamp estimated source metadata on legacy diaries
+~/.ariadne/bin/ariadnectl backfill-attribution  # dry-run legacy diary attribution; add --apply to write
 ~/.ariadne/bin/ariadnectl start|stop|restart
 ~/.ariadne/bin/ariadnectl backup        # 10 recent snapshots; older ones → backups/archive
 ~/.ariadne/bin/ariadnectl restore <f>   # DESTRUCTIVE: replace collection from snapshot
