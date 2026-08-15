@@ -9,7 +9,7 @@ fullWidth: true
 header: mini
 pinned: true
 license: mit
-short_description: Local-first memory with auditable attribution and approved boundaries.
+short_description: Local-first memory with auditable attribution.
 models:
   - BAAI/bge-m3
 tags:
