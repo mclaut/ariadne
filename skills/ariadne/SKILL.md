@@ -100,10 +100,14 @@ while another scope remains independently addressable.
 Metadata: `wing` = required stable project slug (e.g. `myapp`, `backend`),
 `room` = category (`decisions`, `gotchas`, `reference`, `diary`). Use
 `reference` for reports and verified outcomes; `diary` is temporary chronology.
-`memory_save` also accepts optional `source_tokens`: pass it only when a hook or
-integration has a measured or conservative count for the bounded source that
-was condensed into this memory. Omit it rather than guessing from the whole
-session, and never send raw source text merely to obtain a count.
+`memory_save` also accepts optional `source_tokens` — **pass it whenever the
+memory condenses a bounded source you actually processed**: the discussion span
+that produced the decision, the log or file you distilled into a gotcha, the
+work behind a report. Estimate conservatively (UTF-8 bytes of that bounded
+source ÷ 4, round down; when unsure, halve it). Omit it only when there is
+genuinely no bounded source to point at — an unattributed save is counted as
+pure overhead by `ariadnectl metrics`, so an honest conservative estimate beats
+omission. Never send raw source text merely to obtain a count.
 
 ## Curate — delete / move (by id)
 
@@ -127,7 +131,8 @@ when both scoped associations are intentionally useful.
 ```bash
 ~/.ariadne/bin/ariadnectl status        # health, points, storage, maintenance freshness
 ~/.ariadne/bin/ariadnectl version       # active runtime release tag
-~/.ariadne/bin/ariadnectl metrics       # estimated tokens saved by recalls (net avoided)
+~/.ariadne/bin/ariadnectl metrics       # tokens saved by recalls + corpus attribution profile
+~/.ariadne/bin/ariadnectl backfill-attribution --dry-run  # stamp estimated source metadata on legacy diaries
 ~/.ariadne/bin/ariadnectl start|stop|restart
 ~/.ariadne/bin/ariadnectl backup        # 10 recent snapshots; older ones → backups/archive
 ~/.ariadne/bin/ariadnectl restore <f>   # DESTRUCTIVE: replace collection from snapshot

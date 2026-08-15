@@ -128,13 +128,16 @@ func main() {
 		os.Exit(requeueEmptyCmd(os.Args[2:]))
 	case "quarantine-secrets":
 		os.Exit(quarantineSecretsCmd(os.Args[2:]))
+	case "backfill-attribution":
+		os.Exit(backfillAttributionCmd(os.Args[2:]))
 	case "approvals":
 		os.Exit(approvalsCmd(hasFlag("-json")))
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ariadnectl {version | status [-json] | metrics [-json] | "+
 			"start | stop | restart | backup | restore <file> | export [file] | "+
 			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
-			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | approvals [-json]}")
+			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | "+
+			"backfill-attribution [--dry-run] [--multiplier 8] | approvals [-json]}")
 		os.Exit(2)
 	}
 }
@@ -267,14 +270,31 @@ func printMetrics(asJSON bool) {
 		fmt.Fprintln(os.Stderr, "metrics:", err)
 		return
 	}
+	// The corpus profile explains the coverage number: it needs a Qdrant scan,
+	// so it is best-effort — recall accounting above stays available without it.
+	profileCtx, profileCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	profile, profileErr := loadAttributionProfile(profileCtx)
+	profileCancel()
 	if asJSON {
-		b, _ := json.Marshal(s)
+		out := struct {
+			metrics.Summary
+			AttributionProfile *attributionProfile `json:"attribution_profile,omitempty"`
+		}{Summary: s}
+		if profileErr == nil {
+			out.AttributionProfile = &profile
+		}
+		b, _ := json.Marshal(out)
 		fmt.Println(string(b))
 		return
 	}
 	fmt.Printf("Estimated token reuse (%s)\n", s.Estimator)
 	printMetricWindow("All time", s.AllTime)
 	printMetricWindow("Last 30 days", s.Last30Days)
+	if profileErr != nil {
+		fmt.Fprintln(os.Stderr, "metrics: attribution profile unavailable:", profileErr)
+		return
+	}
+	printAttributionProfile(profile)
 }
 
 func printMetricWindow(label string, t metrics.Totals) {
