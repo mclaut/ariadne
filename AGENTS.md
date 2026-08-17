@@ -62,7 +62,9 @@ never traverse npm dependencies that happen to contain Go sources.
   project's wing. Never inspect another project's files or reuse its credentials,
   endpoints, IPs, or configuration merely because another workspace root is readable.
 - Cross-wing recall requires an Ariadne system-warning/tray approval ID; external results receive
-  lower origin weight. Cross-project credential use requires a second, exact,
-  one-time system-warning/tray approval and must never place the value in memory or logs.
+  lower origin weight. Cross-project credential use requires either a second,
+  exact one-time system-warning/tray approval or an owner-authorized persistent
+  exact binding created with `ariadnectl credential trust`; every trusted use is
+  audited append-only. Never place the credential value in memory or logs.
 - `golangci-lint run` clean before every commit; justify any `//nolint` inline.
 - Surgical changes, match existing style, keep it simple (no speculative abstraction).

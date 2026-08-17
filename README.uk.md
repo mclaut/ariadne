@@ -24,24 +24,30 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## Нове у v0.8.11
+## Нове у v0.8.12
 
 ### Виправлено
 
-- **Desktop tray тепер справді single-instance.** Перед створенням status item
-  Ariadne бере OS-level lock: неблокувальний `flock` на macOS/Linux і named
-  mutex на Windows. Друга копія коректно завершується, не додаючи іконку.
-- **Старі launchd jobs більше не множаться після входу.** Інсталер узгоджує всі
-  canonical і versioned jobs для tray, maintenance та Ariadne-owned Qdrant,
-  залишаючи активними лише canonical labels.
+- **Scheduled maintenance не зависає на години.** Supervisor тепер має
+  20-хвилинний deadline, близький до власного 15-хвилинного ліміту
+  consolidation, тому процес, що не реагує, не лишає планове завдання stuck.
+- **Моделі з reasoning повертають очікуваний JSON.** Consolidation і її
+  quality verdict явно вимикають Ollama thinking, щоб відповідь відповідала
+  строгій схемі без reasoning trace.
 
 ### Додано
 
-- **History-preserving cleanup launchd.** Застарілі plist переносяться до runtime
-  archive Ariadne замість видалення, включно зі старим monitor plist.
-- **Діагностика на рівні процесів.** Full-stack doctor тепер показує фактичну
-  кількість tray-процесів разом із launchd ownership, тому ручні дублікати не
-  сховаються за одним service label.
+- **Явно схвалена власником credential-прив’язка для повторної роботи.**
+  `ariadnectl credential trust` додає append-only policy для точних source wing,
+  target wing, credential resource і purpose. Збіг не потребує нового popup,
+  але кожне використання аудитується; `credential revoke` додає відкликання,
+  не стираючи історії policy.
+
+## Раніше у v0.8.11
+
+v0.8.11 зробила desktop tray справді single-instance, узгодила canonical та
+історичний launchd ownership, зберегла superseded plist в archive і додала
+перевірку реальної кількості tray-процесів.
 
 ## Раніше у v0.8.10
 
@@ -190,6 +196,12 @@ v0.8.10 зробила token attribution аудитованою завдяки l
   інший tray request із точними source wing, target wing, назвою/шляхом ресурсу
   та purpose. Grant діє п’ять хвилин і споживається один раз. Ariadne не читає й
   не повертає значення credential.
+- **Постійна точна прив’язка за явним рішенням власника.** Для credential-файлу,
+  який власник явно надав для повторного використання, `ariadnectl credential
+  trust --source-wing ... --target-wing ... --resource ... --purpose ... --yes` один раз
+  реєструє exact scope. Наступні виклики для цього tuple не показують popup, але
+  кожне використання з purpose потрапляє в append-only аудит. `credential revoke`
+  вимикає прив’язку новою подією, не стираючи історію.
 - **Append-only аудит дозволів.** Request, tray decision та consumption
   зберігаються окремими незмінними records. `ariadnectl approvals` показує
   pending requests, але не дозволяє схвалити їх через CLI.
@@ -376,6 +388,20 @@ wing і collection.
 Перший `credential_access` лише створить tray request. Після Approve повторний
 виклик з `approval_id` споживає grant один раз; значення credential через
 Ariadne не передається.
+
+Для явно наданого власником credential-файлу повторні popup можна прибрати
+точною локальною прив’язкою:
+
+```bash
+ariadnectl credential trust \
+  --source-wing shared-credentials \
+  --target-wing my-project \
+  --resource /secure/path/deploy-token.txt \
+  --purpose "publish one release" \
+  --yes
+```
+
+Відкликання є append-only: повторіть увесь exact scope з `credential revoke --yes`.
 
 Пошук в архівній історії:
 

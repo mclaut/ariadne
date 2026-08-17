@@ -35,6 +35,14 @@ var (
 	ErrExpired     = errors.New("approval request or grant expired")
 	ErrScope       = errors.New("approval scope does not match")
 	ErrConsumed    = errors.New("approval grant was already consumed")
+	ErrNotTrusted  = errors.New("credential resource is not locally trusted")
+)
+
+type CredentialTrustAction string
+
+const (
+	CredentialTrust  CredentialTrustAction = "trust"
+	CredentialRevoke CredentialTrustAction = "revoke"
 )
 
 type Request struct {
@@ -73,6 +81,29 @@ type CredentialScope struct {
 	TargetWing    string
 	Resource      string
 	Purpose       string
+}
+
+// CredentialTrustEvent is an append-only local policy decision. It stores only
+// the exact credential path/name and wing scope, never the credential value.
+type CredentialTrustEvent struct {
+	ID         string                `json:"id"`
+	Action     CredentialTrustAction `json:"action"`
+	SourceWing string                `json:"source_wing"`
+	TargetWing string                `json:"target_wing"`
+	Resource   string                `json:"resource"`
+	Purpose    string                `json:"purpose"`
+	CreatedAt  time.Time             `json:"created_at"`
+	CreatedBy  string                `json:"created_by"`
+}
+
+// TrustedCredentialUse is an immutable audit record for a use allowed by a
+// persistent local credential binding.
+type TrustedCredentialUse struct {
+	ID            string    `json:"id"`
+	TrustEventID  string    `json:"trust_event_id"`
+	ClientSession string    `json:"client_session"`
+	Purpose       string    `json:"purpose"`
+	UsedAt        time.Time `json:"used_at"`
 }
 
 type Manager struct {
@@ -212,6 +243,164 @@ func (m *Manager) AuthorizeCredential(id string, scope CredentialScope) (Request
 	return request, nil
 }
 
+// SetCredentialTrust appends a trust or revoke decision for one exact
+// source-wing, target-wing, resource, and purpose tuple. Repeating the same effective
+// decision is idempotent and returns the existing event.
+func (m *Manager) SetCredentialTrust(scope CredentialScope, trusted bool, actor string) (CredentialTrustEvent, error) {
+	scope = normalizeCredentialScope(scope)
+	if err := validateCredentialScope(scope, false); err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	if err := validateText("created_by", actor, 128); err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	if err := m.ensureDirs(); err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	events, err := m.credentialTrustEvents()
+	if err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	action := CredentialRevoke
+	if trusted {
+		action = CredentialTrust
+	}
+	var previous CredentialTrustEvent
+	for i := len(events) - 1; i >= 0; i-- {
+		if trustEventMatches(events[i], scope) {
+			previous = events[i]
+			if events[i].Action == action {
+				return events[i], nil
+			}
+			break
+		}
+	}
+	id, err := randomID()
+	if err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	createdAt := m.now().UTC()
+	if previous.ID != "" && !createdAt.After(previous.CreatedAt) {
+		createdAt = previous.CreatedAt.Add(time.Nanosecond)
+	}
+	event := CredentialTrustEvent{
+		ID: id, Action: action, SourceWing: scope.SourceWing, TargetWing: scope.TargetWing,
+		Resource: scope.Resource, Purpose: scope.Purpose, CreatedAt: createdAt, CreatedBy: strings.TrimSpace(actor),
+	}
+	if err := writeExclusiveJSON(filepath.Join(m.dir("credential-trust"), id+".json"), event); err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	return event, nil
+}
+
+// AuthorizeTrustedCredential accepts a previously registered exact local
+// binding and appends an immutable use record. The purpose must match the
+// binding exactly; the client session is audited per use.
+func (m *Manager) AuthorizeTrustedCredential(scope CredentialScope) (CredentialTrustEvent, error) {
+	scope = normalizeCredentialScope(scope)
+	if err := validateCredentialScope(scope, true); err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	events, err := m.credentialTrustEvents()
+	if err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	var effective CredentialTrustEvent
+	for _, event := range events {
+		if trustEventMatches(event, scope) {
+			effective = event
+		}
+	}
+	if effective.ID == "" || effective.Action != CredentialTrust {
+		return CredentialTrustEvent{}, ErrNotTrusted
+	}
+	id, err := randomID()
+	if err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	use := TrustedCredentialUse{
+		ID: id, TrustEventID: effective.ID, ClientSession: scope.ClientSession,
+		Purpose: scope.Purpose, UsedAt: m.now().UTC(),
+	}
+	if err := writeExclusiveJSON(filepath.Join(m.dir("credential-uses"), id+".json"), use); err != nil {
+		return CredentialTrustEvent{}, err
+	}
+	return effective, nil
+}
+
+func (m *Manager) credentialTrustEvents() ([]CredentialTrustEvent, error) {
+	if err := m.ensureDirs(); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(m.dir("credential-trust"))
+	if err != nil {
+		return nil, err
+	}
+	events := make([]CredentialTrustEvent, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		var event CredentialTrustEvent
+		if err := readJSON(filepath.Join(m.dir("credential-trust"), entry.Name()), &event); err != nil {
+			return nil, fmt.Errorf("read credential trust event %s: %w", entry.Name(), err)
+		}
+		if event.ID+".json" != entry.Name() ||
+			(event.Action != CredentialTrust && event.Action != CredentialRevoke) {
+			return nil, fmt.Errorf("invalid credential trust event %s", entry.Name())
+		}
+		if err := validateCredentialScope(CredentialScope{
+			SourceWing: event.SourceWing, TargetWing: event.TargetWing, Resource: event.Resource, Purpose: event.Purpose,
+		}, false); err != nil {
+			return nil, fmt.Errorf("invalid credential trust event %s: %w", entry.Name(), err)
+		}
+		events = append(events, event)
+	}
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].CreatedAt.Equal(events[j].CreatedAt) {
+			return events[i].ID < events[j].ID
+		}
+		return events[i].CreatedAt.Before(events[j].CreatedAt)
+	})
+	return events, nil
+}
+
+func normalizeCredentialScope(scope CredentialScope) CredentialScope {
+	scope.ClientSession = strings.TrimSpace(scope.ClientSession)
+	scope.SourceWing = strings.TrimSpace(scope.SourceWing)
+	scope.TargetWing = strings.TrimSpace(scope.TargetWing)
+	scope.Resource = strings.TrimSpace(scope.Resource)
+	scope.Purpose = strings.TrimSpace(scope.Purpose)
+	return scope
+}
+
+func validateCredentialScope(scope CredentialScope, requireUseFields bool) error {
+	for name, value := range map[string]string{
+		"source_wing": scope.SourceWing, "target_wing": scope.TargetWing, "resource": scope.Resource,
+	} {
+		if err := validateText(name, value, 512); err != nil {
+			return err
+		}
+	}
+	if scope.SourceWing == scope.TargetWing {
+		return errors.New("credential trust requires different source and target wings")
+	}
+	if err := validateText("purpose", scope.Purpose, 512); err != nil {
+		return err
+	}
+	if requireUseFields {
+		if err := validateText("client_session", scope.ClientSession, 512); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func trustEventMatches(event CredentialTrustEvent, scope CredentialScope) bool {
+	return event.SourceWing == scope.SourceWing && event.TargetWing == scope.TargetWing &&
+		event.Resource == scope.Resource && event.Purpose == scope.Purpose
+}
+
 func (m *Manager) authorized(id string, kind Kind, clientSession string) (Request, Decision, error) {
 	request, err := m.loadRequest(id)
 	if err != nil {
@@ -310,7 +499,7 @@ func (m *Manager) loadRequest(id string) (Request, error) {
 }
 
 func (m *Manager) ensureDirs() error {
-	for _, name := range []string{"requests", "decisions", "consumptions"} {
+	for _, name := range []string{"requests", "decisions", "consumptions", "credential-trust", "credential-uses"} {
 		if err := os.MkdirAll(m.dir(name), 0o700); err != nil {
 			return err
 		}

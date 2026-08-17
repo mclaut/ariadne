@@ -383,7 +383,7 @@ func TestConsolidationRequestUsesSchemaAndWrappedResponse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(memories) != 0 || request["keep_alive"] != "5m" {
+	if len(memories) != 0 || request["keep_alive"] != "5m" || request["think"] != false {
 		t.Fatalf("memories=%#v request=%#v", memories, request)
 	}
 	format, ok := request["format"].(map[string]any)

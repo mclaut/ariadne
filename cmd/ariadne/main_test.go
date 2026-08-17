@@ -139,3 +139,26 @@ func TestCredentialAccessHandlerConsumesOneTimeApproval(t *testing.T) {
 		t.Fatalf("reused result = %#v err=%v", result, err)
 	}
 }
+
+func TestCredentialAccessHandlerUsesExactLocalTrustWithoutPrompt(t *testing.T) {
+	manager := approval.New(t.TempDir())
+	_, err := manager.SetCredentialTrust(approval.CredentialScope{
+		SourceWing: "keys", TargetWing: "ariadne", Resource: "/safe/hf_key.txt", Purpose: "publish a release",
+	}, true, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := credentialAccessHandler(manager, "session")
+	arguments := map[string]any{
+		"source_wing": "keys", "target_wing": "ariadne", "resource": "/safe/hf_key.txt",
+		"purpose": "publish a release",
+	}
+	result, err := handler(context.Background(), mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: arguments}})
+	if err != nil || result == nil || result.IsError {
+		t.Fatalf("trusted result = %#v err=%v", result, err)
+	}
+	pending, err := manager.Pending()
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("pending = %#v err=%v", pending, err)
+	}
+}

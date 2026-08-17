@@ -132,12 +132,14 @@ func main() {
 		os.Exit(backfillAttributionCmd(os.Args[2:]))
 	case "approvals":
 		os.Exit(approvalsCmd(hasFlag("-json")))
+	case "credential":
+		os.Exit(credentialCmd(os.Args[2:]))
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ariadnectl {version | status [-json] | metrics [-json] | "+
 			"start | stop | restart | backup | restore <file> | export [file] | "+
 			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
 			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | "+
-			"backfill-attribution [--apply] [--multiplier 8] | approvals [-json]}")
+			"backfill-attribution [--apply] [--multiplier 8] | approvals [-json] | credential {trust|revoke} ...}")
 		os.Exit(2)
 	}
 }

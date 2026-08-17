@@ -23,6 +23,7 @@ import (
 	"ariadne/internal/store"
 	"ariadne/internal/version"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -105,8 +106,8 @@ func run() int {
 	), saveHandler(st))
 
 	s.AddTool(mcp.NewTool("credential_access",
-		mcp.WithDescription("Request or consume one human-approved, one-time permission to use a credential "+
-			"from another project. This tool never reads or returns the credential itself."),
+		mcp.WithDescription("Authorize use of an exact credential from another project through a persistent "+
+			"owner-created local binding or a human-approved one-time grant. This tool never reads or returns the credential itself."),
 		mcp.WithString("source_wing", mcp.Required(), mcp.Description("Project that owns the credential.")),
 		mcp.WithString("target_wing", mcp.Required(), mcp.Description("Active project that would use it.")),
 		mcp.WithString("resource", mcp.Required(), mcp.Description("Exact credential name or file path; never its value.")),
@@ -393,6 +394,12 @@ func credentialAccessHandler(approvals *approval.Manager, clientSession string) 
 		scope := approval.CredentialScope{
 			ClientSession: clientSession, SourceWing: sourceWing, TargetWing: targetWing,
 			Resource: resource, Purpose: purpose,
+		}
+		if trust, err := approvals.AuthorizeTrustedCredential(scope); err == nil {
+			return mcp.NewToolResultText("locally trusted credential access recorded under binding " + trust.ID +
+				"; use only the exact resource and declared purpose, and never store its value in Ariadne"), nil
+		} else if !errors.Is(err, approval.ErrNotTrusted) {
+			return mcp.NewToolResultError("check local credential trust: " + err.Error()), nil //nolint:nilerr // MCP errors are in-band
 		}
 		if approvalID := strings.TrimSpace(req.GetString("approval_id", "")); approvalID != "" {
 			if _, err := approvals.AuthorizeCredential(approvalID, scope); err != nil {

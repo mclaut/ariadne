@@ -35,15 +35,16 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.11 guarantees one desktop tray even when historical autostart jobs
-or a manual launch try to start more copies.
+Version 0.8.12 makes background memory care predictable and credential reuse
+explicitly auditable.
 
-- **Fixed:** macOS/Linux use a non-blocking file lock and Windows uses a named
-  mutex, so a duplicate exits before creating another icon.
-- **Self-healing:** every install reconciles canonical and historical macOS
-  launchd jobs before bootstrapping one owner for each shared service.
-- **Preserved:** superseded plist files move to a collision-safe runtime archive
-  instead of being deleted; doctor also verifies the real tray-process count.
+- **Bounded:** the maintenance supervisor stops an unresponsive child after 20
+  minutes, instead of retaining a scheduled job for hours.
+- **Deterministic:** schema-bound consolidation disables Ollama thinking so a
+  reasoning-capable curator returns the expected JSON.
+- **Auditable:** an owner can trust one exact credential source, target,
+  resource, and purpose for repeat work; every trust, use, and revoke remains
+  append-only.
 
 ## Links
 

@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.11",
+  softwareVersion: "0.8.12",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.11</a>
+          <a href="#new">New in 0.8.12</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.11 keeps one tray in control
+            v0.8.12 keeps maintenance reliable
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.11</span>
-            <h2>One tray. Every login. Every restart.</h2>
+            <span className="eyebrow">New in v0.8.12</span>
+            <h2>Reliable maintenance. Deliberate credential reuse.</h2>
             <p>
-              OS-level locking and self-healing launch ownership prevent stale
-              runtimes from multiplying status icons.
+              Background memory care stays bounded, while credential reuse is
+              allowed only by a precise, auditable owner decision.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <ShieldCheck aria-hidden="true" />
-              <h3>Locked: one tray process</h3>
+              <h3>Bounded: scheduled maintenance</h3>
               <p>
-                macOS and Linux use a non-blocking file lock; Windows uses a
-                named mutex. A duplicate exits before creating an icon.
+                A 20-minute supervisor deadline prevents an unresponsive child
+                from leaving the daily job stuck for hours.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Database aria-hidden="true" />
-              <h3>Reconciled: launchd ownership</h3>
+              <h3>Deterministic: curator output</h3>
               <p>
-                Every install unloads canonical and historical tray,
-                maintenance, and Ariadne-owned Qdrant jobs before one bootstrap.
+                Thinking is disabled for schema-bound consolidation requests, so
+                reasoning-capable Ollama models return the expected JSON.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Preserved: historical config</h3>
+              <h3>Scoped: credential trust</h3>
               <p>
-                Superseded launchd plists move to a collision-safe runtime
-                archive instead of being deleted.
+                An owner can trust exactly one source, target, resource, and
+                purpose; every later use is still recorded append-only.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Visible: actual process count</h3>
+              <h3>Reversible: policy changes</h3>
               <p>
-                Doctor checks both service labels and real tray processes, so
-                manual duplicates are reported immediately.
+                Revoking a trusted credential appends a new event instead of
+                erasing the audit history.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.11"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.12"
               target="_blank"
               rel="noreferrer"
             >

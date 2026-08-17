@@ -743,7 +743,10 @@ func requestConsolidatedMemories(
 	payload, _ := json.Marshal(map[string]any{
 		"model":    consolidationModel(),
 		"messages": []map[string]string{{"role": "system", "content": systemPrompt}, {"role": "user", "content": input}},
-		"stream":   false, "keep_alive": keepAlive,
+		// Consolidation requires schema-valid JSON, not a reasoning trace. Ollama
+		// returns thinking separately for capable models; disable it to reduce
+		// latency and keep the response contract deterministic.
+		"stream": false, "think": false, "keep_alive": keepAlive,
 		"format": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"memories"},
 			"properties": map[string]any{"memories": map[string]any{
@@ -841,7 +844,7 @@ func requestConsolidationVerdict(
 				" Return one JSON object and nothing else."},
 			{"role": "user", "content": input},
 		},
-		"stream": false, "keep_alive": keepAlive,
+		"stream": false, "think": false, "keep_alive": keepAlive,
 		"format": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"valid", "reason"},
 			"properties": map[string]any{

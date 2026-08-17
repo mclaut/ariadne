@@ -26,24 +26,30 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.11
+## What's New in v0.8.12
 
 ### Fixed
 
-- **The desktop tray is now truly single-instance.** Before creating a status
-  item, Ariadne takes an OS-level lock: non-blocking `flock` on macOS/Linux and
-  a named mutex on Windows. A duplicate exits cleanly without adding an icon.
-- **Old launchd jobs no longer multiply after login.** The installer reconciles
-  every canonical and versioned tray, maintenance, and Ariadne-owned Qdrant job,
-  then keeps only the canonical labels active.
+- **Scheduled maintenance cannot remain wedged for hours.** Its supervisor now
+  has a 20-minute default deadline, close to consolidation's own 15-minute
+  bound, so an unresponsive child cannot leave the scheduled job stuck.
+- **Reasoning-capable curators return the expected JSON.** Consolidation and
+  its quality verdict explicitly disable Ollama thinking, avoiding a reasoning
+  trace in a response that must satisfy a strict schema.
 
 ### Added
 
-- **History-preserving launchd cleanup.** Superseded plist files move to Ariadne's
-  runtime archive instead of being deleted, including the legacy monitor plist.
-- **Process-level diagnostics.** The full-stack doctor now reports the actual
-  tray-process count as well as launchd ownership, so manual duplicates cannot
-  hide behind one service label.
+- **Owner-approved credential trust for repeat work.** `ariadnectl credential
+  trust` stores an append-only policy for one exact source wing, target wing,
+  credential resource, and purpose. Matching calls proceed without another
+  prompt but each use remains audited; `credential revoke` appends a revocation
+  without erasing the policy history.
+
+## Previously in v0.8.11
+
+v0.8.11 made the desktop tray truly single-instance, reconciled canonical and
+historical launchd ownership, preserved superseded plist files in an archive,
+and added real tray-process diagnostics.
 
 ## Previously in v0.8.10
 
@@ -204,6 +210,13 @@ creates an independent tray request for one exact source wing, target wing,
 credential name/path, and purpose. Approval expires after five minutes and is
 consumed once. Ariadne never reads or returns the value; requests, decisions,
 and consumptions remain as separate append-only audit records.
+
+For a credential file the owner explicitly designates for repeated use, register
+an exact local binding once with `ariadnectl credential trust --source-wing ...
+--target-wing ... --resource ... --purpose ... --yes`. Future `credential_access` calls for
+that exact tuple skip the popup while still appending a use record. `credential
+revoke` disables the binding append-only;
+other resources and wing pairs remain default-deny.
 
 ## Previously in v0.8.2
 
@@ -849,7 +862,11 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.11 — current release. Cross-platform single-instance tray enforcement,
+v0.8.12 — current release. Exact owner-approved credential trust with
+append-only trust, use, and revocation records; deterministic JSON-only
+consolidation for reasoning-capable Ollama models; and a 20-minute maintenance
+supervisor deadline that prevents a wedged scheduled child from remaining
+active for hours. Also includes cross-platform single-instance tray enforcement,
 canonical launchd ownership reconciliation, history-preserving legacy plist archival,
 and actual tray-process diagnostics; lossless Qdrant attribution pagination, recallable-versus-history
 corpus accounting, measured-versus-estimated provenance, explicit safe attribution backfill,

@@ -171,3 +171,9 @@ func TestValidateMaintenanceConfig(t *testing.T) {
 		t.Fatal("zero attempts accepted")
 	}
 }
+
+func TestDefaultMaintenanceCommandTimeoutBoundsUnresponsiveChild(t *testing.T) {
+	if defaultMaintenanceCommandTimeout != 20*time.Minute {
+		t.Fatalf("default maintenance command timeout = %s, want 20m", defaultMaintenanceCommandTimeout)
+	}
+}

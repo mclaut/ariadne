@@ -63,12 +63,17 @@ Qdrant data, backups, logs); source lives in the repo.
   borrow one from another project.
 - If the user explicitly needs a credential owned by another wing, use
   `credential_access` with the exact source wing, target wing, credential name
-  or path, and one-time purpose — never the value. The first call creates a
-  separate system-warning/tray request. After the user approves it, retry with `approval_id`;
-  the five-minute grant is consumed once. Then access only that exact resource
-  for that exact purpose. Never store the value in Ariadne, logs, transcripts,
-  commands, or another project. This handshake is audited but is not yet an OS
-  credential broker, so compliance still depends on the agent/client policy.
+  or path, and purpose — never the value. A credential the owner explicitly
+  designates for repeated use may first receive an exact local binding through
+  `ariadnectl credential trust --source-wing ... --target-wing ... --resource
+  ... --purpose ... --yes`; this requires an explicit user instruction and must never be
+  inferred from filesystem visibility. The binding skips repeated popups only
+  for that exact tuple, including an exact purpose, and appends an immutable
+  audit record for every use. Without a binding, the first call creates a separate system-warning/
+  tray request; after approval, retry with `approval_id` and consume the
+  five-minute grant once. Never store the value in Ariadne, logs, transcripts,
+  commands, or another project. Use `credential revoke` to disable a binding
+  append-only.
 - Never copy environment values, endpoints, IP addresses, or configuration from
   one project into another unless the user explicitly identifies the shared
   resource and authorizes that use.
@@ -148,6 +153,8 @@ when both scoped associations are intentionally useful.
 # If newer rules report no-longer-matching records, use --apply --reconcile to
 # restore their prior status while retaining the quarantine audit metadata.
 ~/.ariadne/bin/ariadnectl approvals       # read-only pending human requests
+~/.ariadne/bin/ariadnectl credential trust --source-wing A --target-wing B --resource <path> --purpose <exact> --yes
+~/.ariadne/bin/ariadnectl credential revoke --source-wing A --target-wing B --resource <path> --purpose <exact> --yes
 ```
 
 Remote Qdrant is fail-closed. Use `ARIADNE_QDRANT_API_KEY_FILE` (a user-only,

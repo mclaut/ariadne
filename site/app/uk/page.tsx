@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.11</a>
+          <a href="#new">Нове у 0.8.12</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.11 тримає одну tray-копію під контролем</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.12 робить maintenance передбачуваним</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.11</span><h2>Один tray. Після кожного входу й рестарту.</h2><p>OS-level lock і self-healing launch ownership не дозволяють старим runtime множити іконки.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.12</span><h2>Надійний maintenance. Усвідомлене повторне використання credentials.</h2><p>Background memory care має межі, а повторне використання credential можливе лише за точним рішенням власника з аудитом.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck /><h3>Заблоковано: один tray</h3><p>macOS/Linux використовують file lock, Windows — named mutex. Дублікат завершується до створення іконки.</p></article>
-            <article className="new-item accent-blue"><Database /><h3>Узгоджено: launchd ownership</h3><p>Інсталер вивантажує canonical та історичні jobs перед запуском по одній актуальній копії.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Збережено: історичний config</h3><p>Застарілі launchd plists переходять до collision-safe runtime archive замість видалення.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Видимо: process count</h3><p>Doctor перевіряє service labels і реальні tray-процеси, тому ручні дублікати відразу помітні.</p></article>
+            <article className="new-item accent-green"><ShieldCheck /><h3>Обмежено: scheduled maintenance</h3><p>20-хвилинний supervisor deadline не дає процесу, що не реагує, тримати щоденне завдання stuck годинами.</p></article>
+            <article className="new-item accent-blue"><Database /><h3>Детерміновано: curator output</h3><p>Для schema-bound consolidation вимкнено thinking, тому reasoning-capable Ollama повертає очікуваний JSON.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Scoped: credential trust</h3><p>Власник довіряє лише точним source, target, resource і purpose; кожне подальше використання все одно фіксується.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Зворотно: зміна policy</h3><p>Revoke додає нову append-only подію замість стирання історії аудиту.</p></article>
           </div>
         </div>
       </section>
@@ -108,7 +108,7 @@ export default function UkrainianHome() {
           <div className="install-tool">
             <div className="command-window"><div className="command-title"><span>macOS / Linux</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh</code></pre></div>
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.11">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.12">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>

@@ -17,11 +17,14 @@ import (
 var errMaintenanceDeferred = errors.New("maintenance stage deferred")
 
 const (
-	defaultMaintenanceAttempts       = 3
-	defaultMaintenanceRetryDelay     = 5 * time.Minute
-	defaultMaintenanceMaxRetryDelay  = 30 * time.Minute
-	defaultMaintenanceCommandTimeout = 90 * time.Minute
+	defaultMaintenanceAttempts      = 3
+	defaultMaintenanceRetryDelay    = 5 * time.Minute
+	defaultMaintenanceMaxRetryDelay = 30 * time.Minute
 )
+
+// defaultMaintenanceCommandTimeout stays close to consolidate's own 15-minute
+// deadline so an unresponsive child cannot leave scheduled maintenance stuck.
+const defaultMaintenanceCommandTimeout = 20 * time.Minute
 
 type maintenanceConfig struct {
 	attempts       int
