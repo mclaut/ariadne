@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.12",
+  softwareVersion: "0.8.13",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.12</a>
+          <a href="#new">New in 0.8.13</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.12 keeps maintenance reliable
+            v0.8.13 keeps maintenance honest under load
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.12</span>
-            <h2>Reliable maintenance. Deliberate credential reuse.</h2>
+            <span className="eyebrow">New in v0.8.13</span>
+            <h2>Bounded consolidation. Honest status.</h2>
             <p>
-              Background memory care stays bounded, while credential reuse is
-              allowed only by a precise, auditable owner decision.
+              A slow local curator defers unchanged work safely instead of
+              turning routine maintenance into a false alarm.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <ShieldCheck aria-hidden="true" />
-              <h3>Bounded: scheduled maintenance</h3>
+              <h3>Deadline-aware: consolidation</h3>
               <p>
-                A 20-minute supervisor deadline prevents an unresponsive child
-                from leaving the daily job stuck for hours.
+                A bounded model deadline turns remaining batches into safe
+                deferred work, not a retry storm.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Database aria-hidden="true" />
-              <h3>Deterministic: curator output</h3>
+              <h3>Durable: deferred markers</h3>
               <p>
-                Thinking is disabled for schema-bound consolidation requests, so
-                reasoning-capable Ollama models return the expected JSON.
+                Fresh, short persistence writes record deferred batches after
+                model time runs out, preserving every source diary.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Scoped: credential trust</h3>
+              <h3>Truthful: health status</h3>
               <p>
-                An owner can trust exactly one source, target, resource, and
-                purpose; every later use is still recorded append-only.
+                The tray stays healthy for safely deferred maintenance and warns
+                only when a real unsafe failure needs attention.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Reversible: policy changes</h3>
+              <h3>Append-only: source history</h3>
               <p>
-                Revoking a trusted credential appends a new event instead of
-                erasing the audit history.
+                Deferral changes lifecycle metadata only; diary text and vectors
+                remain available for a future curator pass.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.12"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.13"
               target="_blank"
               rel="noreferrer"
             >

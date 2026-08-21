@@ -309,16 +309,21 @@ func consolidateCmd(args []string) int {
 		return 1
 	}
 	defer func() { _ = st.Close() }()
+	// Model work has a firm deadline, but applying its safe, append-only outcome
+	// must still be possible after that deadline. In particular, a timed-out
+	// batch is deferred rather than retried by maintenance on every run.
+	persistenceCtx, persistenceCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer persistenceCancel()
 	totals := consolidationOutcome{}
 	now := time.Now()
 	for _, item := range deferred {
-		if err := markDeferredConsolidation(ctx, st, item.batch.points, now, pipelineKey); err != nil {
+		if err := markDeferredConsolidation(persistenceCtx, st, item.batch.points, now, pipelineKey); err != nil {
 			fmt.Fprintf(os.Stderr, "consolidate: %s: persist deferred marker: %v\n", item.batch.key, err)
 			retryableFailures++
 		}
 	}
 	for _, result := range results {
-		outcome, err := applyConsolidatedGroup(ctx, st, result.batch.points, result.memories, now, *emptyGrace)
+		outcome, err := applyConsolidatedGroup(persistenceCtx, st, result.batch.points, result.memories, now, *emptyGrace)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "consolidate: %s: %v; source diary kept\n", result.batch.key, err)
 			failures++
@@ -896,7 +901,7 @@ func requestConsolidationVerdict(
 func isDeferredConsolidationError(err error) bool {
 	var outputErr *consolidationOutputError
 	var deferredErr *consolidationDeferredError
-	return errors.As(err, &outputErr) || errors.As(err, &deferredErr)
+	return errors.As(err, &outputErr) || errors.As(err, &deferredErr) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func validateConsolidatedMemories(

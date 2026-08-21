@@ -26,24 +26,23 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.12
+## What's New in v0.8.13
 
 ### Fixed
 
-- **Scheduled maintenance cannot remain wedged for hours.** Its supervisor now
-  has a 20-minute default deadline, close to consolidation's own 15-minute
-  bound, so an unresponsive child cannot leave the scheduled job stuck.
-- **Reasoning-capable curators return the expected JSON.** Consolidation and
-  its quality verdict explicitly disable Ollama thinking, avoiding a reasoning
-  trace in a response that must satisfy a strict schema.
+- **A consolidation deadline is now safe deferred work, not a maintenance
+  failure.** When a local curator exhausts its bounded budget, its remaining
+  diary batches stay active and are marked deferred instead of triggering three
+  retries and an unhealthy tray indicator.
+- **Deferred markers survive the model deadline.** Ariadne applies safe,
+  append-only lifecycle metadata with a fresh short persistence context, so the
+  next scheduled run does not reprocess the same unchanged batch.
 
-### Added
+## Previously in v0.8.12
 
-- **Owner-approved credential trust for repeat work.** `ariadnectl credential
-  trust` stores an append-only policy for one exact source wing, target wing,
-  credential resource, and purpose. Matching calls proceed without another
-  prompt but each use remains audited; `credential revoke` appends a revocation
-  without erasing the policy history.
+v0.8.12 bounded the maintenance supervisor, made schema-bound consolidation
+JSON deterministic for reasoning-capable Ollama models, and added exact,
+append-only owner-approved credential trust.
 
 ## Previously in v0.8.11
 
@@ -862,7 +861,10 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.12 — current release. Exact owner-approved credential trust with
+v0.8.13 — current release. A bounded consolidation deadline is safely deferred
+with a fresh persistence context, so unchanged source diaries remain intact and
+the tray reports a healthy `complete_with_deferred` outcome instead of a false
+maintenance failure. v0.8.12 added exact owner-approved credential trust with
 append-only trust, use, and revocation records; deterministic JSON-only
 consolidation for reasoning-capable Ollama models; and a 20-minute maintenance
 supervisor deadline that prevents a wedged scheduled child from remaining

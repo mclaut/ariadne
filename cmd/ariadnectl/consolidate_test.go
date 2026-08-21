@@ -509,3 +509,9 @@ func TestConsolidationFailureStatusPrefersRetryableFailures(t *testing.T) {
 		t.Fatalf("complete status=%q code=%d", status, code)
 	}
 }
+
+func TestDeadlineExceededIsDeferredConsolidationError(t *testing.T) {
+	if !isDeferredConsolidationError(context.DeadlineExceeded) {
+		t.Fatal("context deadline must defer consolidation instead of retrying the whole maintenance stage")
+	}
+}

@@ -35,16 +35,14 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.12 makes background memory care predictable and credential reuse
-explicitly auditable.
+Version 0.8.13 makes bounded consolidation honest under local-model load.
 
-- **Bounded:** the maintenance supervisor stops an unresponsive child after 20
-  minutes, instead of retaining a scheduled job for hours.
-- **Deterministic:** schema-bound consolidation disables Ollama thinking so a
-  reasoning-capable curator returns the expected JSON.
-- **Auditable:** an owner can trust one exact credential source, target,
-  resource, and purpose for repeat work; every trust, use, and revoke remains
-  append-only.
+- **Safe:** a curator deadline defers remaining diary batches instead of
+  retrying the whole maintenance stage and reporting a false failure.
+- **Durable:** a fresh short persistence context records append-only deferred
+  markers after model work ends, preserving every source diary.
+- **Honest:** `complete_with_deferred` stays a healthy outcome while real
+  partial, failed, stuck, and stale work remains visible.
 
 ## Links
 

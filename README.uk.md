@@ -24,24 +24,23 @@ Ariadne замінює вбудовані векторні бази, які па
 кількох паралельних MCP-сесій. Один сервер Qdrant нативно обробляє конкурентні
 читання й записи, тому клас проблем single-writer та lock starvation зникає.
 
-## Нове у v0.8.12
+## Нове у v0.8.13
 
 ### Виправлено
 
-- **Scheduled maintenance не зависає на години.** Supervisor тепер має
-  20-хвилинний deadline, близький до власного 15-хвилинного ліміту
-  consolidation, тому процес, що не реагує, не лишає планове завдання stuck.
-- **Моделі з reasoning повертають очікуваний JSON.** Consolidation і її
-  quality verdict явно вимикають Ollama thinking, щоб відповідь відповідала
-  строгій схемі без reasoning trace.
+- **Deadline consolidation тепер означає безпечне відкладення, а не помилку
+  maintenance.** Якщо локальний curator вичерпав обмежений час, решта diary
+  batches лишаються active і позначаються deferred замість трьох повторів та
+  помаранчевого tray.
+- **Deferred-маркери переживають deadline моделі.** Ariadne записує безпечні
+  append-only lifecycle-метадані у свіжому короткому persistence context, тому
+  наступний scheduled run не повторює ту саму незмінену batch.
 
-### Додано
+## Раніше у v0.8.12
 
-- **Явно схвалена власником credential-прив’язка для повторної роботи.**
-  `ariadnectl credential trust` додає append-only policy для точних source wing,
-  target wing, credential resource і purpose. Збіг не потребує нового popup,
-  але кожне використання аудитується; `credential revoke` додає відкликання,
-  не стираючи історії policy.
+v0.8.12 обмежила maintenance supervisor, зробила schema-bound consolidation
+JSON детермінованим для reasoning-capable Ollama моделей і додала точну
+append-only credential-прив’язку, схвалену власником.
 
 ## Раніше у v0.8.11
 
