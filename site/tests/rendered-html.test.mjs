@@ -31,9 +31,9 @@ test("server-renders the Ariadne product page and discovery metadata", async () 
   const html = await response.text();
   assert.match(html, /<title>Ariadne - Local-first memory for AI agents<\/title>/i);
   assert.match(html, /<h1>Ariadne<\/h1>/);
-  assert.match(html, /New in v0\.8\.13/);
-  assert.match(html, /Deadline-aware: consolidation/);
-  assert.match(html, /Durable: deferred markers/);
+  assert.match(html, /New in v0\.8\.14/);
+  assert.match(html, /Detached updater/);
+  assert.match(html, /Visible handoff/);
   assert.match(html, /application\/ld\+json/);
   assert.match(html, /SoftwareApplication/);
   assert.match(html, /og:image/);
@@ -47,8 +47,8 @@ test("server-renders the Ukrainian localized route", async () => {
 
   const html = await response.text();
   assert.match(html, /локальна пам’ять для AI-агентів/i);
-  assert.match(html, /Нове у v0\.8\.13/);
-  assert.match(html, /Усвідомлено: consolidation deadline/);
+  assert.match(html, /Нове у v0\.8\.14/);
+  assert.match(html, /Відокремлений updater/);
   assert.match(html, /hrefLang="en"|hreflang="en"/i);
 });
 

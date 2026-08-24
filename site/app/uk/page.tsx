@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.13</a>
+          <a href="#new">Нове у 0.8.14</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.13 чесно працює під навантаженням</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.14 доводить підтверджене оновлення до кінця</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.13</span><h2>Обмежена consolidation. Чесний статус.</h2><p>Повільний локальний curator безпечно відкладає незмінені групи замість хибної аварії maintenance.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.14</span><h2>Підтверджене оновлення. Надійна передача.</h2><p>На macOS updater переживає tray, який замінює, і лишає чіткий журнал кожного кроку.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck /><h3>Усвідомлено: consolidation deadline</h3><p>Після обмеженого часу решта batch безпечно переходять у deferred, а не запускають retry storm.</p></article>
-            <article className="new-item accent-blue"><Database /><h3>Надійно: deferred markers</h3><p>Свіжий короткий persistence context фіксує deferred batches після deadline моделі й зберігає кожен source diary.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Правдиво: health status</h3><p>Tray лишається здоровим для безпечно відкладеного maintenance і попереджає лише про справді небезпечну помилку.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Append-only: історія</h3><p>Відкладення змінює лише lifecycle metadata; текст і вектори diary лишаються для майбутнього curator pass.</p></article>
+            <article className="new-item accent-green"><ShieldCheck /><h3>Відокремлений updater</h3><p>Незалежна процесна сесія зберігає helper живим після закриття tray і встановлює обраний реліз.</p></article>
+            <article className="new-item accent-blue"><Database /><h3>Видима передача</h3><p>Журнал update фіксує старт helper до заміни tray, тому збій можна одразу діагностувати.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Діагностований збій</h3><p>Помилка завантаження або старту helper потрапляє в update journal, а не виглядає як проігнорований клік.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Безпечна заміна</h3><p>Tray завершується лише після старту відокремленого helper для підтвердженого встановлення.</p></article>
           </div>
         </div>
       </section>
@@ -108,7 +108,7 @@ export default function UkrainianHome() {
           <div className="install-tool">
             <div className="command-window"><div className="command-title"><span>macOS / Linux</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh</code></pre></div>
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.13">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.14">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>

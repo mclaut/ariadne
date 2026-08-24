@@ -193,6 +193,8 @@ func startUpdate(release releaseInfo) {
 	helper := exec.CommandContext( //nolint:gosec // our copied executable, validated release tag, and downloaded installer
 		context.Background(), helperExe, "--apply-update", release.TagName, scriptPath,
 	)
+	detachUpdateProcess(helper)
+	appendUpdateLog("update handoff starting: version=%s helper=%s\n", release.TagName, helperExe)
 	if err := helper.Start(); err != nil {
 		_ = os.Remove(scriptPath)
 		if helperExe != exe {
@@ -201,6 +203,7 @@ func startUpdate(release releaseInfo) {
 		updateStartFailed(release.TagName, err)
 		return
 	}
+	appendUpdateLog("update helper started: version=%s pid=%d\n", release.TagName, helper.Process.Pid)
 	_ = helper.Process.Release()
 	quitTray("update handoff started")
 }

@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.13",
+  softwareVersion: "0.8.14",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.13</a>
+          <a href="#new">New in 0.8.14</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.13 keeps maintenance honest under load
+            v0.8.14 makes confirmed updates complete
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.13</span>
-            <h2>Bounded consolidation. Honest status.</h2>
+            <span className="eyebrow">New in v0.8.14</span>
+            <h2>Confirmed update. Reliable handoff.</h2>
             <p>
-              A slow local curator defers unchanged work safely instead of
-              turning routine maintenance into a false alarm.
+              On macOS, the updater now outlives the tray it replaces and
+              records each handoff for clear recovery.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <ShieldCheck aria-hidden="true" />
-              <h3>Deadline-aware: consolidation</h3>
+              <h3>Detached updater</h3>
               <p>
-                A bounded model deadline turns remaining batches into safe
-                deferred work, not a retry storm.
+                A separate process session keeps the helper alive after the
+                tray exits to install the selected release.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Database aria-hidden="true" />
-              <h3>Durable: deferred markers</h3>
+              <h3>Visible handoff</h3>
               <p>
-                Fresh, short persistence writes record deferred batches after
-                model time runs out, preserving every source diary.
+                The update journal records helper startup before replacement,
+                so a failed step can be diagnosed directly.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Truthful: health status</h3>
+              <h3>Actionable failures</h3>
               <p>
-                The tray stays healthy for safely deferred maintenance and warns
-                only when a real unsafe failure needs attention.
+                A failed download or helper launch is written to the update
+                journal instead of looking like an ignored click.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Append-only: source history</h3>
+              <h3>Safe replacement</h3>
               <p>
-                Deferral changes lifecycle metadata only; diary text and vectors
-                remain available for a future curator pass.
+                The tray is replaced only after the detached helper has started
+                the confirmed installation path.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.13"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.14"
               target="_blank"
               rel="noreferrer"
             >

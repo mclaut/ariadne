@@ -26,17 +26,21 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.13
+## What's New in v0.8.14
 
 ### Fixed
 
-- **A consolidation deadline is now safe deferred work, not a maintenance
-  failure.** When a local curator exhausts its bounded budget, its remaining
-  diary batches stay active and are marked deferred instead of triggering three
-  retries and an unhealthy tray indicator.
-- **Deferred markers survive the model deadline.** Ariadne applies safe,
-  append-only lifecycle metadata with a fresh short persistence context, so the
-  next scheduled run does not reprocess the same unchanged batch.
+- **macOS tray updates now survive tray shutdown.** The update helper starts in
+  an independent process session before the tray exits, so the downloaded
+  installer can complete instead of silently remaining unused.
+- **Every handoff is observable.** `update.log` records helper startup before
+  the tray is replaced, making a failed update actionable rather than silent.
+
+## Previously in v0.8.13
+
+v0.8.13 makes a consolidation deadline safe deferred work rather than a
+maintenance failure, preserving every source diary with append-only deferred
+metadata.
 
 ## Previously in v0.8.12
 
@@ -861,7 +865,11 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.13 — current release. A bounded consolidation deadline is safely deferred
+v0.8.14 — current release. macOS tray update helpers run independently before
+the tray exits and append explicit handoff diagnostics, preventing a confirmed
+update from silently leaving its installer unused.
+
+v0.8.13 made a bounded consolidation deadline safely deferred
 with a fresh persistence context, so unchanged source diaries remain intact and
 the tray reports a healthy `complete_with_deferred` outcome instead of a false
 maintenance failure. v0.8.12 added exact owner-approved credential trust with

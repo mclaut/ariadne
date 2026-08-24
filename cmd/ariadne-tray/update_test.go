@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -29,6 +30,14 @@ func TestIsNewerVersion(t *testing.T) {
 		if got := isNewerVersion(tc.current, tc.candidate); got != tc.want {
 			t.Fatalf("isNewerVersion(%q, %q) = %v, want %v", tc.current, tc.candidate, got, tc.want)
 		}
+	}
+}
+
+func TestDetachUpdateProcessConfiguresProcessAttributes(t *testing.T) {
+	cmd := exec.CommandContext(context.Background(), "true")
+	detachUpdateProcess(cmd)
+	if cmd.SysProcAttr == nil {
+		t.Fatal("detached updater must have process attributes")
 	}
 }
 
