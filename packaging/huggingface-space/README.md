@@ -35,14 +35,14 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.13 makes bounded consolidation honest under local-model load.
+Version 0.8.15 adds a real macOS application launcher.
 
-- **Safe:** a curator deadline defers remaining diary batches instead of
-  retrying the whole maintenance stage and reporting a false failure.
-- **Durable:** a fresh short persistence context records append-only deferred
-  markers after model work ends, preserving every source diary.
-- **Honest:** `complete_with_deferred` stays a healthy outcome while real
-  partial, failed, stuck, and stale work remains visible.
+- **Discoverable:** a signed `Ariadne.app` appears in Applications, Spotlight,
+  and Launchpad with a native project icon.
+- **Managed:** one click starts the existing tray LaunchAgent instead of an
+  unmanaged duplicate process.
+- **Recoverable:** the launcher can re-register the canonical tray plist before
+  starting it when macOS has unloaded the agent.
 
 ## Links
 

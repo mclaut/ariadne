@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.14",
+  softwareVersion: "0.8.15",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.14</a>
+          <a href="#new">New in 0.8.15</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.14 makes confirmed updates complete
+            v0.8.15 puts Ariadne in Applications
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,44 +186,44 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.14</span>
-            <h2>Confirmed update. Reliable handoff.</h2>
+            <span className="eyebrow">New in v0.8.15</span>
+            <h2>A real Mac app. One-click recovery.</h2>
             <p>
-              On macOS, the updater now outlives the tray it replaces and
-              records each handoff for clear recovery.
+              Find Ariadne in Applications, Spotlight, or Launchpad and restore
+              its managed menu-bar monitor with one click.
             </p>
           </div>
           <div className="new-grid">
             <article className="new-item accent-green">
               <ShieldCheck aria-hidden="true" />
-              <h3>Detached updater</h3>
+              <h3>Native app bundle</h3>
               <p>
-                A separate process session keeps the helper alive after the
-                tray exits to install the selected release.
+                The installer creates a signed Ariadne.app with the project
+                icon in Applications, with a user-level fallback.
               </p>
             </article>
             <article className="new-item accent-blue">
               <Database aria-hidden="true" />
-              <h3>Visible handoff</h3>
+              <h3>Managed restart</h3>
               <p>
-                The update journal records helper startup before replacement,
-                so a failed step can be diagnosed directly.
+                The launcher starts the existing tray LaunchAgent instead of
+                creating a second unmanaged process.
               </p>
             </article>
             <article className="new-item accent-coral">
               <Network aria-hidden="true" />
-              <h3>Actionable failures</h3>
+              <h3>Self-repairing registration</h3>
               <p>
-                A failed download or helper launch is written to the update
-                journal instead of looking like an ignored click.
+                If the canonical agent was unloaded, the app registers its
+                installed plist again before starting it.
               </p>
             </article>
             <article className="new-item accent-black">
               <Monitor aria-hidden="true" />
-              <h3>Safe replacement</h3>
+              <h3>Finder and Spotlight ready</h3>
               <p>
-                The tray is replaced only after the detached helper has started
-                the confirmed installation path.
+                Ariadne is discoverable like a normal Mac application while
+                remaining a lightweight menu-bar utility.
               </p>
             </article>
           </div>
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.14"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.15"
               target="_blank"
               rel="noreferrer"
             >

@@ -26,15 +26,21 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.14
+## What's New in v0.8.15
 
 ### Fixed
 
-- **macOS tray updates now survive tray shutdown.** The update helper starts in
-  an independent process session before the tray exits, so the downloaded
-  installer can complete instead of silently remaining unused.
-- **Every handoff is observable.** `update.log` records helper startup before
-  the tray is replaced, making a failed update actionable rather than silent.
+- **Ariadne is now a real macOS application.** The installer creates a signed
+  `Ariadne.app` in the system Applications folder when writable, with a
+  user-level `~/Applications` fallback and a native project icon.
+- **One click restores the managed tray.** Finder, Spotlight, or Launchpad now
+  starts the existing tray LaunchAgent, re-registering its canonical plist when
+  needed without creating an unmanaged duplicate process.
+
+## Previously in v0.8.14
+
+v0.8.14 detached the confirmed macOS update helper from tray shutdown and made
+the handoff observable in `update.log`.
 
 ## Previously in v0.8.13
 
@@ -273,7 +279,9 @@ capture can remain on a smaller model.
 **A resilient, explainable tray.** The macOS LaunchAgent restarts the tray after
 an abnormal exit but respects an explicit clean Quit. Lifecycle reasons are
 appended to the tray log, so a missing icon no longer leaves an empty forensic
-trail.
+trail. The installer also adds `Ariadne.app` to Applications; launching it from
+Finder, Spotlight, or Launchpad restores the managed tray without spawning an
+unmanaged duplicate.
 
 ## Previously in v0.8.0
 
@@ -865,7 +873,11 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.14 — current release. macOS tray update helpers run independently before
+v0.8.15 — current release. The macOS installer adds a signed `Ariadne.app` with
+a native icon to Applications, and one click restores or re-registers the
+managed tray LaunchAgent.
+
+v0.8.14 made macOS tray update helpers run independently before
 the tray exits and append explicit handoff diagnostics, preventing a confirmed
 update from silently leaving its installer unused.
 

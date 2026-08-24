@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"ariadne/internal/qdrantauth"
 	"ariadne/internal/store"
+	"ariadne/internal/version"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -85,6 +86,11 @@ func makePlan(r *report, o opts) []action {
 		{
 			title: "install tray-monitor autostart (Linux: autostart entry; macOS: LaunchAgent)",
 			run:   func() error { return installTrayAutostart(r, o) },
+		},
+		{
+			title: "install macOS launcher → Applications/Ariadne.app",
+			skip:  r.os != osDarwin,
+			run:   func() error { return installMacApplication(r) },
 		},
 	}
 }
@@ -670,7 +676,7 @@ func archiveLaunchAgentPlist(home, name string) error {
 func buildBinaries(r *report) error {
 	for bin, pkg := range map[string]string{
 		"ariadne": "ariadne", "ariadnectl": "ariadnectl", "import": "import",
-		"ariadne-hook": "hook", "ariadne-tray": "ariadne-tray",
+		"ariadne-hook": "hook", "ariadne-launcher": "ariadne-launcher", "ariadne-tray": "ariadne-tray",
 	} {
 		dest := filepath.Join(r.home, ".ariadne", "bin", bin)
 		next := dest + ".new"
@@ -694,6 +700,11 @@ func buildBinaries(r *report) error {
 		}
 	}
 	return nil
+}
+
+func installMacApplication(r *report) error {
+	launcher := filepath.Join(r.home, ".ariadne", "bin", "ariadne-launcher")
+	return writeMacApplicationBundle(macApplicationPath(r.home), launcher, version.Current, runCmd)
 }
 
 func pullModel(o opts, model string) error {

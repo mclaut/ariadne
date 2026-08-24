@@ -92,6 +92,7 @@ jobs:
           ariadnectl ariadnectl
           import import
           ariadne-hook hook
+          ariadne-launcher ariadne-launcher
           ariadne-tray ariadne-tray
           BUILDS
           cp -R skills "$root/"

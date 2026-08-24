@@ -4,12 +4,78 @@ package main
 
 import (
 	"ariadne/internal/qdrantauth"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestWriteMacApplicationBundleCreatesLaunchableUserApp(t *testing.T) {
+	home := t.TempDir()
+	launcher := filepath.Join(home, "ariadne-launcher")
+	if err := os.WriteFile(launcher, []byte("launcher-binary"), 0o755); err != nil { //nolint:gosec // executable test fixture
+		t.Fatal(err)
+	}
+	app := filepath.Join(home, "Applications", "Ariadne.app")
+	runner := func(bin string, args ...string) error {
+		if bin != "codesign" || len(args) != 5 || args[4] != app {
+			t.Fatalf("codesign command = %s %v", bin, args)
+		}
+		return nil
+	}
+	if err := writeMacApplicationBundle(app, launcher, "0.8.15", runner); err != nil {
+		t.Fatal(err)
+	}
+	contents := filepath.Join(app, "Contents")
+	executable := filepath.Join(contents, "MacOS", "Ariadne")
+	info, err := os.Stat(executable)
+	if err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("launcher mode = %v, %v", info, err)
+	}
+	plist, err := os.ReadFile(filepath.Join(contents, "Info.plist")) //nolint:gosec // test fixture
+	if err != nil || !strings.Contains(string(plist), "io.github.mclaut.ariadne") ||
+		!strings.Contains(string(plist), "0.8.15") || !strings.Contains(string(plist), "LSUIElement") {
+		t.Fatalf("Info.plist = %q, %v", plist, err)
+	}
+	icon, err := os.ReadFile(filepath.Join(contents, "Resources", "Ariadne.icns")) //nolint:gosec // test fixture
+	if err != nil || len(icon) < 8 || string(icon[:4]) != "icns" || int(binary.BigEndian.Uint32(icon[4:8])) != len(icon) {
+		t.Fatalf("Ariadne.icns header = %q, %v", icon, err)
+	}
+	if got := renderAriadneIcon(1024).Bounds(); got.Dx() != 1024 || got.Dy() != 1024 {
+		t.Fatalf("rendered icon bounds = %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(contents, "Resources", "Ariadne.icns")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDirectoryWritableByCurrentUser(t *testing.T) {
+	dir := t.TempDir()
+	if !directoryWritableByCurrentUser(dir) {
+		t.Fatal("current user must be able to write its temporary directory")
+	}
+}
+
+func TestWriteMacApplicationIconWithSystemIconutil(t *testing.T) {
+	if runtime.GOOS != osDarwin {
+		t.Skip("iconutil is a macOS system tool")
+	}
+	resources := t.TempDir()
+	if err := writeMacApplicationIcon(resources); err != nil {
+		t.Fatal(err)
+	}
+	icon := filepath.Join(resources, "Ariadne.icns")
+	info, err := os.Stat(icon)
+	if err != nil || info.Size() == 0 {
+		t.Fatalf("Ariadne.icns = %v, %v", info, err)
+	}
+	if err := runCmd("iconutil", "-c", "iconset", icon, "-o", filepath.Join(resources, "Decoded.iconset")); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestParseInstallQdrantAgents(t *testing.T) {
 	t.Parallel()
