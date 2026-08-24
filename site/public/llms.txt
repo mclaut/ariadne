@@ -22,6 +22,10 @@
 
 Windows uses install.ps1. Linux and macOS use install.sh. Both are available in the repository root.
 
+## Upgrade compatibility
+
+Trays running v0.8.14 or newer update normally after explicit user confirmation. A tray still running v0.8.13 or older may hit the old update-handoff bug and needs one pinned upgrade: `curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh`. This reuses existing Qdrant data, backups, settings, and logs. Once v0.8.16 is active, later confirmed tray updates keep `Ariadne.app`, the tray, and command-line binaries synchronized.
+
 ## Current release
 
 v0.8.16 adds a signed macOS `Ariadne.app` with a native icon to Applications. Launching it from Finder, Spotlight, or Launchpad starts the managed tray LaunchAgent and re-registers its canonical plist when needed without creating an unmanaged duplicate. It also keeps the macOS-only launcher tests out of Windows CI while preserving a Windows-safe launcher stub in release archives.

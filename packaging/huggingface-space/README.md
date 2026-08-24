@@ -60,6 +60,16 @@ Linux and macOS:
 curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh
 ```
 
+For a one-time upgrade from a tray still running v0.8.13 or older, use the
+pinned v0.8.16 installer; it preserves Qdrant data, backups, settings, and logs:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh
+```
+
+After v0.8.16 is active, normal confirmed tray updates keep `Ariadne.app`, the
+tray, and command-line binaries synchronized.
+
 Windows PowerShell:
 
 ```powershell

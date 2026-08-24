@@ -328,6 +328,26 @@ v0.8.10 зробила token attribution аудитованою завдяки l
 curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh
 ```
 
+### Оновлення наявної інсталяції
+
+Tray перевіряє GitHub Releases кожні шість годин і після підтвердження
+встановлює саме обраний реліз. На macOS кожен інсталятор v0.8.16 або новіший
+також створює чи оновлює `Ariadne.app` у Applications, тому app, launcher, tray
+і command-line binaries надалі залишаються синхронними.
+
+Якщо зараз запущено tray **v0.8.13 або старіший**, його старий update handoff
+може завершити процес раніше, ніж стартує інсталятор. Один раз виконайте
+закріплену команду:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh
+```
+
+Наявні колекції Qdrant, резервні копії, налаштування та журнали повторно
+використовуються. Після переходу на v0.8.16 звичайні підтверджувані оновлення з
+tray знову працюють; діагностика записується у
+`~/.ariadne/logs/update.log`.
+
 ### Windows
 
 ```powershell

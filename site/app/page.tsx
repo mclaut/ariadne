@@ -357,6 +357,16 @@ export default function Home() {
               <pre><code>{activeInstall.command}</code></pre>
             </div>
             <p className="install-note">{activeInstall.note}</p>
+            <p className="install-note">
+              Upgrading from a tray still running v0.8.13 or older? Run the
+              pinned v0.8.16 installer once. It preserves Qdrant data, backups,
+              settings, and logs. After that, confirmed tray updates keep the
+              app and binaries synchronized.
+            </p>
+            <div className="command-window">
+              <div className="command-title"><span>One-time legacy upgrade</span></div>
+              <pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh</code></pre>
+            </div>
             <a
               className="release-link"
               href="https://github.com/mclaut/ariadne/releases/tag/v0.8.16"

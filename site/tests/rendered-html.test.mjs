@@ -34,6 +34,8 @@ test("server-renders the Ariadne product page and discovery metadata", async () 
   assert.match(html, /New in v0\.8\.16/);
   assert.match(html, /Native app bundle/);
   assert.match(html, /Managed restart/);
+  assert.match(html, /One-time legacy upgrade/);
+  assert.match(html, /preserves Qdrant data, backups/i);
   assert.match(html, /application\/ld\+json/);
   assert.match(html, /SoftwareApplication/);
   assert.match(html, /og:image/);
@@ -49,6 +51,8 @@ test("server-renders the Ukrainian localized route", async () => {
   assert.match(html, /локальна пам’ять для AI-агентів/i);
   assert.match(html, /Нове у v0\.8\.16/);
   assert.match(html, /Нативний app bundle/);
+  assert.match(html, /Одноразове оновлення старої версії/);
+  assert.match(html, /збереже дані Qdrant, резервні копії/i);
   assert.match(html, /hrefLang="en"|hreflang="en"/i);
 });
 

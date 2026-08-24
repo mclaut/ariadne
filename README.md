@@ -550,6 +550,24 @@ separately.
 curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh
 ```
 
+### Upgrading an existing installation
+
+The tray checks GitHub Releases every six hours and, after confirmation,
+installs the exact selected release. On macOS, every v0.8.16-or-newer installer
+also creates or refreshes `Ariadne.app` in Applications, so future updates keep
+the app, launcher, tray, and command-line binaries aligned.
+
+If the currently running tray is **v0.8.13 or older**, its pre-v0.8.14 update
+handoff may close before the installer starts. Use this pinned command once:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh
+```
+
+Your existing Qdrant collections, backups, settings, and logs are reused. After
+v0.8.16 is active, normal consent-gated updates from the tray work again. If an
+update needs diagnosis, inspect `~/.ariadne/logs/update.log`.
+
 Nothing by hand: `install.sh` bootstraps Go and the source (GitHub tarball — no
 git needed), then runs the installer below, which auto-installs Ollama, Qdrant,
 the models, the services, and — on Linux — the tray plus its desktop deps. Pass
