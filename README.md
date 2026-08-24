@@ -26,9 +26,15 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.15
+## What's New in v0.8.16
 
 ### Fixed
+
+- **Windows release checks include the launcher safely.** The macOS behavior
+  tests are now platform-scoped while release archives retain a Windows-safe
+  launcher stub, so every supported target builds and tests cleanly.
+
+### Added in v0.8.15
 
 - **Ariadne is now a real macOS application.** The installer creates a signed
   `Ariadne.app` in the system Applications folder when writable, with a
@@ -873,9 +879,10 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.15 — current release. The macOS installer adds a signed `Ariadne.app` with
+v0.8.16 — current release. The macOS installer adds a signed `Ariadne.app` with
 a native icon to Applications, and one click restores or re-registers the
-managed tray LaunchAgent.
+managed tray LaunchAgent. macOS-only launcher tests are platform-scoped so the
+full Windows CI gate also passes.
 
 v0.8.14 made macOS tray update helpers run independently before
 the tray exits and append explicit handoff diagnostics, preventing a confirmed

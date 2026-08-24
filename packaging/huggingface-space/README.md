@@ -35,7 +35,7 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.15 adds a real macOS application launcher.
+Version 0.8.16 adds a real macOS application launcher and keeps its platform-specific tests portable.
 
 - **Discoverable:** a signed `Ariadne.app` appears in Applications, Spotlight,
   and Launchpad with a native project icon.

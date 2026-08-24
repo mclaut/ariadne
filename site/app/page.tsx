@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.15",
+  softwareVersion: "0.8.16",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.15</a>
+          <a href="#new">New in 0.8.16</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.15 puts Ariadne in Applications
+            v0.8.16 puts Ariadne in Applications
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,7 +186,7 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.15</span>
+            <span className="eyebrow">New in v0.8.16</span>
             <h2>A real Mac app. One-click recovery.</h2>
             <p>
               Find Ariadne in Applications, Spotlight, or Launchpad and restore
@@ -359,7 +359,7 @@ export default function Home() {
             <p className="install-note">{activeInstall.note}</p>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.15"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.16"
               target="_blank"
               rel="noreferrer"
             >
