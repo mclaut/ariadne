@@ -131,7 +131,7 @@ func main() {
 	case "backfill-attribution":
 		os.Exit(backfillAttributionCmd(os.Args[2:]))
 	case "approvals":
-		os.Exit(approvalsCmd(hasFlag("-json")))
+		os.Exit(approvalsCmd(os.Args[2:]))
 	case "credential":
 		os.Exit(credentialCmd(os.Args[2:]))
 	default:
@@ -139,7 +139,7 @@ func main() {
 			"start | stop | restart | backup | restore <file> | export [file] | "+
 			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
 			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | "+
-			"backfill-attribution [--apply] [--multiplier 8] | approvals [-json] | credential {trust|revoke} ...}")
+			"backfill-attribution [--apply] [--multiplier 8] | approvals [-json] [-id ID] | credential {trust|revoke} ...}")
 		os.Exit(2)
 	}
 }

@@ -226,6 +226,12 @@ credential name/path, and purpose. Approval expires after five minutes and is
 consumed once. Ariadne never reads or returns the value; requests, decisions,
 and consumptions remain as separate append-only audit records.
 
+`ariadnectl approvals` lists only undecided requests. A request leaving that list
+does not imply denial. Poll `ariadnectl approvals -id REQUEST_ID -json` to inspect
+its `pending`, `approved`, `denied`, `consumed`, or `expired` state and timestamps.
+This read-only diagnostic never approves or consumes a grant; the MCP client must
+still retry the original request with `approval_id` after human approval.
+
 For a credential file the owner explicitly designates for repeated use, register
 an exact local binding once with `ariadnectl credential trust --source-wing ...
 --target-wing ... --resource ... --purpose ... --yes`. Future `credential_access` calls for

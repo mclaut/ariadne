@@ -219,6 +219,11 @@ v0.8.10 зробила token attribution аудитованою завдяки l
 - **Append-only аудит дозволів.** Request, tray decision та consumption
   зберігаються окремими незмінними records. `ariadnectl approvals` показує
   pending requests, але не дозволяє схвалити їх через CLI.
+  Зникнення з pending не означає відмову: команда
+  `ariadnectl approvals -id REQUEST_ID -json` показує стан конкретного запиту
+  (`pending`, `approved`, `denied`, `consumed`, `expired`) та часові мітки.
+  Ця перевірка лише читає стан. Після схвалення людиною MCP-клієнт усе одно
+  має повторити початковий запит із `approval_id` для використання дозволу.
 
 ## Раніше у v0.8.2
 
