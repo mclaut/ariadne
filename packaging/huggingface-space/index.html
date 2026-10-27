@@ -19,7 +19,7 @@
         Ariadne
       </a>
       <div class="nav-links">
-        <a href="#new">New in 0.8.16</a>
+        <a href="#new">New in 0.8.17</a>
         <a href="#architecture">Architecture</a>
         <a href="#install">Install</a>
       </div>
@@ -40,7 +40,7 @@
         <div class="hero-content">
           <div class="release-kicker">
             <span data-lucide="sparkles" aria-hidden="true"></span>
-            v0.8.16 puts Ariadne in Applications
+            v0.8.17 keeps every access request visible
           </div>
           <h1>Ariadne</h1>
           <p class="hero-lead">
@@ -58,7 +58,7 @@
             </a>
             <a
               class="button button-secondary"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.16"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.17"
               target="_blank"
               rel="noreferrer"
             >
@@ -78,38 +78,17 @@
       <section class="new-band" id="new">
         <div class="section-shell">
           <div class="section-heading">
-            <span class="eyebrow">New in v0.8.16</span>
-            <h2>A real Mac app. One-click recovery.</h2>
+            <span class="eyebrow">New in v0.8.17</span>
+            <h2>Every request visible. Every decision clear.</h2>
             <p>
-              Find Ariadne in Applications, Spotlight, or Launchpad and restore
-              its managed menu-bar monitor with one click.
+              See the entire access queue and retained history. Approve the exact
+              request and follow its status through client continuation.
             </p>
           </div>
           <div class="feature-grid">
-            <article class="feature feature-green">
-              <span data-lucide="check-circle-2" aria-hidden="true"></span>
-              <h3>Native app bundle</h3>
-              <p>
-                The installer creates a signed Ariadne.app with the project
-                icon and a user-level fallback.
-              </p>
-            </article>
-            <article class="feature feature-blue">
-              <span data-lucide="scan-search" aria-hidden="true"></span>
-              <h3>Managed restart</h3>
-              <p>
-                One click starts the existing tray LaunchAgent instead of a
-                second unmanaged process.
-              </p>
-            </article>
-            <article class="feature feature-coral">
-              <span data-lucide="list-filter" aria-hidden="true"></span>
-              <h3>Self-repairing registration</h3>
-              <p>
-                If the canonical agent was unloaded, the app registers its
-                installed plist again before starting it.
-              </p>
-            </article>
+            <article class="feature feature-green"><span data-lucide="check-circle-2" aria-hidden="true"></span><h3>Entire queue</h3><p>Every retained request has its own ID, scope, explicit status, and decision controls.</p></article>
+            <article class="feature feature-blue"><span data-lucide="scan-search" aria-hidden="true"></span><h3>Fair prompt rotation</h3><p>System dialogs yield after 30 seconds. Unanswered requests remain in the queue.</p></article>
+            <article class="feature feature-coral"><span data-lucide="list-filter" aria-hidden="true"></span><h3>Clear continuation</h3><p>Approved clients retry with approval_id. Expired and consumed grants stay visible and cannot authorize access.</p></article>
           </div>
         </div>
       </section>

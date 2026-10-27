@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.16",
+  softwareVersion: "0.8.17",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.16</a>
+          <a href="#new">New in 0.8.17</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.16 puts Ariadne in Applications
+            v0.8.17 keeps every access request visible
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,46 +186,18 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.16</span>
-            <h2>A real Mac app. One-click recovery.</h2>
+            <span className="eyebrow">New in v0.8.17</span>
+            <h2>Every request visible. Every decision clear.</h2>
             <p>
-              Find Ariadne in Applications, Spotlight, or Launchpad and restore
-              its managed menu-bar monitor with one click.
+              See the entire access queue and retained history. Approve the exact
+              request and follow its status through client continuation.
             </p>
           </div>
           <div className="new-grid">
-            <article className="new-item accent-green">
-              <ShieldCheck aria-hidden="true" />
-              <h3>Native app bundle</h3>
-              <p>
-                The installer creates a signed Ariadne.app with the project
-                icon in Applications, with a user-level fallback.
-              </p>
-            </article>
-            <article className="new-item accent-blue">
-              <Database aria-hidden="true" />
-              <h3>Managed restart</h3>
-              <p>
-                The launcher starts the existing tray LaunchAgent instead of
-                creating a second unmanaged process.
-              </p>
-            </article>
-            <article className="new-item accent-coral">
-              <Network aria-hidden="true" />
-              <h3>Self-repairing registration</h3>
-              <p>
-                If the canonical agent was unloaded, the app registers its
-                installed plist again before starting it.
-              </p>
-            </article>
-            <article className="new-item accent-black">
-              <Monitor aria-hidden="true" />
-              <h3>Finder and Spotlight ready</h3>
-              <p>
-                Ariadne is discoverable like a normal Mac application while
-                remaining a lightweight menu-bar utility.
-              </p>
-            </article>
+            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Entire queue</h3><p>Each retained request has its own ID, scope, status, and approval controls.</p></article>
+            <article className="new-item accent-blue"><Database aria-hidden="true" /><h3>Explicit history</h3><p>Pending, approved, denied, expired, and consumed records remain visible.</p></article>
+            <article className="new-item accent-coral"><Network aria-hidden="true" /><h3>Fair prompt rotation</h3><p>A system dialog yields after 30 seconds so newer requests get a turn.</p></article>
+            <article className="new-item accent-black"><Monitor aria-hidden="true" /><h3>Clear continuation</h3><p>After approval, the client retries with approval_id. One-time grants cannot be reused.</p></article>
           </div>
         </div>
       </section>
@@ -369,7 +341,7 @@ export default function Home() {
             </div>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.16"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.17"
               target="_blank"
               rel="noreferrer"
             >

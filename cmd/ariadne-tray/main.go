@@ -179,6 +179,7 @@ func onReady() {
 	rowMaintenance = infoRow("")
 	rowApproval = infoRow("")
 	rowApprovalDetail = infoRow("")
+	approvalQueueMenu = systray.AddMenuItem("", "")
 	mApprove = systray.AddMenuItem("", "")
 	mDeny = systray.AddMenuItem("", "")
 	systray.AddSeparator()
@@ -298,6 +299,7 @@ func infoRow(title string) *systray.MenuItem {
 func poll() {
 	s := fetch()
 	pending, approvalErr := approvalManager.Pending()
+	history, historyErr := approvalManager.History()
 	mu.Lock()
 	var icon []byte
 	var word string
@@ -345,8 +347,7 @@ func poll() {
 			approvalNotice = &request
 			lastNotifiedApprovalID = currentApproval.ID
 		}
-		if approvalPrompts.begin(currentApproval.ID, time.Now()) {
-			request := currentApproval
+		if request, ok := approvalPrompts.next(pending, time.Now()); ok {
 			approvalPrompt = &request
 		}
 	} else {
@@ -355,6 +356,7 @@ func poll() {
 		currentApprovalCount = 0
 	}
 	refreshApprovalMenuLocked()
+	refreshApprovalQueueLocked(history, historyErr)
 
 	// notify only when a NEW issue appears (or a service just dropped)
 	if s.reachable && len(s.Issues) > 0 && !slices.Equal(s.Issues, lastIssues) {
@@ -465,7 +467,7 @@ func decideApproval(approved bool) {
 
 func decideApprovalByID(id string, approved bool, activeLang i18n.Lang) {
 	_, err := approvalManager.Decide(id, approved)
-	message := i18n.T(activeLang, "notify.done")
+	message := i18n.T(activeLang, "approval.state.approved")
 	if !approved {
 		message = i18n.T(activeLang, "menu.deny")
 	}

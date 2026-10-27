@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const stateExpired = "expired"
+
 // Status is a read-only snapshot, never an authorization token.
 type Status struct {
 	ID             string    `json:"id"`
@@ -47,7 +49,7 @@ func (m *Manager) Status(id string) (Status, error) {
 	now := m.now().UTC()
 	if decisionErr != nil {
 		if !request.PendingUntil.After(now) {
-			status.State = "expired"
+			status.State = stateExpired
 		}
 		return status, nil
 	}
@@ -60,7 +62,7 @@ func (m *Manager) Status(id string) (Status, error) {
 		status.State = "consumed"
 		status.UsedAt = consumption.UsedAt
 	case !decision.GrantExpiresAt.After(now):
-		status.State = "expired"
+		status.State = stateExpired
 	default:
 		status.State = "approved"
 	}

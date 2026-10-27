@@ -35,14 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.16 adds a real macOS application launcher and keeps its platform-specific tests portable.
+Version 0.8.17 keeps every access request visible throughout its lifecycle.
 
-- **Discoverable:** a signed `Ariadne.app` appears in Applications, Spotlight,
-  and Launchpad with a native project icon.
-- **Managed:** one click starts the existing tray LaunchAgent instead of an
-  unmanaged duplicate process.
-- **Recoverable:** the launcher can re-register the canonical tray plist before
-  starting it when macOS has unloaded the agent.
+- **Complete queue and history:** pending, approved, denied, expired, and consumed statuses with controls bound to the exact request ID.
+- **Fair prompts:** each system dialog yields after 30 seconds while unanswered requests remain pending.
+- **Explicit continuation:** after approval, clients retry with `approval_id`; one-time credential grants reject reuse.
+- **Read-only CLI history:** `ariadnectl approvals --all` displays all retained requests without granting access.
 
 ## Links
 

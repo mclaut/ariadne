@@ -10,6 +10,7 @@ import (
 
 func approvalsCmd(args []string) int {
 	flags := flag.NewFlagSet("approvals", flag.ContinueOnError)
+	all := flags.Bool("all", false, "show all retained access requests and explicit statuses")
 	asJSON := flags.Bool("json", false, "print JSON")
 	id := flags.String("id", "", "read one request's lifecycle without authorizing it")
 	if err := flags.Parse(args); err != nil {
@@ -31,6 +32,23 @@ func approvalsCmd(args []string) int {
 			}
 		} else {
 			fmt.Printf("%s  %s  %s\n", status.ID, status.Kind, status.State)
+		}
+		return 0
+	}
+	if *all {
+		history, err := approval.New("").History()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "approvals:", err)
+			return 1
+		}
+		if *asJSON {
+			if err := json.NewEncoder(os.Stdout).Encode(history); err != nil {
+				return 1
+			}
+			return 0
+		}
+		for _, entry := range history {
+			fmt.Printf("%s  %s  %s  %s\n", entry.Request.ID, entry.Status.State, entry.Request.Kind, approvalRequestScope(entry.Request))
 		}
 		return 0
 	}

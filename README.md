@@ -26,7 +26,15 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.16
+## What's New in v0.8.17
+
+- **Every access request stays visible.** The tray lists the entire retained queue and history with pending, approved, denied, expired, and consumed statuses, plus actions bound to each request ID.
+- **Prompts rotate fairly.** Each system dialog is bounded to 30 seconds; unanswered requests remain pending, and newer requests get a turn.
+- **Continuation is explicit.** Approval tells the client to retry with `approval_id`. Tests verify successful continuation and rejection of reused one-time grants.
+- **Read-only history.** `ariadnectl approvals --all` lists retained requests and their lifecycle without authorizing or consuming access.
+
+## Previously in v0.8.16
+
 
 ### Fixed
 
@@ -903,7 +911,7 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.16 — current release. The macOS installer adds a signed `Ariadne.app` with
+v0.8.17 — current release. The macOS installer adds a signed `Ariadne.app` with
 a native icon to Applications, and one click restores or re-registers the
 managed tray LaunchAgent. macOS-only launcher tests are platform-scoped so the
 full Windows CI gate also passes.

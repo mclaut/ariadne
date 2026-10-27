@@ -36,6 +36,13 @@ var (
 // table[lang][key]. %d/%s placeholders are filled by the caller via Sprintf.
 var table = map[Lang]map[string]string{
 	EN: {
+		"approval.queue":          "All access requests and history",
+		"approval.state.pending":  "Waiting for your decision",
+		"approval.state.approved": "Approved — client must retry with approval_id",
+		"approval.state.denied":   "Denied",
+		"approval.state.expired":  "Expired — create a new request",
+		"approval.state.consumed": "Access authorization consumed",
+
 		"health.ok": "OK", "health.warn": "warning", "health.down": "service down",
 		"health.unreachable": "ariadnectl unreachable",
 		"row.records":        "Records", "row.context_saved": "Measured token savings", "row.metrics_coverage": "Attribution coverage",
@@ -76,6 +83,13 @@ var table = map[Lang]map[string]string{
 		"issue.maintenance_stuck":    "maintenance appears stuck since %s", "issue.maintenance_missing": "maintenance has never completed",
 	},
 	UK: {
+		"approval.queue":          "Усі запити доступу та історія",
+		"approval.state.pending":  "Очікує вашого рішення",
+		"approval.state.approved": "Дозволено — клієнт має повторити виклик з approval_id",
+		"approval.state.denied":   "Відхилено",
+		"approval.state.expired":  "Строк минув — створіть новий запит",
+		"approval.state.consumed": "Дозвіл на доступ використано",
+
 		"health.ok": "OK", "health.warn": "увага", "health.down": "сервіс впав",
 		"health.unreachable": "ariadnectl недоступний",
 		"row.records":        "Записів", "row.context_saved": "Виміряно зекономлено", "row.metrics_coverage": "Покриття атрибуції",
@@ -118,6 +132,13 @@ var table = map[Lang]map[string]string{
 		"issue.maintenance_missing":  "обслуговування ще жодного разу не завершилось",
 	},
 	DE: {
+		"approval.queue":          "Alle Zugriffsanfragen und Verlauf",
+		"approval.state.pending":  "Wartet auf Ihre Entscheidung",
+		"approval.state.approved": "Genehmigt — Client muss mit approval_id erneut anfragen",
+		"approval.state.denied":   "Abgelehnt",
+		"approval.state.expired":  "Abgelaufen — neue Anfrage erstellen",
+		"approval.state.consumed": "Zugriffsgenehmigung verbraucht",
+
 		"health.ok": "OK", "health.warn": "Warnung", "health.down": "Dienst ausgefallen",
 		"health.unreachable": "ariadnectl nicht erreichbar",
 		"row.records":        "Einträge", "row.context_saved": "Gemessene Token-Einsparung", "row.metrics_coverage": "Attributionsabdeckung",
@@ -158,6 +179,13 @@ var table = map[Lang]map[string]string{
 		"issue.maintenance_stuck":    "Wartung hängt offenbar seit %s", "issue.maintenance_missing": "Wartung wurde noch nie abgeschlossen",
 	},
 	IT: {
+		"approval.queue":          "Tutte le richieste di accesso e cronologia",
+		"approval.state.pending":  "In attesa della tua decisione",
+		"approval.state.approved": "Approvata — il client deve riprovare con approval_id",
+		"approval.state.denied":   "Rifiutata",
+		"approval.state.expired":  "Scaduta — crea una nuova richiesta",
+		"approval.state.consumed": "Autorizzazione di accesso utilizzata",
+
 		"health.ok": "OK", "health.warn": "attenzione", "health.down": "servizio inattivo",
 		"health.unreachable": "ariadnectl irraggiungibile",
 		"row.records":        "Record", "row.context_saved": "Risparmio token misurato", "row.metrics_coverage": "Copertura attribuzione",
@@ -199,6 +227,13 @@ var table = map[Lang]map[string]string{
 		"issue.maintenance_missing":  "la manutenzione non è mai stata completata",
 	},
 	ES: {
+		"approval.queue":          "Todas las solicitudes de acceso e historial",
+		"approval.state.pending":  "Esperando tu decisión",
+		"approval.state.approved": "Aprobada — el cliente debe reintentar con approval_id",
+		"approval.state.denied":   "Denegada",
+		"approval.state.expired":  "Caducada — crea una nueva solicitud",
+		"approval.state.consumed": "Autorización de acceso utilizada",
+
 		"health.ok": "OK", "health.warn": "advertencia", "health.down": "servicio caído",
 		"health.unreachable": "ariadnectl inaccesible",
 		"row.records":        "Registros", "row.context_saved": "Ahorro de tokens medido", "row.metrics_coverage": "Cobertura atribuida",
@@ -240,6 +275,13 @@ var table = map[Lang]map[string]string{
 		"issue.maintenance_missing":  "el mantenimiento nunca se ha completado",
 	},
 	FR: {
+		"approval.queue":          "Toutes les demandes d’accès et leur historique",
+		"approval.state.pending":  "En attente de votre décision",
+		"approval.state.approved": "Approuvée — le client doit réessayer avec approval_id",
+		"approval.state.denied":   "Refusée",
+		"approval.state.expired":  "Expirée — créez une nouvelle demande",
+		"approval.state.consumed": "Autorisation d’accès utilisée",
+
 		"health.ok": "OK", "health.warn": "avertissement", "health.down": "service arrêté",
 		"health.unreachable": "ariadnectl injoignable",
 		"row.records":        "Entrées", "row.context_saved": "Économie de tokens mesurée", "row.metrics_coverage": "Couverture attribuée",
@@ -281,6 +323,13 @@ var table = map[Lang]map[string]string{
 		"issue.maintenance_missing":  "la maintenance n’a jamais été terminée",
 	},
 	PL: {
+		"approval.queue":          "Wszystkie prośby o dostęp i historia",
+		"approval.state.pending":  "Oczekuje na Twoją decyzję",
+		"approval.state.approved": "Zatwierdzono — klient musi ponowić z approval_id",
+		"approval.state.denied":   "Odrzucono",
+		"approval.state.expired":  "Wygasło — utwórz nową prośbę",
+		"approval.state.consumed": "Zezwolenie na dostęp wykorzystane",
+
 		"health.ok": "OK", "health.warn": "ostrzeżenie", "health.down": "usługa nie działa",
 		"health.unreachable": "ariadnectl niedostępny",
 		"row.records":        "Wpisy", "row.context_saved": "Zmierzona oszczędność tokenów", "row.metrics_coverage": "Pokrycie atrybucji",

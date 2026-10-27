@@ -46,15 +46,14 @@ const (
 // reminder after a short cooldown.
 type approvalPromptGate struct {
 	inFlight string
-	retryID  string
-	retryAt  time.Time
+	retryAt  map[string]time.Time
 }
 
 func (g *approvalPromptGate) begin(id string, now time.Time) bool {
 	if id == "" || g.inFlight != "" {
 		return false
 	}
-	if g.retryID == id && now.Before(g.retryAt) {
+	if now.Before(g.retryAt[id]) {
 		return false
 	}
 	g.inFlight = id
@@ -65,8 +64,10 @@ func (g *approvalPromptGate) finish(id string, now time.Time) {
 	if g.inFlight == id {
 		g.inFlight = ""
 	}
-	g.retryID = id
-	g.retryAt = now.Add(approvalPromptRetryEvery)
+	if g.retryAt == nil {
+		g.retryAt = make(map[string]time.Time)
+	}
+	g.retryAt[id] = now.Add(approvalPromptRetryEvery)
 }
 
 func showApprovalSystemPrompt(
@@ -209,7 +210,11 @@ func parseApprovalPromptLabel(output, approve, deny string) approvalPromptAction
 }
 
 func runApprovalSystemPrompt(request approval.Request, activeLang i18n.Lang) {
-	ctx, cancel := context.WithDeadline(context.Background(), request.PendingUntil)
+	deadline := time.Now().Add(30 * time.Second)
+	if request.PendingUntil.Before(deadline) {
+		deadline = request.PendingUntil
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	action, err := showApprovalSystemPrompt(ctx, runtime.GOOS, activeLang, request)
 	cancel()
 
@@ -236,4 +241,21 @@ func runApprovalSystemPrompt(request approval.Request, activeLang i18n.Lang) {
 func logApprovalPromptError(err error) {
 	// Kept separate so tests can exercise prompt decisions without UI globals.
 	log.Printf("system approval prompt: %v", err)
+}
+
+// next rotates through eligible requests, preferring ones never shown before.
+func (g *approvalPromptGate) next(pending []approval.Request, now time.Time) (approval.Request, bool) {
+	var selected approval.Request
+	for _, request := range pending {
+		if !request.PendingUntil.After(now) || now.Before(g.retryAt[request.ID]) {
+			continue
+		}
+		if selected.ID == "" || g.retryAt[request.ID].Before(g.retryAt[selected.ID]) {
+			selected = request
+		}
+	}
+	if !g.begin(selected.ID, now) {
+		return approval.Request{}, false
+	}
+	return selected, true
 }

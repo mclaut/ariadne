@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.16</a>
+          <a href="#new">Нове у 0.8.17</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.16 додає Ariadne до Applications</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.17 зберігає видимість усіх запитів доступу</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.16</span><h2>Справжня Mac-програма. Відновлення одним кліком.</h2><p>Знайдіть Ariadne в Applications, Spotlight або Launchpad і відновіть керований menu-bar monitor.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.17</span><h2>Усі запити видимі. Кожне рішення зрозуміле.</h2><p>Переглядайте всю чергу та збережену історію. Дозволяйте конкретний запит і стежте за його статусом до продовження клієнтом.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck /><h3>Нативний app bundle</h3><p>Інсталятор створює підписану Ariadne.app з іконкою проєкту в Applications або user-level fallback.</p></article>
-            <article className="new-item accent-blue"><Database /><h3>Керований restart</h3><p>Launcher запускає наявний tray LaunchAgent замість другої некерованої копії процесу.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Самовідновлення реєстрації</h3><p>Якщо canonical agent розвантажений, app повторно реєструє встановлений plist перед стартом.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Finder і Spotlight</h3><p>Ariadne знаходиться як звичайна Mac-програма, залишаючись легкою menu-bar utility.</p></article>
+            <article className="new-item accent-green"><ShieldCheck /><h3>Уся черга</h3><p>Кожен збережений запит має власний ID, область доступу, статус і кнопки рішення.</p></article>
+            <article className="new-item accent-blue"><Database /><h3>Явна історія</h3><p>Видимі очікування, дозвіл, відмова, завершення строку та використання дозволу.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Показ по черзі</h3><p>Через 30 секунд діалог поступається місцем наступним запитам.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Зрозуміле продовження</h3><p>Після дозволу клієнт повторює виклик з approval_id. Одноразовий дозвіл не можна використати вдруге.</p></article>
           </div>
         </div>
       </section>
@@ -110,7 +110,7 @@ export default function UkrainianHome() {
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
             <p className="install-note">Якщо tray досі працює на v0.8.13 або старішій версії, один раз запустіть закріплений інсталятор v0.8.16. Він збереже дані Qdrant, резервні копії, налаштування й журнали. Після цього підтверджені оновлення з tray синхронно оновлюватимуть app і binaries.</p>
             <div className="command-window"><div className="command-title"><span>Одноразове оновлення старої версії</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh</code></pre></div>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.16">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.17">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>
