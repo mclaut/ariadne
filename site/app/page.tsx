@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.17",
+  softwareVersion: "0.8.18",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.17</a>
+          <a href="#new">New in 0.8.18</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.17 keeps every access request visible
+            v0.8.18 makes access requests easy to read
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,18 +186,18 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.17</span>
-            <h2>Every request visible. Every decision clear.</h2>
+            <span className="eyebrow">New in v0.8.18</span>
+            <h2>Decisions first. History in pages.</h2>
             <p>
-              See the entire access queue and retained history. Approve the exact
-              request and follow its status through client continuation.
+              Find requests that need your decision at the top. Browse retained
+              history ten records at a time, with clear status and details.
             </p>
           </div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Entire queue</h3><p>Each retained request has its own ID, scope, status, and approval controls.</p></article>
-            <article className="new-item accent-blue"><Database aria-hidden="true" /><h3>Explicit history</h3><p>Pending, approved, denied, expired, and consumed records remain visible.</p></article>
-            <article className="new-item accent-coral"><Network aria-hidden="true" /><h3>Fair prompt rotation</h3><p>A system dialog yields after 30 seconds so newer requests get a turn.</p></article>
-            <article className="new-item accent-black"><Monitor aria-hidden="true" /><h3>Clear continuation</h3><p>After approval, the client retries with approval_id. One-time grants cannot be reused.</p></article>
+            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Decisions first</h3><p>Only requests that need your decision appear in the active queue, near the top of the tray.</p></article>
+            <article className="new-item accent-blue"><Database aria-hidden="true" /><h3>History in pages</h3><p>Browse all retained records newest first, ten per page. The first page always shows the latest requests.</p></article>
+            <article className="new-item accent-coral"><Network aria-hidden="true" /><h3>Readable status</h3><p>Each row starts with its purpose and status. Full paths, project scope, and IDs stay in details.</p></article>
+            <article className="new-item accent-black"><Monitor aria-hidden="true" /><h3>Exact request actions</h3><p>Approve or deny the specific request. History rows are read-only, and audit records remain intact.</p></article>
           </div>
         </div>
       </section>
@@ -341,7 +341,7 @@ export default function Home() {
             </div>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.17"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.18"
               target="_blank"
               rel="noreferrer"
             >

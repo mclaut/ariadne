@@ -91,16 +91,13 @@ var (
 
 	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints                                       *systray.MenuItem
 	rowTokens, rowCoverage, rowUnattributed, rowDisk, rowMaintenance                             *systray.MenuItem
-	rowApproval, rowApprovalDetail                                                               *systray.MenuItem
+	rowApproval                                                                                  *systray.MenuItem
 	mUpdate, mStart, mStop, mRestart, mMaintenance, mBackup, mExport, mData, mLogs, mLang, mQuit *systray.MenuItem
-	mApprove, mDeny                                                                              *systray.MenuItem
 	langItems                                                                                    map[i18n.Lang]*systray.MenuItem
 	maintenanceRunning                                                                           bool
 	serviceActionRunning                                                                         bool
 	approvalManager                                                                              = approval.New("")
 	currentApproval                                                                              approval.Request
-	hasCurrentApproval                                                                           bool
-	currentApprovalCount                                                                         int
 	lastNotifiedApprovalID                                                                       string
 	approvalPrompts                                                                              approvalPromptGate
 	trayExitMu                                                                                   sync.Mutex
@@ -169,6 +166,10 @@ func onReady() {
 
 	rowVersion = infoRow("Ariadne " + version.Tag)
 	rowHealth = infoRow("…")
+	rowApproval = infoRow("")
+	approvalQueueMenu = systray.AddMenuItem("", "")
+	approvalHistoryMenu = systray.AddMenuItem("", "")
+	systray.AddSeparator()
 	rowQdrant = infoRow("")
 	rowOllama = infoRow("")
 	rowPoints = infoRow("")
@@ -177,11 +178,6 @@ func onReady() {
 	rowUnattributed = infoRow("")
 	rowDisk = infoRow("")
 	rowMaintenance = infoRow("")
-	rowApproval = infoRow("")
-	rowApprovalDetail = infoRow("")
-	approvalQueueMenu = systray.AddMenuItem("", "")
-	mApprove = systray.AddMenuItem("", "")
-	mDeny = systray.AddMenuItem("", "")
 	systray.AddSeparator()
 	mUpdate = systray.AddMenuItem("", "")
 	systray.AddSeparator()
@@ -236,10 +232,6 @@ func loop() {
 			serviceActionClicked(serviceRestart)
 		case <-mMaintenance.ClickedCh:
 			go maintenanceClicked()
-		case <-mApprove.ClickedCh:
-			go decideApproval(true)
-		case <-mDeny.ClickedCh:
-			go decideApproval(false)
 		case <-mUpdate.ClickedCh:
 			go updateClicked()
 		case <-mBackup.ClickedCh:
@@ -340,8 +332,6 @@ func poll() {
 	var approvalNotice, approvalPrompt *approval.Request
 	if approvalErr == nil && len(pending) > 0 {
 		currentApproval = pending[0]
-		hasCurrentApproval = true
-		currentApprovalCount = len(pending)
 		if currentApproval.ID != lastNotifiedApprovalID {
 			request := currentApproval
 			approvalNotice = &request
@@ -352,8 +342,6 @@ func poll() {
 		}
 	} else {
 		currentApproval = approval.Request{}
-		hasCurrentApproval = false
-		currentApprovalCount = 0
 	}
 	refreshApprovalMenuLocked()
 	refreshApprovalQueueLocked(history, historyErr)
@@ -428,41 +416,9 @@ func refreshServiceMenusLocked() {
 }
 
 func refreshApprovalMenuLocked() {
-	if rowApproval == nil || mApprove == nil || mDeny == nil {
-		return
+	if rowApproval != nil {
+		rowApproval.SetTitle(i18n.T(lang, "row.approvals"))
 	}
-	if !hasCurrentApproval {
-		rowApproval.SetTitle(i18n.T(lang, "row.approvals") + ": " + i18n.T(lang, "approval.none"))
-		rowApprovalDetail.SetTitle("")
-		mApprove.SetTitle(i18n.T(lang, "menu.approve"))
-		mDeny.SetTitle(i18n.T(lang, "menu.deny"))
-		mApprove.Disable()
-		mDeny.Disable()
-		return
-	}
-	kind := approvalKindTitle(lang, currentApproval.Kind)
-	count := ""
-	if currentApprovalCount > 1 {
-		count = fmt.Sprintf(" (+%d)", currentApprovalCount-1)
-	}
-	rowApproval.SetTitle(i18n.T(lang, "row.approvals") + ": " + kind + count)
-	rowApprovalDetail.SetTitle(shortApprovalDetail(currentApproval, 96))
-	mApprove.SetTitle(i18n.T(lang, "menu.approve"))
-	mDeny.SetTitle(i18n.T(lang, "menu.deny"))
-	mApprove.Enable()
-	mDeny.Enable()
-}
-
-func decideApproval(approved bool) {
-	mu.Lock()
-	if !hasCurrentApproval {
-		mu.Unlock()
-		return
-	}
-	id := currentApproval.ID
-	activeLang := lang
-	mu.Unlock()
-	decideApprovalByID(id, approved, activeLang)
 }
 
 func decideApprovalByID(id string, approved bool, activeLang i18n.Lang) {

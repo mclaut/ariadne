@@ -28,6 +28,8 @@ Trays running v0.8.14 or newer update normally after explicit user confirmation.
 
 ## Current release
 
+v0.8.18 makes the access-request menu readable: pending decisions appear in a separate active queue near the top of the tray, and retained history is paginated ten records at a time, newest first. Purpose and short status labels appear in each row; exact scope, resource, creation time, and ID are in details. Active actions remain bound to one request ID; reusable history slots are strictly read-only. Every audit record is preserved. The existing explicit MCP approval retry and grant deadlines remain unchanged.
+
 v0.8.17 adds a complete tray access-request queue and retained history with pending, approved, denied, expired, and consumed statuses. Exact-ID controls avoid acting on a changing queue head. Per-request cooldowns and 30-second dialogs rotate prompts fairly. Approval explicitly requires a client retry with approval_id; one-time credential grants reject reuse. `ariadnectl approvals --all` reads every retained lifecycle without authorizing access. Request records, decisions, and consumptions are preserved.
 
 v0.8.16 adds a signed macOS `Ariadne.app` with a native icon to Applications. Launching it from Finder, Spotlight, or Launchpad starts the managed tray LaunchAgent and re-registers its canonical plist when needed without creating an unmanaged duplicate. It also keeps the macOS-only launcher tests out of Windows CI while preserving a Windows-safe launcher stub in release archives.

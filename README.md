@@ -26,7 +26,14 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.17
+## What's New in v0.8.18
+
+- **Decisions first.** The access section sits near the top of the tray. Only requests that need a decision appear in the active queue.
+- **History in pages.** Retained decisions appear newest first, ten records per page. New requests no longer hide below a long flat history.
+- **Readable rows.** Purpose and a short status are visible immediately; full project scope, resource, creation time, and ID are in details.
+- **Exact request actions.** Approve and Deny stay bound to a specific request. History rows are read-only, and every audit record is preserved.
+
+## Previously in v0.8.17
 
 - **Every access request stays visible.** The tray lists the entire retained queue and history with pending, approved, denied, expired, and consumed statuses, plus actions bound to each request ID.
 - **Prompts rotate fairly.** Each system dialog is bounded to 30 seconds; unanswered requests remain pending, and newer requests get a turn.
@@ -911,10 +918,13 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.17 — current release. The macOS installer adds a signed `Ariadne.app` with
-a native icon to Applications, and one click restores or re-registers the
-managed tray LaunchAgent. macOS-only launcher tests are platform-scoped so the
-full Windows CI gate also passes.
+v0.8.18 — current release. The access section is near the top of the tray,
+with a pending-only decision queue, retained history in pages of ten, and
+readable purpose/status rows with full scope in details.
+
+v0.8.16 added a signed macOS `Ariadne.app` with a native icon to Applications.
+One click restores or re-registers the managed tray LaunchAgent, while
+platform-scoped launcher tests preserve the Windows CI gate.
 
 v0.8.14 made macOS tray update helpers run independently before
 the tray exits and append explicit handoff diagnostics, preventing a confirmed

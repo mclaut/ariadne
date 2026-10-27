@@ -35,12 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.17 keeps every access request visible throughout its lifecycle.
+Version 0.8.18 makes the access-request menu easier to read.
 
-- **Complete queue and history:** pending, approved, denied, expired, and consumed statuses with controls bound to the exact request ID.
-- **Fair prompts:** each system dialog yields after 30 seconds while unanswered requests remain pending.
-- **Explicit continuation:** after approval, clients retry with `approval_id`; one-time credential grants reject reuse.
-- **Read-only CLI history:** `ariadnectl approvals --all` displays all retained requests without granting access.
+- **Decisions first:** the active queue contains only requests that need your decision, near the top of the tray.
+- **History in pages:** all retained records remain available newest first, ten per page.
+- **Readable rows:** purpose and a short status appear first; full scope, resource, time, and ID are in details.
+- **Exact request actions:** controls stay bound to a specific request. History rows are read-only and audit records are preserved.
 
 ## Links
 
