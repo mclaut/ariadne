@@ -26,7 +26,7 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.19
+## What's New in v0.8.20
 
 - **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
 - **Recovery checked before rotation.** Snapshot size and SHA-256 must match Qdrant; an isolated local Qdrant restores the snapshot, checks the source count and vector schema, and reads every point with its payload and vectors.
@@ -811,7 +811,7 @@ are never selected just because they exist. A compatible local Qdrant binary
 must be installed at `~/.ariadne/bin/qdrant` (Windows: `qdrant.exe`) for recovery
 verification, including when the source Qdrant is remote.
 
-**Retention change in v0.8.19:** successful backups expire older matching native
+**Retention change in v0.8.20:** successful backups expire older matching native
 snapshots and timestamped downloads in the backup root and `backups/archive`.
 Older payload/metadata history in those copies is intentionally lost. Export or
 move any required historical checkpoint outside those managed names before the
@@ -944,7 +944,7 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.19 — current release. Verified recovery precedes automatic single-copy backup rotation.
+v0.8.20 — current release. Verified recovery precedes automatic single-copy backup rotation.
 
 v0.8.18 placed the access section near the top of the tray,
 with a pending-only decision queue, retained history in pages of ten, and

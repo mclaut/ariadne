@@ -35,7 +35,7 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.19 keeps one verified recovery copy per component.
+Version 0.8.20 keeps one verified recovery copy per component.
 
 - **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
 - **Recovery checked before rotation.** Snapshot size and SHA-256 must match Qdrant; an isolated local Qdrant restores the snapshot, checks the source count and vector schema, and reads every point with its payload and vectors.
