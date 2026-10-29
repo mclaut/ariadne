@@ -25,9 +25,9 @@ func InUse(dir string) (bool, error) {
 			continue
 		}
 		st, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || st.Uid != uint32(os.Getuid()) {
+		if !ok || int64(st.Uid) != int64(os.Getuid()) {
 			continue
-		} //nolint:gosec // OS user ID fits uid_t
+		}
 		for _, name := range []string{"exe", "cwd"} {
 			target, linkErr := os.Readlink(filepath.Join(proc, name))
 			if linkErr == nil {
