@@ -9,7 +9,7 @@ fullWidth: true
 header: mini
 pinned: true
 license: mit
-short_description: Local-first memory with auditable attribution.
+short_description: Local-first memory with verified backup rotation.
 models:
   - BAAI/bge-m3
 tags:
@@ -35,12 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.18 makes the access-request menu easier to read.
+Version 0.8.19 keeps one verified recovery copy per component.
 
-- **Decisions first:** the active queue contains only requests that need your decision, near the top of the tray.
-- **History in pages:** all retained records remain available newest first, ten per page.
-- **Readable rows:** purpose and a short status appear first; full scope, resource, time, and ID are in details.
-- **Exact request actions:** controls stay bound to a specific request. History rows are read-only and audit records are preserved.
+- **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
+- **Recovery checked before rotation.** Snapshot size and SHA-256 must match Qdrant; an isolated local Qdrant restores the snapshot, checks the source count and vector schema, and reads every point with its payload and vectors.
+- **Bounded backup storage.** After successful verification, older matching downloaded/archive snapshots and redundant native snapshots expire automatically. Older historical backup states are intentionally discarded.
+- **Working state stays available.** Live memory, session data, access-request history and audit logs remain outside rotation. Modified or in-use previous generations block replacement.
 
 ## Links
 

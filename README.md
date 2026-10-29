@@ -26,7 +26,14 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.18
+## What's New in v0.8.19
+
+- **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
+- **Recovery checked before rotation.** Snapshot size and SHA-256 must match Qdrant; an isolated local Qdrant restores the snapshot, checks the source count and vector schema, and reads every point with its payload and vectors.
+- **Bounded backup storage.** After successful verification, older matching downloaded/archive snapshots and redundant native snapshots expire automatically. Older historical backup states are intentionally discarded.
+- **Working state stays available.** Live memory, session data, access-request history and audit logs remain outside rotation. Modified or in-use previous generations block replacement.
+
+## Previously in v0.8.18
 
 - **Decisions first.** The access section sits near the top of the tray. Only requests that need a decision appear in the active queue.
 - **History in pages.** Retained decisions appear newest first, ten records per page. New requests no longer hide below a long flat history.
@@ -795,6 +802,25 @@ pass after the default seven-day grace period may archive it as
 Automatic consolidation creates a native Qdrant backup only when archival is
 needed and the latest backup is older than seven days (override with
 `ARIADNE_BACKUP_MIN_INTERVAL`); manual `ariadnectl backup` is unconditional.
+
+Backups live under `~/.ariadne/backups/previous/snapshot-<collection>/` with a
+checksummed manifest and recovery proof. The configured `ARIADNE_COLLECTION` is
+the default scope. Set `ARIADNE_BACKUP_COLLECTIONS=ariadne,sessions` explicitly
+when both collections belong to this installation; shared Qdrant collections
+are never selected just because they exist. A compatible local Qdrant binary
+must be installed at `~/.ariadne/bin/qdrant` (Windows: `qdrant.exe`) for recovery
+verification, including when the source Qdrant is remote.
+
+**Retention change in v0.8.19:** successful backups expire older matching native
+snapshots and timestamped downloads in the backup root and `backups/archive`.
+Older payload/metadata history in those copies is intentionally lost. Export or
+move any required historical checkpoint outside those managed names before the
+next backup. Custom full backup sets, JSONL exports, and audit evidence are not
+recursively pruned. Incomplete or modified generations remain for diagnosis.
+Runtime and client-configuration recovery copies use `previous/runtime` and
+`previous/config-*`; a same-version reinstall preserves the previous different
+runtime. Platform-owned process cancellation also stops its verifier children.
+
 New memories are saved before source diary entries are marked archived; source
 text and vectors remain intact. Deterministic failures remain active and receive
 a model-and-pipeline revision marker, so unchanged input is reconsidered only
@@ -890,7 +916,7 @@ Two distinct concepts:
 - **Backup / restore** — a fast, full, native Qdrant snapshot (includes vectors;
   one-to-one restore, tied to the embedding model). For recovering after damage.
   ```bash
-  ariadnectl backup            # 10 recent snapshots; older ones move to backups/archive
+  ariadnectl backup            # one verified copy per configured collection; older snapshots expire
   ariadnectl restore <file>    # recover the collection from a snapshot (destructive)
   ```
 - **Export / import** — portable JSONL with text, scope, provenance, historical
@@ -918,7 +944,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.18 — current release. The access section is near the top of the tray,
+v0.8.19 — current release. Verified recovery precedes automatic single-copy backup rotation.
+
+v0.8.18 placed the access section near the top of the tray,
 with a pending-only decision queue, retained history in pages of ten, and
 readable purpose/status rows with full scope in details.
 

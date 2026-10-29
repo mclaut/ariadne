@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<defs><pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#173a30" stroke-opacity=".08"/></pattern></defs>
+<rect width="1200" height="630" fill="#f4f5ed"/><rect width="1200" height="630" fill="url(#grid)"/>
+<rect x="56" y="48" width="1088" height="534" rx="20" fill="#132f27"/>
+<rect x="870" y="82" width="220" height="54" rx="27" fill="#d8f6a2"/>
+<text x="980" y="118" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="#132f27">v0.8.19</text>
+<text x="110" y="198" font-family="Arial,sans-serif" font-size="94" font-weight="700" fill="#f4f5ed">Ariadne</text>
+<text x="112" y="251" font-family="Arial,sans-serif" font-size="27" fill="#d8f6a2">Local-first memory for AI agents</text>
+<path d="M112 291H1088" stroke="#b7ccb9" stroke-opacity=".35"/>
+<text x="110" y="362" font-family="Arial,sans-serif" font-size="48" font-weight="700" fill="#f4f5ed">One previous copy.</text>
+<text x="110" y="423" font-family="Arial,sans-serif" font-size="48" font-weight="700" fill="#d8f6a2">Verified recovery.</text>
+<text x="112" y="518" font-family="Arial,sans-serif" font-size="21" fill="#c9d7cb">Go + Qdrant + bge-m3 · MCP · macOS / Linux / Windows</text>
+</svg>

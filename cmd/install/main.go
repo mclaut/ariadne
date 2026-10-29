@@ -16,11 +16,13 @@
 package main
 
 import (
+	"ariadne/internal/backupretention"
 	"ariadne/internal/version"
 	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -93,6 +95,11 @@ func main() {
 		fmt.Println("aborted")
 		return
 	}
+	unlock, lockErr := backupretention.Lock(filepath.Join(pf.home, ".ariadne"), "install")
+	if lockErr != nil {
+		fmt.Fprintln(os.Stderr, "installer lock:", lockErr)
+		os.Exit(1)
+	}
 
 	fmt.Println("\n[install]")
 	for _, a := range plan {
@@ -102,6 +109,7 @@ func main() {
 		fmt.Printf("  → %s\n", a.title)
 		if err := a.run(); err != nil {
 			fmt.Fprintf(os.Stderr, "  ✗ %s: %v\n", a.title, err)
+			unlock()
 			os.Exit(1)
 		}
 	}
@@ -109,8 +117,10 @@ func main() {
 	fmt.Println("\n[verify]")
 	if !verify(o) {
 		fmt.Println("\nINSTALL FINISHED WITH PROBLEMS — see ✗ above.")
+		unlock()
 		os.Exit(1)
 	}
+	unlock()
 	fmt.Println("\nINSTALL OK ✓  (restart your Claude Code session to pick up the MCP tools + skill)")
 	if pf.qdrant.state == qdForeign {
 		fmt.Println("note: reusing a foreign Qdrant — `ariadnectl start/stop` will NOT manage it (by design).")

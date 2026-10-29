@@ -599,8 +599,10 @@ function Install-Models {
     if ($LASTEXITCODE -ne 0) { throw "Could not pull $SummaryModel." }
 }
 
-function Register-Codex([string]$AriadneExe, [string]$CodexPath) {
+function Register-Codex([string]$AriadneExe, [string]$CodexPath, [string]$PackageRoot) {
     Write-Step "Registering Ariadne with Codex"
+    & (Join-Path $PackageRoot "bin\ariadnectl.exe") backup-retention codex-mcp
+    if ($LASTEXITCODE -ne 0) { throw "Could not verify previous Codex MCP configuration." }
     & $CodexPath mcp remove ariadne 2>$null | Out-Null
     $arguments = @("mcp", "add")
     foreach ($entry in (Get-AriadneMCPEnvironment).GetEnumerator()) {
@@ -672,10 +674,11 @@ function Register-Claude([string]$AriadneExe, [string]$PackageRoot, [string]$Cla
 
     Write-Step "Registering Ariadne with Claude Code"
     Write-Host "Claude CLI: $ClaudePath"
-    if (Test-Path $claudeConfig) {
-        Copy-Item $claudeConfig "$claudeConfig.bak-ariadne" -Force
-    }
     $config = Read-JsonObject $claudeConfig
+    if (Test-Path $claudeConfig) {
+        & (Join-Path $PackageRoot "bin\ariadnectl.exe") backup-retention claude-mcp
+        if ($LASTEXITCODE -ne 0) { throw "Could not verify previous Claude MCP configuration." }
+    }
     $servers = if ($config.PSObject.Properties["mcpServers"]) { $config.mcpServers } else { [pscustomobject]@{} }
     $server = [ordered]@{
         type = "stdio"
@@ -698,7 +701,10 @@ function Register-Claude([string]$AriadneExe, [string]$PackageRoot, [string]$Cla
 
     $settingsPath = Join-Path $claudeHome "settings.json"
     $settings = Read-JsonObject $settingsPath
-    if (Test-Path $settingsPath) { Copy-Item $settingsPath "$settingsPath.bak-ariadne" -Force }
+    if (Test-Path $settingsPath) {
+        & (Join-Path $PackageRoot "bin\ariadnectl.exe") backup-retention claude-hooks
+        if ($LASTEXITCODE -ne 0) { throw "Could not verify previous Claude hook configuration." }
+    }
     $hooks = if ($settings.PSObject.Properties["hooks"]) { $settings.hooks } else { [pscustomobject]@{} }
     $hookExe = Join-Path $BinDir "ariadne-hook.exe"
     $hookCommand = "`"$hookExe`""
@@ -737,10 +743,10 @@ function Configure-SelectedClients(
 ) {
     switch ($Selection) {
         "Claude" { Register-Claude $AriadneExe $PackageRoot $ClaudePath }
-        "Codex" { Register-Codex $AriadneExe $CodexPath }
+        "Codex" { Register-Codex $AriadneExe $CodexPath $PackageRoot }
         "Both" {
             Register-Claude $AriadneExe $PackageRoot $ClaudePath
-            Register-Codex $AriadneExe $CodexPath
+            Register-Codex $AriadneExe $CodexPath $PackageRoot
         }
         "None" {
             Write-Host "No AI client configuration was changed."
@@ -784,8 +790,11 @@ if (-not $Update -and -not $ConfigureClients -and -not (Confirm-Install "Install
 
 $tempDir = Join-Path $env:TEMP ("ariadne-install-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+$installLock = $null
 try {
     New-Item -ItemType Directory -Path $BinDir, $LogsDir, $DataDir -Force | Out-Null
+    $installLock = [System.IO.File]::Open((Join-Path $RuntimeDir ".install.lock"),
+        [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     $release = Get-Release $Version
     $tag = [string]$release.tag_name
     $assetName = "ariadne-$tag-windows-amd64.zip"
@@ -803,6 +812,12 @@ try {
         Where-Object { $_.Directory.Name -eq "bin" } | Select-Object -First 1
     if (-not $ariadneSource) { throw "The Ariadne release archive has an unexpected layout." }
     $packageRoot = Split-Path $ariadneSource.Directory.FullName
+
+    $retentionCtl = Join-Path $packageRoot "bin\ariadnectl.exe"
+    if (-not $ConfigureClients) {
+        & $retentionCtl backup-retention runtime
+        if ($LASTEXITCODE -ne 0) { throw "Could not verify the previous Ariadne runtime; update aborted." }
+    }
 
     if ($ConfigureClients) {
         $ariadneExe = Join-Path $BinDir "ariadne.exe"
@@ -834,5 +849,6 @@ try {
         Write-Host "Remote Qdrant is configured with explicit transport and client authentication policy."
     }
 } finally {
+    if ($installLock) { $installLock.Dispose() }
     Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 }

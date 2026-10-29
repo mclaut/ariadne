@@ -3,6 +3,7 @@ package main
 import (
 	"ariadne/internal/activity"
 	maintenancecore "ariadne/internal/maintenance"
+	"ariadne/internal/processgroup"
 	"context"
 	"errors"
 	"flag"
@@ -204,6 +205,7 @@ func appendMaintenanceEvent(
 
 func runMaintenanceCommand(ctx context.Context, path string, args ...string) error {
 	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // caller selects installed Ariadne binaries only
+	processgroup.Configure(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()

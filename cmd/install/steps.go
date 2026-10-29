@@ -4,9 +4,11 @@ package main
 
 import (
 	"archive/tar"
+	"ariadne/internal/backupretention"
 	"ariadne/internal/qdrantauth"
 	"ariadne/internal/store"
 	"ariadne/internal/version"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -34,6 +36,17 @@ func makePlan(r *report, o opts) []action {
 		{
 			title: "ensure ~/.ariadne/{bin,backups,logs,qdrant-data}",
 			run:   func() error { return ensureDirs(home) },
+		},
+		{
+			title: "keep one verified previous runtime before upgrade",
+			run: func() error {
+				app := ""
+				if r.os == osDarwin {
+					app = macApplicationPath(home)
+				}
+				_, err := backupretention.CaptureRuntimeBeforeUpgrade(home, app, version.Tag)
+				return err
+			},
 		},
 		{
 			title: "install Qdrant binary + service (loopback-only)",
@@ -748,14 +761,14 @@ func ensureCollection(o opts) error {
 
 func registerMCP(home string, o opts) error {
 	path := filepath.Join(home, ".claude.json")
+	previous, readErr := os.ReadFile(path) //nolint:gosec // explicitly owned client configuration
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return readErr
+	}
 	m := map[string]any{}
-	if b, err := os.ReadFile(path); err == nil { //nolint:gosec // own config
-		if err := json.Unmarshal(b, &m); err != nil {
+	if readErr == nil {
+		if err := json.Unmarshal(previous, &m); err != nil {
 			return fmt.Errorf("~/.claude.json is not valid JSON, refusing to touch it: %w", err)
-		}
-		backup := path + ".bak-ariadne-" + time.Now().Format("20060102-150405")
-		if err := os.WriteFile(backup, b, 0o600); err != nil { //nolint:gosec // backup of own config
-			return err
 		}
 	}
 	srv, _ := m["mcpServers"].(map[string]any)
@@ -777,6 +790,23 @@ func registerMCP(home string, o opts) error {
 	if err != nil {
 		return err
 	}
+	if bytes.Equal(previous, out) {
+		return nil
+	}
+	if readErr == nil {
+		if _, err = backupretention.CaptureConfig(home, "claude-mcp", path); err != nil {
+			return err
+		}
+	}
+	if readErr == nil {
+		current, checkErr := os.ReadFile(path) //nolint:gosec // same explicit client configuration
+		if checkErr != nil {
+			return checkErr
+		}
+		if !bytes.Equal(current, previous) {
+			return errors.New("client configuration changed during backup; refusing overwrite")
+		}
+	}
 	return os.WriteFile(path, out, 0o600)
 }
 
@@ -785,14 +815,14 @@ func registerMCP(home string, o opts) error {
 // PreCompact (manual|auto) → mid-session capture before context is compacted.
 func registerHooks(home string, o opts) error {
 	path := filepath.Join(home, ".claude", "settings.json")
+	previous, readErr := os.ReadFile(path) //nolint:gosec // explicitly owned client configuration
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return readErr
+	}
 	m := map[string]any{}
-	if b, err := os.ReadFile(path); err == nil { //nolint:gosec // own config
-		if err := json.Unmarshal(b, &m); err != nil {
+	if readErr == nil {
+		if err := json.Unmarshal(previous, &m); err != nil {
 			return fmt.Errorf("~/.claude/settings.json is not valid JSON, refusing to touch it: %w", err)
-		}
-		backup := path + ".bak-ariadne-" + time.Now().Format("20060102-150405")
-		if err := os.WriteFile(backup, b, 0o600); err != nil { //nolint:gosec // backup of own config
-			return err
 		}
 	}
 	hooks, _ := m["hooks"].(map[string]any)
@@ -815,6 +845,23 @@ func registerHooks(home string, o opts) error {
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
+	}
+	if bytes.Equal(previous, out) {
+		return nil
+	}
+	if readErr == nil {
+		if _, err = backupretention.CaptureConfig(home, "claude-hooks", path); err != nil {
+			return err
+		}
+	}
+	if readErr == nil {
+		current, checkErr := os.ReadFile(path) //nolint:gosec // same explicit client configuration
+		if checkErr != nil {
+			return checkErr
+		}
+		if !bytes.Equal(current, previous) {
+			return errors.New("client configuration changed during backup; refusing overwrite")
+		}
 	}
 	return os.WriteFile(path, out, 0o600)
 }

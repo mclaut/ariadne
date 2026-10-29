@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.18</a>
+          <a href="#new">Нове у 0.8.19</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.18 робить меню доступу зрозумілим</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.19 залишає одну перевірену копію кожного компонента</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.18</span><h2>Спочатку рішення. Історія по сторінках.</h2><p>Актуальні запити — вгорі. Збережена історія — по десять записів, з короткими статусами та окремими подробицями.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.19</span><h2>Одна попередня копія. Перевірене відновлення.</h2><p>Обсяг backup обмежений. Старі копії видаляються лише після успішної перевірки нової.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck /><h3>Спочатку рішення</h3><p>Угорі меню — лише запити, які потребують вашого рішення.</p></article>
-            <article className="new-item accent-blue"><Database /><h3>Історія по сторінках</h3><p>Усі записи збережені: новіші першими, по десять на сторінці.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Зрозумілі статуси</h3><p>Одразу видно мету й статус. Повні шляхи, проєкти та ID — у подробицях.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Конкретна дія</h3><p>Кнопки рішення прив’язані до конкретного запиту. Історія лише для читання; audit-записи збережені.</p></article>
+            <article className="new-item accent-green"><ShieldCheck /><h3>Одна копія на компонент</h3><p>Для кожної налаштованої колекції пам’яті чи сесій зберігається окремий перевірений snapshot.</p></article>
+            <article className="new-item accent-blue"><Database /><h3>Спочатку відновлення</h3><p>Перед ротацією перевіряються checksum, кількість відновлених записів, схема векторів і читання всіх points.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Попередній runtime</h3><p>Оновлення залишає перевірену копію попередніх програм, застосунку та зміненої конфігурації клієнта.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Робочі дані збережені</h3><p>Пам’ять та аудит доступу залишаються. Історичні стани старих backup видаляються після перевірки заміни.</p></article>
           </div>
         </div>
       </section>
@@ -110,7 +110,7 @@ export default function UkrainianHome() {
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
             <p className="install-note">Якщо tray досі працює на v0.8.13 або старішій версії, один раз запустіть закріплений інсталятор v0.8.16. Він збереже дані Qdrant, резервні копії, налаштування й журнали. Після цього підтверджені оновлення з tray синхронно оновлюватимуть app і binaries.</p>
             <div className="command-window"><div className="command-title"><span>Одноразове оновлення старої версії</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh</code></pre></div>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.18">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.19">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>

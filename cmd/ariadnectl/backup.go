@@ -2,6 +2,7 @@ package main
 
 import (
 	"ariadne/internal/activity"
+	"ariadne/internal/backupretention"
 	"bufio"
 	"bytes"
 	"context"
@@ -12,14 +13,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 )
 
 const (
 	backupsSub = ".ariadne/backups"
-	keepBackup = 10
 )
 
 func backupsDir() string {
@@ -28,57 +26,22 @@ func backupsDir() string {
 }
 
 // backupCmd creates a Qdrant snapshot and downloads it OUTSIDE qdrant-data so
-// it survives loss of the data dir. Both copies are preserved; older downloaded
-// snapshots move into an append-only archive rather than being discarded.
+// it survives loss of the data dir. One verified generation is retained per
+// collection, and legacy/native copies rotate only after recovery verification.
 func backupCmd() (code int) {
 	status, message := "failed", ""
-	var sizeMB int64
 	defer func() {
-		counters := map[string]int64{}
-		if sizeMB > 0 {
-			counters["snapshot_mb"] = sizeMB
-		}
+		counters := map[string]int64{"copies_per_object": 1}
 		_ = activity.Append(activity.Event{
 			Operation: "backup", Status: status, Message: message, Counters: counters,
 		})
 	}()
-	dir := backupsDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // user-owned backups dir
-		fmt.Fprintln(os.Stderr, "mkdir backups:", err)
-		message = err.Error()
-		return 1
+	code = managedBackupCmd()
+	if code != 0 {
+		message = "verified backup or retention failed"
+		return code
 	}
-	// 1. create snapshot
-	body, ok := postJSON(qdrantREST+"/collections/"+collection+"/snapshots", nil)
-	if !ok {
-		fmt.Fprintln(os.Stderr, "snapshot create failed (is Qdrant up?)")
-		message = "snapshot create failed"
-		return 1
-	}
-	name, _ := mapPath(body, "result", "name")
-	if name == "" {
-		fmt.Fprintln(os.Stderr, "snapshot: no name in response")
-		message = "snapshot response had no name"
-		return 1
-	}
-	// 2. download it
-	ts := time.Now().Format("20060102-150405")
-	dest := filepath.Join(dir, collection+"-"+ts+".snapshot")
-	if err := download(qdrantREST+"/collections/"+collection+"/snapshots/"+name, dest); err != nil {
-		fmt.Fprintln(os.Stderr, "download snapshot:", err)
-		message = err.Error()
-		return 1
-	}
-	// 3. keep a small recent set in the root and move older snapshots into an
-	// append-only archive. Nothing is discarded.
-	n, archived := rotateBackups(dir)
-	fi, _ := os.Stat(dest)
-	if fi != nil {
-		sizeMB = fi.Size() / (1024 * 1024)
-	}
-	fmt.Printf("backup ok: %s (%dMB) · %d recent · %d archived now\n",
-		filepath.Base(dest), sizeMB, n, archived)
-	status = "complete"
+	status = backupStatusComplete
 	return 0
 }
 
@@ -88,62 +51,42 @@ func backupIfDue(now time.Time, interval time.Duration) int {
 	if interval <= 0 {
 		interval = 7 * 24 * time.Hour
 	}
-	latest, err := latestBackupTime(backupsDir())
+	names, err := backupCollections()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "backup cadence:", err)
 		return 1
 	}
-	if !latest.IsZero() && now.Sub(latest) < interval {
+	allFresh := true
+	for _, name := range names {
+		latest, timeErr := latestManagedBackupTime(backupsDir(), name)
+		if timeErr != nil {
+			fmt.Fprintln(os.Stderr, "backup cadence:", timeErr)
+			return 1
+		}
+		if latest.IsZero() || now.Sub(latest) >= interval {
+			allFresh = false
+		}
+	}
+	if allFresh {
 		return 0
 	}
 	return backupCmd()
 }
 
-func latestBackupTime(dir string) (time.Time, error) {
-	var latest time.Time
-	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			if os.IsNotExist(walkErr) {
-				return nil
-			}
-			return walkErr
-		}
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), collection+"-") ||
-			!strings.HasSuffix(entry.Name(), ".snapshot") {
-			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if info.ModTime().After(latest) {
-			latest = info.ModTime()
-		}
-		return nil
-	})
-	return latest, err
-}
+func latestBackupTime(dir string) (time.Time, error) { return latestManagedBackupTime(dir, collection) }
 
-func rotateBackups(dir string) (recent, archived int) {
-	m, _ := filepath.Glob(filepath.Join(dir, collection+"-*.snapshot"))
-	sort.Strings(m)
-	archiveDir := filepath.Join(dir, "archive")
-	if len(m) <= keepBackup {
-		return len(m), 0
+func latestManagedBackupTime(dir, name string) (time.Time, error) {
+	m, err := backupretention.Verify(filepath.Join(dir, "previous", "snapshot-"+name))
+	if os.IsNotExist(err) {
+		return time.Time{}, nil
 	}
-	if err := os.MkdirAll(archiveDir, 0o755); err != nil { //nolint:gosec // user-owned backup archive
-		return len(m), 0
+	if err != nil {
+		return time.Time{}, err
 	}
-	for _, source := range m[:len(m)-keepBackup] {
-		destination := filepath.Join(archiveDir, filepath.Base(source))
-		if _, err := os.Stat(destination); err == nil {
-			continue // preserve both copies rather than overwrite either one
-		}
-		if err := os.Rename(source, destination); err == nil {
-			archived++
-		}
+	if err = checkSnapshotManifest(m, name); err != nil {
+		return time.Time{}, err
 	}
-	return len(m) - archived, archived
+	return m.CreatedAt, nil
 }
 
 // restoreCmd uploads a snapshot file and recovers the collection from it
@@ -260,7 +203,7 @@ func httpDo(method, url string, body io.Reader, out any) error {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := (&http.Client{Timeout: 120 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 120 * time.Second, CheckRedirect: noQdrantRedirect}).Do(req)
 	if err != nil {
 		return err
 	}
@@ -284,7 +227,7 @@ func download(url, dest string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := (&http.Client{Timeout: 300 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 300 * time.Second, CheckRedirect: noQdrantRedirect}).Do(req)
 	if err != nil {
 		return err
 	}
@@ -298,7 +241,10 @@ func download(url, dest string) error {
 	}
 	defer func() { _ = f.Close() }()
 	_, err = io.Copy(f, resp.Body)
-	return err
+	if err != nil {
+		return err
+	}
+	return f.Sync()
 }
 
 func uploadMultipart(url, field, path string) error {
@@ -324,7 +270,7 @@ func uploadMultipart(url, field, path string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	resp, err := (&http.Client{Timeout: 300 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 300 * time.Second, CheckRedirect: noQdrantRedirect}).Do(req)
 	if err != nil {
 		return err
 	}
@@ -355,3 +301,7 @@ func strOf(v any) string {
 	}
 	return ""
 }
+
+// Qdrant requests are scoped to exact resources; redirects must never retarget a
+// snapshot deletion or forward the api-key header to another host.
+func noQdrantRedirect(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }

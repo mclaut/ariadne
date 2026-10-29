@@ -36,7 +36,7 @@ const (
 
 // Overridable for reused/remote Qdrant setups (the installer's -qdrant-* flags).
 var (
-	qdrantREST = envOr("ARIADNE_QDRANT_REST", "http://localhost:6333")
+	qdrantREST = strings.TrimRight(envOr("ARIADNE_QDRANT_REST", "http://localhost:6333"), "/")
 	ollamaURL  = envOr("ARIADNE_OLLAMA", "http://localhost:11434")
 	collection = envOr("ARIADNE_COLLECTION", "ariadne")
 )
@@ -116,6 +116,8 @@ func main() {
 		}
 	case "backup":
 		os.Exit(backupCmd())
+	case "backup-retention":
+		os.Exit(backupRetentionCmd(os.Args[2:]))
 	case "restore":
 		os.Exit(restoreCmd(arg(2), hasFlag("--yes")))
 	case "export":
@@ -136,7 +138,7 @@ func main() {
 		os.Exit(credentialCmd(os.Args[2:]))
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ariadnectl {version | status [-json] | metrics [-json] | "+
-			"start | stop | restart | backup | restore <file> | export [file] | "+
+			"start | stop | restart | backup | backup-retention <component> | restore <file> | export [file] | "+
 			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
 			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | "+
 			"backfill-attribution [--apply] [--multiplier 8] | approvals [-json] [-id ID] | credential {trust|revoke} ...}")

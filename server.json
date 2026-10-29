@@ -2,19 +2,19 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.mclaut/ariadne",
   "title": "Ariadne",
-  "description": "Local-first multilingual, auditable memory for Codex, Claude Code, and MCP clients.",
+  "description": "Local-first agent memory with verified backup rotation and explicit project isolation.",
   "websiteUrl": "https://mclaut.github.io/ariadne/",
   "repository": {
     "url": "https://github.com/mclaut/ariadne",
     "source": "github",
     "id": "1289765011"
   },
-  "version": "0.8.18",
+  "version": "0.8.19",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/mclaut/ariadne/releases/download/v0.8.18/ariadne-v0.8.18.mcpb",
-      "version": "0.8.18",
+      "identifier": "https://github.com/mclaut/ariadne/releases/download/v0.8.19/ariadne-v0.8.19.mcpb",
+      "version": "0.8.19",
       "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "transport": {
         "type": "stdio"

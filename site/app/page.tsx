@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.18",
+  softwareVersion: "0.8.19",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.18</a>
+          <a href="#new">New in 0.8.19</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.18 makes access requests easy to read
+            v0.8.19 keeps one verified recovery copy per component
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,18 +186,15 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.18</span>
-            <h2>Decisions first. History in pages.</h2>
-            <p>
-              Find requests that need your decision at the top. Browse retained
-              history ten records at a time, with clear status and details.
-            </p>
+            <span className="eyebrow">New in v0.8.19</span>
+            <h2>One previous copy. Verified recovery.</h2>
+            <p>Backup storage stays bounded. A replacement must pass recovery checks before older copies expire.</p>
           </div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Decisions first</h3><p>Only requests that need your decision appear in the active queue, near the top of the tray.</p></article>
-            <article className="new-item accent-blue"><Database aria-hidden="true" /><h3>History in pages</h3><p>Browse all retained records newest first, ten per page. The first page always shows the latest requests.</p></article>
-            <article className="new-item accent-coral"><Network aria-hidden="true" /><h3>Readable status</h3><p>Each row starts with its purpose and status. Full paths, project scope, and IDs stay in details.</p></article>
-            <article className="new-item accent-black"><Monitor aria-hidden="true" /><h3>Exact request actions</h3><p>Approve or deny the specific request. History rows are read-only, and audit records remain intact.</p></article>
+            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>One copy per component</h3><p>Each configured memory or session collection keeps its own verified snapshot.</p></article>
+            <article className="new-item accent-blue"><Database aria-hidden="true" /><h3>Recovery checked first</h3><p>Checksums, restored record counts, vector schema and readable points are checked before rotation.</p></article>
+            <article className="new-item accent-coral"><Network aria-hidden="true" /><h3>One previous runtime</h3><p>Upgrades preserve verified copies of the previous programs, app and changed client configuration.</p></article>
+            <article className="new-item accent-black"><Monitor aria-hidden="true" /><h3>Working state stays available</h3><p>Live memory and access audit remain intact. Older backup history expires after a replacement passes verification.</p></article>
           </div>
         </div>
       </section>
@@ -341,7 +338,7 @@ export default function Home() {
             </div>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.18"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.19"
               target="_blank"
               rel="noreferrer"
             >

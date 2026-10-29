@@ -10,6 +10,7 @@ import (
 	"ariadne/internal/approval"
 	"ariadne/internal/i18n"
 	"ariadne/internal/metrics"
+	"ariadne/internal/processgroup"
 	"ariadne/internal/version"
 	"bytes"
 	"context"
@@ -518,9 +519,15 @@ func fetch() status {
 
 // ctl runs an ariadnectl action; a non-empty banner posts a completion notice.
 func ctl(action, banner string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	timeout := 60 * time.Second
+	if action == "backup" {
+		timeout = 20 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	err := exec.CommandContext(ctx, ctlPath(), action).Run() //nolint:gosec // our own binary, fixed action set
+	cmd := exec.CommandContext(ctx, ctlPath(), action) //nolint:gosec // our own binary, fixed action set
+	processgroup.Configure(cmd)
+	err := cmd.Run()
 	if banner != "" {
 		result := i18n.T(lang, "notify.done")
 		if err != nil {
