@@ -8,6 +8,8 @@ import (
 	"syscall"
 )
 
+// InUse observes accessible same-user process references. Protected /proc
+// descriptors cannot be inspected by an unprivileged backup controller.
 func InUse(dir string) (bool, error) {
 	processes, err := os.ReadDir("/proc")
 	if err != nil {
@@ -36,7 +38,7 @@ func InUse(dir string) (bool, error) {
 			}
 		}
 		handles, readErr := os.ReadDir(filepath.Join(proc, "fd"))
-		if os.IsNotExist(readErr) {
+		if os.IsNotExist(readErr) || os.IsPermission(readErr) {
 			continue
 		}
 		if readErr != nil {
@@ -44,7 +46,7 @@ func InUse(dir string) (bool, error) {
 		}
 		for _, fd := range handles {
 			target, linkErr := os.Readlink(filepath.Join(proc, "fd", fd.Name()))
-			if os.IsNotExist(linkErr) {
+			if os.IsNotExist(linkErr) || os.IsPermission(linkErr) {
 				continue
 			}
 			if linkErr != nil {

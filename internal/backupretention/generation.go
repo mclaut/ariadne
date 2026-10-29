@@ -372,5 +372,9 @@ func RemoveVerified(dir string) error {
 	if err = root.Remove(manifestName); err != nil {
 		return err
 	}
+	// Windows cannot remove a directory while our own Root handle is open.
+	if err = root.Close(); err != nil {
+		return err
+	}
 	return os.Remove(dir)
 }
