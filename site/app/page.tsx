@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.22",
+  softwareVersion: "0.8.23",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.22</a>
+          <a href="#new">New in 0.8.23</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.22 rotates full backups after verified recovery
+            v0.8.23 rotates full backups after verified recovery
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,7 +186,7 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.22</span>
+            <span className="eyebrow">New in v0.8.23</span>
             <h2>One full copy. Verified recovery.</h2>
             <p>Full recovery sets now rotate too. A replacement must pass independent recovery checks; audit remains available.</p>
           </div>
@@ -338,7 +338,7 @@ export default function Home() {
             </div>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.22"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.23"
               target="_blank"
               rel="noreferrer"
             >
