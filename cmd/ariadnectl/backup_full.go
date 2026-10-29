@@ -363,7 +363,8 @@ func copyFullSQLite(source, dest string) error {
 	if err = os.Chmod(dest, 0o600); err != nil {
 		return err
 	}
-	f, err := os.Open(dest) //nolint:gosec // newly created private SQLite recovery copy
+	// Windows FlushFileBuffers requires a write-capable handle, even after VACUUM.
+	f, err := os.OpenFile(dest, os.O_RDWR, 0) //nolint:gosec // newly created private SQLite recovery copy
 	if err != nil {
 		return err
 	}
