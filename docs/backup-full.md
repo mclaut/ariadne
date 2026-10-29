@@ -1,7 +1,7 @@
 # Full recovery sets
 
 `ariadnectl backup-full` uses a private regular file `~/.ariadne/full-backup.json`
-(mode 0600). Every source is explicit: do not include the backup tree itself,
+(mode 0600 on Unix; restrict it with the account ACL on Windows). Every source is explicit: do not include the backup tree itself,
 live Qdrant storage, raw SQLite/WAL files, or unrelated shared client configuration.
 Paths in `sources`, `sqlite` and `prefixes` are absolute source paths keyed by
 relative recovery paths. Missing sources fail the backup; nothing is silently skipped.

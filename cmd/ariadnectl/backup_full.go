@@ -49,7 +49,9 @@ func loadFullPlan() (fullBackupPlan, []byte, error) {
 	if err != nil {
 		return plan, nil, err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+	// Windows uses the operator's profile ACL; POSIX mode bits there are synthetic.
+	publicPOSIXMode := runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0
+	if !info.Mode().IsRegular() || publicPOSIXMode {
 		return plan, nil, errors.New("full-backup.json must be a private regular file")
 	}
 	data, err := os.ReadFile(fullPlanPath()) //nolint:gosec // fixed private operator-owned plan
