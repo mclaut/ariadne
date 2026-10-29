@@ -522,6 +522,9 @@ func ctl(action, banner string) error {
 	timeout := 60 * time.Second
 	if action == "backup" {
 		timeout = 20 * time.Minute
+		if _, err := os.Lstat(runtimeDir("full-backup.json")); err == nil {
+			timeout = time.Hour
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

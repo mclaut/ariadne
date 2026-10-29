@@ -55,6 +55,10 @@ and its entire content must still match. Timestamp names alone never authorize
 discovery or deletion. Prior access/state/logs, legacy evidence, verification
 records and top-level receipts are preserved in an immutable audit archive first.
 
+After a cleanup-only failure, `ariadnectl backup-full --retry-cleanup` re-verifies
+the already restored full keeper and retries only enrolled legacy cleanup. It
+does not create a second full set or bypass the immutable recovery proof.
+
 Full sets are component-consistent captures, not global transactions or OS images.
 OS frameworks and hardware remain external dependencies. Nested symlinks are
 preserved; when relocating an installation, rebase installation-owned absolute

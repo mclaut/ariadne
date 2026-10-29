@@ -115,11 +115,48 @@ func loadFullPlan() (fullBackupPlan, []byte, error) {
 }
 
 func fullBackupCmd() int {
+	if hasFlag("--retry-cleanup") {
+		if err := retryFullCleanup(); err != nil {
+			fmt.Fprintln(os.Stderr, "full cleanup:", err)
+			return 1
+		}
+		return 0
+	}
 	if err := runFullBackup(); err != nil {
 		fmt.Fprintln(os.Stderr, "full backup:", err)
 		return 1
 	}
 	return 0
+}
+
+// A cleanup failure can resume without creating another full set. The keeper
+// must still match its sealed successful recovery proof.
+func retryFullCleanup() error {
+	plan, _, err := loadFullPlan()
+	if err != nil {
+		return err
+	}
+	root := managedBackupsDir()
+	unlock, err := backupretention.Lock(root, "operation-full")
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	keeper := filepath.Join(root, "full")
+	m, err := backupretention.Verify(keeper)
+	if err != nil {
+		return err
+	}
+	if m.Object != "full" || m.Metadata["restore_verified"] != backupProofVerified {
+		return errors.New("verified full keeper required")
+	}
+	for _, old := range plan.Legacy {
+		if err = backupretention.PruneLegacyFull(backupsDir(), keeper, old); err != nil {
+			return err
+		}
+	}
+	fmt.Println("full cleanup ok: verified keeper retained · audit preserved")
+	return nil
 }
 
 func runFullBackup() error {
@@ -288,12 +325,22 @@ func writeFullJSON(path string, value any) error {
 }
 
 func fullSQLite(path string) (*sql.DB, error) {
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	u := fullSQLiteURL(path)
+	return sql.Open("sqlite", u.String())
+}
+
+func fullSQLiteURL(path string) url.URL {
+	path = filepath.ToSlash(path)
+	// file:///C:/... has no URI authority; file://C:/... treats C: as a host.
+	if len(path) > 2 && path[1] == ':' && path[2] == '/' {
+		path = "/" + path
+	}
+	u := url.URL{Scheme: "file", Path: path}
 	q := u.Query()
 	q.Set("mode", "ro")
 	q.Set("_pragma", "busy_timeout(5000)")
 	u.RawQuery = q.Encode()
-	return sql.Open("sqlite", u.String())
+	return u
 }
 
 func copyFullSQLite(source, dest string) error {

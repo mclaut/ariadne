@@ -35,7 +35,7 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.21 keeps one verified recovery copy per component.
+Version 0.8.22 keeps one verified recovery copy per component.
 
 - **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
 - **Recovery checked before rotation.** Snapshot size and SHA-256 must match Qdrant; an isolated local Qdrant restores the snapshot, checks the source count and vector schema, and reads every point with its payload and vectors.
@@ -78,6 +78,6 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 MIT licensed. The source of this Space is maintained in
 `packaging/huggingface-space` in the Ariadne repository.
 
-## Full backup rotation in v0.8.21
+## Full backup rotation in v0.8.22
 
 An explicit full-backup plan keeps one independently restored full recovery set. Older full sets expire only after the replacement passes file, database and model recovery checks. Audit is preserved separately, outside rotation.

@@ -66,7 +66,9 @@ func legacyFullFixture(t *testing.T, root string) LegacyFull {
 	t.Helper()
 	name := "full-20200101T000000Z"
 	dir := filepath.Join(root, name)
-	paths := []string{"runtime/state/approvals/decision.json", "runtime/logs/activity.log", "verification/RESTORE.json", "snapshot"}
+	paths := []string{
+		"runtime/state/approvals/decision.json", "runtime/logs/activity.log", "runtime-extra", "verification/RESTORE.json", "snapshot",
+	}
 	for _, path := range paths {
 		p := filepath.Join(dir, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {

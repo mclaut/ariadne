@@ -47,6 +47,10 @@ type maintenanceDeps struct {
 func maintenanceCmd(args []string) int {
 	fs := flag.NewFlagSet("maintenance", flag.ContinueOnError)
 	config := maintenanceConfig{}
+	commandTimeout := defaultMaintenanceCommandTimeout
+	if _, err := os.Lstat(fullPlanPath()); err == nil {
+		commandTimeout = time.Hour
+	}
 	fs.IntVar(&config.attempts, "attempts", maintenanceAttemptsEnv(), "maximum attempts per failed stage")
 	fs.DurationVar(&config.retryDelay, "retry-delay",
 		durationEnv("ARIADNE_MAINTENANCE_RETRY_DELAY", defaultMaintenanceRetryDelay),
@@ -55,7 +59,7 @@ func maintenanceCmd(args []string) int {
 		durationEnv("ARIADNE_MAINTENANCE_MAX_RETRY_DELAY", defaultMaintenanceMaxRetryDelay),
 		"maximum delay between retries")
 	fs.DurationVar(&config.commandTimeout, "command-timeout",
-		durationEnv("ARIADNE_MAINTENANCE_COMMAND_TIMEOUT", defaultMaintenanceCommandTimeout),
+		durationEnv("ARIADNE_MAINTENANCE_COMMAND_TIMEOUT", commandTimeout),
 		"timeout for one import or consolidation attempt")
 	fs.DurationVar(&config.before, "before", 24*time.Hour, "minimum diary age to consolidate")
 	fs.StringVar(&config.importPath, "import-path", defaultImportPath(), "path to the Ariadne importer")

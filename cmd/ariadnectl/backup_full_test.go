@@ -41,6 +41,16 @@ func TestFullSQLiteCapturesCommittedWALAndRestoresIndependently(t *testing.T) {
 	}
 }
 
+func TestFullSQLiteDriveURIHasNoAuthority(t *testing.T) {
+	u := fullSQLiteURL("C:/profile with spaces/runtime/metrics.db")
+	if u.Host != "" || u.Path != "/C:/profile with spaces/runtime/metrics.db" || u.Query().Get("mode") != "ro" {
+		t.Fatalf("invalid drive URI: %s", u.String())
+	}
+	if u.String() != "file:///C:/profile%20with%20spaces/runtime/metrics.db?_pragma=busy_timeout%285000%29&mode=ro" {
+		t.Fatalf("unexpected SQLite URI: %s", u.String())
+	}
+}
+
 func TestFullPlanRejectsOverlappingAndReservedPaths(t *testing.T) {
 	for _, names := range [][]string{
 		{"runtime", "runtime/bin"},

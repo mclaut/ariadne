@@ -112,6 +112,7 @@ func PruneLegacyFull(root, keeper string, old LegacyFull) error {
 	if err != nil {
 		return err
 	}
+	slices.SortFunc(actual, func(a, b Entry) int { return strings.Compare(a.Path, b.Path) })
 	if !slices.Equal(actual, expected) {
 		return errors.New("legacy full content differs from enrolled manifest")
 	}
@@ -154,6 +155,7 @@ func PruneLegacyFull(root, keeper string, old LegacyFull) error {
 	if err != nil {
 		return err
 	}
+	slices.SortFunc(actual, func(a, b Entry) int { return strings.Compare(a.Path, b.Path) })
 	if !slices.Equal(actual, expected) {
 		return errors.New("legacy full changed before deletion; retained for diagnosis")
 	}
