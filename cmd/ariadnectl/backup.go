@@ -36,7 +36,14 @@ func backupCmd() (code int) {
 			Operation: "backup", Status: status, Message: message, Counters: counters,
 		})
 	}()
-	code = managedBackupCmd()
+	if _, err := os.Lstat(fullPlanPath()); err == nil {
+		code = fullBackupCmd()
+	} else if !os.IsNotExist(err) {
+		fmt.Fprintln(os.Stderr, "full backup plan:", err)
+		code = 1
+	} else {
+		code = managedBackupCmd()
+	}
 	if code != 0 {
 		message = "verified backup or retention failed"
 		return code
@@ -50,6 +57,20 @@ func backupCmd() (code int) {
 func backupIfDue(now time.Time, interval time.Duration) int {
 	if interval <= 0 {
 		interval = 7 * 24 * time.Hour
+	}
+	if _, err := os.Lstat(fullPlanPath()); err == nil {
+		m, verifyErr := backupretention.Verify(filepath.Join(managedBackupsDir(), "full"))
+		if verifyErr != nil && !os.IsNotExist(verifyErr) {
+			fmt.Fprintln(os.Stderr, "full backup cadence:", verifyErr)
+			return 1
+		}
+		if verifyErr == nil && m.Object == "full" && m.Metadata["restore_verified"] == backupProofVerified && now.Sub(m.CreatedAt) < interval {
+			return 0
+		}
+		return backupCmd()
+	} else if !os.IsNotExist(err) {
+		fmt.Fprintln(os.Stderr, "full backup cadence:", err)
+		return 1
 	}
 	names, err := backupCollections()
 	if err != nil {

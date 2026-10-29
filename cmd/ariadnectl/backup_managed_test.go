@@ -141,7 +141,7 @@ func TestManagedBackupKeepsOneAndCleansOnlyMatchingLegacy(t *testing.T) {
 	}
 	dest := filepath.Join(managedBackupsDir(), "snapshot-ariadne")
 	m, err := backupretention.Verify(dest)
-	if err != nil || m.Metadata["restore_verified"] != "true" {
+	if err != nil || m.Metadata["restore_verified"] != backupProofVerified {
 		t.Fatalf("backup=%#v err=%v", m, err)
 	}
 	for _, p := range old {

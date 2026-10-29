@@ -37,12 +37,16 @@ func unusedLoopbackPort(ctx context.Context) (int, error) {
 }
 
 func verifySnapshotRestore(snapshot, home string) (proof snapshotProof, returnErr error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
 	binary := filepath.Join(home, ".ariadne", "bin", "qdrant")
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
+	return verifySnapshotWithBinary(snapshot, home, binary)
+}
+
+func verifySnapshotWithBinary(snapshot, home, binary string) (proof snapshotProof, returnErr error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 	if _, err := os.Stat(binary); err != nil {
 		return proof, fmt.Errorf("local Qdrant required to verify recovery: %w", err)
 	}

@@ -20,7 +20,10 @@ import (
 	"time"
 )
 
-const backupStatusComplete = "complete"
+const (
+	backupStatusComplete = "complete"
+	backupProofVerified  = "true"
+)
 
 var verifyBackupSnapshot = verifySnapshotRestore
 
@@ -130,7 +133,7 @@ func managedCollectionBackup(name string) error {
 
 	metadata := map[string]string{
 		"collection": name, "snapshot_sha256": sha,
-		"snapshot_bytes": strconv.FormatInt(snapshot.Size, 10), "restore_verified": "true",
+		"snapshot_bytes": strconv.FormatInt(snapshot.Size, 10), "restore_verified": backupProofVerified,
 		"points": strconv.FormatInt(proof.Points, 10), "points_sha256": proof.PointsSHA256,
 		"schema_sha256": proof.SchemaSHA256, "restore_verified_at": time.Now().UTC().Format(time.RFC3339Nano),
 		"native_source": snapshot.Name,
@@ -469,7 +472,7 @@ func verifiedSnapshotKeeper(path, coll string) error {
 }
 
 func checkSnapshotManifest(m backupretention.Manifest, coll string) error {
-	if m.Object != "snapshot-"+coll || m.Metadata["collection"] != coll || m.Metadata["restore_verified"] != "true" {
+	if m.Object != "snapshot-"+coll || m.Metadata["collection"] != coll || m.Metadata["restore_verified"] != backupProofVerified {
 		return errors.New("verified recovery copy for this collection required")
 	}
 	for _, key := range []string{"snapshot_sha256", "points_sha256", "schema_sha256"} {

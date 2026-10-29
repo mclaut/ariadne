@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	fyne.io/systray v1.12.2
 	github.com/mark3labs/mcp-go v0.55.1
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/qdrant/go-client v1.18.3
 	golang.org/x/sys v0.45.0
 	modernc.org/sqlite v1.53.0

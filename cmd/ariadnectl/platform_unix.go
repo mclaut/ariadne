@@ -74,7 +74,7 @@ func control(action string) error {
 }
 
 func loadedAriadneQdrantAgents() []string {
-	if runtime.GOOS != "darwin" {
+	if runtime.GOOS != macOS {
 		return nil
 	}
 	out, err := exec.CommandContext(context.Background(), "launchctl", "list").Output() //nolint:gosec // fixed command
@@ -131,7 +131,7 @@ func processFDUsage(processID int) (int, int) {
 	if processID <= 0 {
 		return 0, 0
 	}
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == macOS {
 		out, err := exec.CommandContext(context.Background(), "lsof", "-nP", "-a", "-p", //nolint:gosec // fixed diagnostic
 			strconv.Itoa(processID), "-Ff").Output()
 		if err != nil {

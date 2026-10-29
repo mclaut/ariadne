@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.20",
+  softwareVersion: "0.8.21",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.20</a>
+          <a href="#new">New in 0.8.21</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.20 keeps one verified recovery copy per component
+            v0.8.21 rotates full backups after verified recovery
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,13 +186,13 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.20</span>
-            <h2>One previous copy. Verified recovery.</h2>
-            <p>Backup storage stays bounded. A replacement must pass recovery checks before older copies expire.</p>
+            <span className="eyebrow">New in v0.8.21</span>
+            <h2>One full copy. Verified recovery.</h2>
+            <p>Full recovery sets now rotate too. A replacement must pass independent recovery checks; audit remains available.</p>
           </div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>One copy per component</h3><p>Each configured memory or session collection keeps its own verified snapshot.</p></article>
-            <article className="new-item accent-blue"><Database aria-hidden="true" /><h3>Recovery checked first</h3><p>Checksums, restored record counts, vector schema and readable points are checked before rotation.</p></article>
+            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Full sets rotate too</h3><p>Keep one verified full recovery set alongside collection and runtime recovery copies.</p></article>
+            <article className="new-item accent-blue"><Database aria-hidden="true" /><h3>Recovery checked first</h3><p>Independent file copies, restored databases and model inference are checked before full-set rotation.</p></article>
             <article className="new-item accent-coral"><Network aria-hidden="true" /><h3>One previous runtime</h3><p>Upgrades preserve verified copies of the previous programs, app and changed client configuration.</p></article>
             <article className="new-item accent-black"><Monitor aria-hidden="true" /><h3>Working state stays available</h3><p>Live memory and access audit remain intact. Older backup history expires after a replacement passes verification.</p></article>
           </div>
@@ -338,7 +338,7 @@ export default function Home() {
             </div>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.20"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.21"
               target="_blank"
               rel="noreferrer"
             >

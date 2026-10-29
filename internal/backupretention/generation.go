@@ -317,12 +317,16 @@ func RemoveVerified(dir string) error {
 	if err != nil {
 		return err
 	}
+	return removeEntries(dir, m.Entries, true)
+}
+
+func removeEntries(dir string, inventoryEntries []Entry, managedManifest bool) error {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = root.Close() }()
-	entries := append([]Entry(nil), m.Entries...)
+	entries := append([]Entry(nil), inventoryEntries...)
 	slices.SortFunc(entries, func(a, b Entry) int {
 		da, db := strings.Count(a.Path, "/"), strings.Count(b.Path, "/")
 		if da != db {
@@ -369,8 +373,10 @@ func RemoveVerified(dir string) error {
 			return err
 		}
 	}
-	if err = root.Remove(manifestName); err != nil {
-		return err
+	if managedManifest {
+		if err = root.Remove(manifestName); err != nil {
+			return err
+		}
 	}
 	// Windows cannot remove a directory while our own Root handle is open.
 	if err = root.Close(); err != nil {

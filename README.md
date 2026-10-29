@@ -26,8 +26,9 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.20
+## What's New in v0.8.21
 
+- **Full sets rotate too.** An explicit full-backup plan retains one independently restored full recovery set. The previous full set expires only after recovery passes; its audit is preserved separately.
 - **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
 - **Recovery checked before rotation.** Snapshot size and SHA-256 must match Qdrant; an isolated local Qdrant restores the snapshot, checks the source count and vector schema, and reads every point with its payload and vectors.
 - **Bounded backup storage.** After successful verification, older matching downloaded/archive snapshots and redundant native snapshots expire automatically. Older historical backup states are intentionally discarded.
@@ -343,7 +344,7 @@ sources become `orphaned`, not deleted. Consolidation is batch- and
 context-bounded, validates model output, and retains source diaries when any
 promotion fails. The runner retries transient failures with capped backoff,
 records append-only activity, and exposes failed, partial, stuck, or stale state
-in status and the tray. Backup rotation archives older snapshots.
+in status and the tray. Backup rotation expires older verified snapshots after replacement recovery.
 
 **Deterministic regression evaluation.** `go run ./cmd/eval` executes the
 multilingual coding-memory ranking suite in `evaluation/coding-memory.json`
@@ -811,15 +812,23 @@ are never selected just because they exist. A compatible local Qdrant binary
 must be installed at `~/.ariadne/bin/qdrant` (Windows: `qdrant.exe`) for recovery
 verification, including when the source Qdrant is remote.
 
-**Retention change in v0.8.20:** successful backups expire older matching native
+**Retention change in v0.8.21:** successful backups expire older matching native
 snapshots and timestamped downloads in the backup root and `backups/archive`.
 Older payload/metadata history in those copies is intentionally lost. Export or
 move any required historical checkpoint outside those managed names before the
-next backup. Custom full backup sets, JSONL exports, and audit evidence are not
-recursively pruned. Incomplete or modified generations remain for diagnosis.
+next backup. Enrolled full backup sets also rotate after independent recovery verification. JSONL
+exports and audit evidence are retained. Incomplete or modified generations remain
+for diagnosis.
 Runtime and client-configuration recovery copies use `previous/runtime` and
 `previous/config-*`; a same-version reinstall preserves the previous different
 runtime. Platform-owned process cancellation also stops its verifier children.
+
+With a private `~/.ariadne/full-backup.json` plan, `ariadnectl backup-full`, ordinary
+`backup` and due automatic backups also retain one full set at `previous/full`.
+Every file is restored independently; copied Qdrant, SQLite and model runtimes are
+checked before rotation. Access/activity history and receipts from retired full
+sets are preserved in `backups/full-audit`, outside rotation. See the
+[full backup setup](docs/backup-full.md). Audit archives intentionally remain unbounded.
 
 New memories are saved before source diary entries are marked archived; source
 text and vectors remain intact. Deterministic failures remain active and receive
@@ -944,7 +953,7 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.20 — current release. Verified recovery precedes automatic single-copy backup rotation.
+v0.8.21 — current release. Verified recovery precedes automatic single-copy backup rotation.
 
 v0.8.18 placed the access section near the top of the tray,
 with a pending-only decision queue, retained history in pages of ten, and

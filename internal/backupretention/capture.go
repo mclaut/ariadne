@@ -58,6 +58,87 @@ func Capture(root, object string, sources map[string]string) (string, error) {
 	return Publish(root, object, stage, created, map[string]string{"verification": "independent-copy-sha256"})
 }
 
+// CopyInto copies an explicit source independently, without following child links.
+// The destination must be absent and must not overlap the source.
+func CopyInto(source, destination string) error {
+	if !filepath.IsAbs(source) || !filepath.IsAbs(destination) {
+		return errors.New("copy paths must be absolute")
+	}
+	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
+		return errors.New("copy destination must be absent")
+	}
+	source, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		return err
+	}
+	ancestor, tail := filepath.Clean(destination), ""
+	for {
+		_, statErr := os.Lstat(ancestor)
+		if statErr == nil {
+			break
+		}
+		if !os.IsNotExist(statErr) {
+			return statErr
+		}
+		tail = filepath.Join(filepath.Base(ancestor), tail)
+		ancestor = filepath.Dir(ancestor)
+	}
+	ancestor, err = filepath.EvalSymlinks(ancestor)
+	if err != nil {
+		return err
+	}
+	destination = filepath.Join(ancestor, tail)
+	contains := func(a, b string) bool {
+		rel, relErr := filepath.Rel(a, b)
+		return relErr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	}
+	if contains(source, destination) || contains(destination, source) {
+		return errors.New("copy source and destination overlap")
+	}
+	return copyItem(source, destination)
+}
+
+// CheckRecoveryCopy restores every entry into a new independent directory and
+// checks the restored inventory before invoking component recovery checks.
+// Failed copies remain available for diagnosis; only a verified derivative is removed.
+func CheckRecoveryCopy(source, root string, check func(string) error) error {
+	before, err := inventory(source)
+	if err != nil {
+		return err
+	}
+	work, err := NewStage(root, "full-restore")
+	if err != nil {
+		return err
+	}
+	restored := filepath.Join(work, ".pending-checked-restored")
+	if err = CopyInto(source, restored); err != nil {
+		return err
+	}
+	after, err := inventory(restored)
+	if err != nil {
+		return err
+	}
+	if !slices.Equal(before, after) {
+		return errors.New("restored full backup differs from source")
+	}
+	if err = check(restored); err != nil {
+		return err
+	}
+	// Seal this checked derivative before using the same exact-entry removal path.
+	sealed, err := Publish(work, "checked", restored, time.Now(), nil)
+	if err != nil {
+		return err
+	}
+	busy, useErr := InUse(sealed)
+	if useErr != nil {
+		return useErr
+	}
+	if busy {
+		return errors.New("restored full test still in use; retained")
+	}
+	return RemoveVerified(sealed)
+}
+
 func copyItem(source, destination string) error {
 	before, err := os.Lstat(source)
 	if err != nil {

@@ -118,6 +118,8 @@ func main() {
 		os.Exit(backupCmd())
 	case "backup-retention":
 		os.Exit(backupRetentionCmd(os.Args[2:]))
+	case "backup-full":
+		os.Exit(fullBackupCmd())
 	case "restore":
 		os.Exit(restoreCmd(arg(2), hasFlag("--yes")))
 	case "export":
@@ -138,7 +140,7 @@ func main() {
 		os.Exit(credentialCmd(os.Args[2:]))
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ariadnectl {version | status [-json] | metrics [-json] | "+
-			"start | stop | restart | backup | backup-retention <component> | restore <file> | export [file] | "+
+			"start | stop | restart | backup | backup-full | backup-retention <component> | restore <file> | export [file] | "+
 			"maintenance [--attempts 3] | consolidate [--before 24h] [--dry-run] | "+
 			"requeue-empty [--dry-run] | quarantine-secrets [--collections ariadne,sessions] [--apply] | "+
 			"backfill-attribution [--apply] [--multiplier 8] | approvals [-json] [-id ID] | credential {trust|revoke} ...}")
