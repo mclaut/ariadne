@@ -44,7 +44,9 @@ Minimal shape (replace each placeholder with an owned absolute source):
 ```
 
 When the plan exists, ordinary `ariadnectl backup` and due automatic backups use
-this path. Automatic cadence is based on the verified full manifest, never a file
+this path, with **one full recovery set and no separate runtime/config/snapshot
+copies**. A plan is the explicit opt-in to full-only retention. Without a plan,
+the existing component-only mode remains available. Automatic cadence is based on the verified full manifest, never a file
 mtime or only a newer collection snapshot. The default interval remains seven days
 when automatic consolidation requires a backup.
 
@@ -61,15 +63,28 @@ does not create a second full set or bypass the immutable recovery proof.
 
 Full sets are component-consistent captures, not global transactions or OS images.
 
-Legacy runtime copies under `releases/vX.Y.Z-<suffix>/previous-runtime` also migrate
-to the one verified `backups/previous/runtime` policy. Migration requires exact
-matches against a restored full set, an older actual CLI version, an unused copy,
-and an independently restored canonical runtime. Manifests, app metadata, logs and
-other audit evidence are preserved under `backups/runtime-audit` before removal.
-Release binaries outside `previous-runtime` are never selected. Modified, newer,
-unrecognized or active copies remain protected. The migration runs on runtime
-capture, same-version reinstalls, and successful backups; it can also be retried
-without another full backup using `ariadnectl backup-retention runtime-cleanup`.
+In full-only mode, snapshots are created directly under the pending full set at
+`snapshots/snapshot-<collection>`. No separate `previous/snapshot-*` generation is
+published. Native snapshots recorded in the full recovery receipt expire only
+after that full set has passed independent recovery and publication. Cleanup
+retries validate the full and the matching nested snapshot manifests first;
+unrelated native snapshots are not selected. Earlier full layouts using
+`snapshots/<collection>` remain readable by cleanup retries.
+
+Runtime upgrades, same-version reinstalls and client-configuration capture reuse
+the sealed successful full keeper. A missing, modified or unsuccessful full set
+blocks these paths instead of silently creating component backups. The pre-upgrade check also requires the full to contain the currently installed
+binaries and application. Run `ariadnectl backup-full` first if the keeper is
+stale or when establishing full-only retention.
+Existing `previous/runtime`, `previous/snapshot-*`, `previous/config-*` and
+release-local legacy copies are not deleted by switching to full-only mode.
+Inventory them, preserve their audit, and approve an exact cleanup plan separately.
+The `backup-retention runtime-cleanup` compatibility command verifies the full
+keeper in this mode; it does not remove existing component copies.
+
+Old full manifests, plans, recovery receipts, access/activity history, and nested
+snapshot manifests and restore logs are archived under `backups/full-audit`
+before full rotation. Audit archives remain outside rotation.
 
 OS frameworks and hardware remain external dependencies. Nested symlinks are
 preserved; when relocating an installation, rebase installation-owned absolute

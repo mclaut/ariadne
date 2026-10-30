@@ -45,6 +45,37 @@ func managedBackupCmd() int {
 }
 
 func managedCollectionBackup(name string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	if enabled, policyErr := backupretention.FullOnlyEnabled(home); enabled || policyErr != nil {
+		return errors.Join(errors.New("full-only policy: use backup-full instead of standalone snapshots"), policyErr)
+	}
+	if err = captureCollectionBackup(name, managedBackupsDir()); err != nil {
+		return err
+	}
+	dest := filepath.Join(managedBackupsDir(), "snapshot-"+name)
+	m, err := backupretention.Verify(dest)
+	if err != nil {
+		return err
+	}
+	removed, err := pruneLegacySnapshots(backupsDir(), name, m.CreatedAt, dest)
+	if err != nil {
+		return fmt.Errorf("new verified backup retained at %s; cleanup: %w", dest, err)
+	}
+	nativeRemoved, err := pruneNativeSnapshots(name, m.Metadata["native_source"], m.CreatedAt, dest)
+	if err != nil {
+		return fmt.Errorf("new verified backup retained; native cleanup: %w", err)
+	}
+	fmt.Printf("backup ok: %s · %s points · one verified copy · %d old files and %d native copies removed\n",
+		name, m.Metadata["points"], removed, nativeRemoved)
+	return nil
+}
+
+// The full backup supplies a private stage root so snapshots never become
+// separate retained generations before full recovery succeeds.
+func captureCollectionBackup(name, root string) error {
 	if name == "" || strings.ContainsAny(name, "/\\\x00") {
 		return errors.New("invalid collection name")
 	}
@@ -52,7 +83,6 @@ func managedCollectionBackup(name string) error {
 	if err != nil {
 		return err
 	}
-	root := managedBackupsDir()
 	object := "snapshot-" + name
 	// Serialize creation as well as cleanup; Publish has a separate object lock.
 	unlock, err := backupretention.Lock(root, "operation-"+object)
@@ -139,22 +169,8 @@ func managedCollectionBackup(name string) error {
 		"native_source": snapshot.Name,
 	}
 
-	dest, err := backupretention.Publish(root, object, stage, started, metadata)
-	if err != nil {
-		return err
-	}
-	// Old paths are considered only after the new generation is durable and readable.
-	removed, err := pruneLegacySnapshots(backupsDir(), name, started, dest)
-	if err != nil {
-		return fmt.Errorf("new verified backup retained at %s; cleanup: %w", dest, err)
-	}
-	nativeRemoved, err := pruneNativeSnapshots(name, snapshot.Name, started, dest)
-	if err != nil {
-		return fmt.Errorf("new verified backup retained; native cleanup: %w", err)
-	}
-	fmt.Printf("backup ok: %s · %d points · one verified copy · %d old files and %d native copies removed\n",
-		name, proof.Points, removed, nativeRemoved)
-	return nil
+	_, err = backupretention.Publish(root, object, stage, started, metadata)
+	return err
 }
 
 func validateSnapshotArchive(path string) error {
@@ -445,6 +461,11 @@ func backupRetentionCmd(args []string) int {
 		err = backupretention.PruneLegacyRuntimes(home)
 		unlock()
 		dest = filepath.Join(home, ".ariadne", "backups", "previous", "runtime")
+		if err == nil {
+			if keeper, enabled, policyErr := backupretention.FullOnlyKeeper(home); enabled || policyErr != nil {
+				dest, err = keeper, policyErr
+			}
+		}
 	case "runtime":
 		app := ""
 		if runtime.GOOS == "darwin" {
@@ -468,7 +489,7 @@ func backupRetentionCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "previous copy:", err)
 		return 1
 	}
-	fmt.Println("one verified previous copy:", dest)
+	fmt.Println("verified recovery copy:", dest)
 	return 0
 }
 

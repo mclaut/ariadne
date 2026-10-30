@@ -28,6 +28,8 @@ Trays running v0.8.14 or newer update normally after explicit user confirmation.
 
 ## Current release
 
+v0.8.25 uses one independently restored full recovery set when an explicit full-backup plan is configured. Runtime, client configuration and collection snapshots are included in that set instead of accumulating separately. Existing extra copies require a separately approved cleanup plan. Audit, manifests and recovery logs remain outside rotation.
+
 v0.8.18 makes the access-request menu readable: pending decisions appear in a separate active queue near the top of the tray, and retained history is paginated ten records at a time, newest first. Purpose and short status labels appear in each row; exact scope, resource, creation time, and ID are in details. Active actions remain bound to one request ID; reusable history slots are strictly read-only. Every audit record is preserved. The existing explicit MCP approval retry and grant deadlines remain unchanged.
 
 v0.8.17 adds a complete tray access-request queue and retained history with pending, approved, denied, expired, and consumed statuses. Exact-ID controls avoid acting on a changing queue head. Per-request cooldowns and 30-second dialogs rotate prompts fairly. Approval explicitly requires a client retry with approval_id; one-time credential grants reject reuse. `ariadnectl approvals --all` reads every retained lifecycle without authorizing access. Request records, decisions, and consumptions are preserved.

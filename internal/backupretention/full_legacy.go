@@ -177,6 +177,11 @@ func archiveBackupAudit(root, kind, id, source string, paths []string, provenanc
 	if kind != "full" && kind != "runtime" {
 		return "", errors.New("invalid backup audit kind")
 	}
+	physicalSource, sourceErr := physicalDirectory(source)
+	if sourceErr != nil {
+		return "", sourceErr
+	}
+	source = physicalSource
 	if len(id) != 64 || strings.Trim(id, "0123456789abcdef") != "" {
 		return "", errors.New("invalid full audit identity")
 	}

@@ -19,7 +19,7 @@
         Ariadne
       </a>
       <div class="nav-links">
-        <a href="#new">New in 0.8.24</a>
+        <a href="#new">New in 0.8.25</a>
         <a href="#architecture">Architecture</a>
         <a href="#install">Install</a>
       </div>
@@ -40,7 +40,7 @@
         <div class="hero-content">
           <div class="release-kicker">
             <span data-lucide="sparkles" aria-hidden="true"></span>
-            v0.8.24 fixes rotation of older runtime backups
+            v0.8.25 keeps one verified full recovery copy
           </div>
           <h1>Ariadne</h1>
           <p class="hero-lead">
@@ -58,7 +58,7 @@
             </a>
             <a
               class="button button-secondary"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.24"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.25"
               target="_blank"
               rel="noreferrer"
             >
@@ -78,14 +78,14 @@
       <section class="new-band" id="new">
         <div class="section-shell">
           <div class="section-heading">
-            <span class="eyebrow">New in v0.8.24</span>
-            <h2>One runtime copy. Audit preserved.</h2>
-            <p>Legacy release-local runtime copies now join canonical retention. The retained runtime is restored before cleanup; audit is preserved.</p>
+            <span class="eyebrow">New in v0.8.25</span>
+            <h2>One full copy. Audit preserved.</h2>
+            <p>With a declared full-backup plan, keep one independently restored full set. Separate runtime and snapshot copies stop accumulating; audit stays available.</p>
           </div>
           <div class="feature-grid">
-            <article class="feature feature-green"><span data-lucide="check-circle-2" aria-hidden="true"></span><h3>One copy per component</h3><p>One verified canonical runtime replaces obsolete previous-runtime directories from older releases.</p></article>
-            <article class="feature feature-blue"><span data-lucide="scan-search" aria-hidden="true"></span><h3>Recovery checked first</h3><p>The retained runtime is independently restored, checksum-checked and version-probed before older copies expire.</p></article>
-            <article class="feature feature-coral"><span data-lucide="list-filter" aria-hidden="true"></span><h3>Working data stays available</h3><p>Old manifests and retired-file inventories are preserved separately. Busy, changed, newer and unknown copies block cleanup.</p></article>
+            <article class="feature feature-green"><span data-lucide="check-circle-2" aria-hidden="true"></span><h3>One full recovery set</h3><p>Runtime and collection snapshots are included in the full set instead of accumulating separately.</p></article>
+            <article class="feature feature-blue"><span data-lucide="scan-search" aria-hidden="true"></span><h3>Recovery checked first</h3><p>Files, databases and configured models are independently restored before the previous full set expires.</p></article>
+            <article class="feature feature-coral"><span data-lucide="list-filter" aria-hidden="true"></span><h3>Working data stays available</h3><p>Audit, manifests and recovery logs remain outside rotation. Existing extra copies require a separately approved cleanup plan.</p></article>
           </div>
         </div>
       </section>
@@ -224,6 +224,6 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
 
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <script src="app.js"></script>
-  <section class="section"><h2>Full backup rotation · v0.8.24</h2><p>Keep one verified full recovery set. Older full sets expire only after independent recovery checks pass. Access and activity audit remain preserved outside rotation.</p></section>
+  <section class="section"><h2>Full backup rotation · v0.8.25</h2><p>Keep one verified full recovery set. Older full sets expire only after independent recovery checks pass. Access and activity audit remain preserved outside rotation.</p></section>
 </body>
 </html>

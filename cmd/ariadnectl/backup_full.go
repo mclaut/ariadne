@@ -18,7 +18,12 @@ import (
 	"time"
 )
 
-const macOS = "darwin"
+const (
+	macOS            = "darwin"
+	backupObjectFull = "full"
+)
+
+var verifyFullRecovery = checkFullRecovery
 
 // Explicit sources avoid guessing ownership of shared models/client settings.
 // The private plan contains paths, never credential values. Its exact bytes are
@@ -142,12 +147,12 @@ func retryFullCleanup() error {
 		return err
 	}
 	defer unlock()
-	keeper := filepath.Join(root, "full")
+	keeper := filepath.Join(root, backupObjectFull)
 	m, err := backupretention.Verify(keeper)
 	if err != nil {
 		return err
 	}
-	if m.Object != "full" || m.Metadata["restore_verified"] != backupProofVerified {
+	if m.Object != backupObjectFull || m.Metadata["restore_verified"] != backupProofVerified {
 		return errors.New("verified full keeper required")
 	}
 	for _, old := range plan.Legacy {
@@ -155,11 +160,7 @@ func retryFullCleanup() error {
 			return err
 		}
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	if err = backupretention.PruneLegacyRuntimes(home); err != nil {
+	if err = pruneFullNativeSnapshots(keeper); err != nil {
 		return err
 	}
 	fmt.Println("full cleanup ok: verified keeper retained · audit preserved")
@@ -187,10 +188,7 @@ func runFullBackup() error {
 	}
 	defer unlock()
 	started := time.Now().UTC()
-	if code := managedBackupCmd(); code != 0 {
-		return errors.New("fresh verified collection backups required")
-	}
-	stage, err := backupretention.NewStage(root, "full")
+	stage, err := backupretention.NewStage(root, backupObjectFull)
 	if err != nil {
 		return err
 	}
@@ -224,14 +222,21 @@ func runFullBackup() error {
 	}
 	proofs := map[string]backupretention.Manifest{}
 	for _, name := range collections {
-		// Hold the collection operation lock across verification and independent copy.
-		if err = copyFullSnapshot(root, stage, name, proofs); err != nil {
+		if err = captureCollectionBackup(name, filepath.Join(stage, "snapshots")); err != nil {
 			return err
 		}
+		proof, verifyErr := backupretention.Verify(filepath.Join(stage, "snapshots", "snapshot-"+name))
+		if verifyErr != nil {
+			return verifyErr
+		}
+		if err = checkSnapshotManifest(proof, name); err != nil {
+			return err
+		}
+		proofs[name] = proof
 	}
 	fmt.Println("full backup: testing independent file, database and model recovery")
 	if err = backupretention.CheckRecoveryCopy(stage, filepath.Join(backupsDir(), "full-recovery-checks"), func(restored string) error {
-		return checkFullRecovery(restored, plan, proofs)
+		return verifyFullRecovery(restored, plan, proofs)
 	}); err != nil {
 		return fmt.Errorf("full recovery failed; previous full copies retained: %w", err)
 	}
@@ -244,13 +249,13 @@ func runFullBackup() error {
 		return err
 	}
 	// Preserve prior full-set audit before Publish can retire that generation.
-	previous := filepath.Join(root, "full")
+	previous := filepath.Join(root, backupObjectFull)
 	if _, statErr := os.Lstat(previous); statErr == nil {
 		m, verifyErr := backupretention.Verify(previous)
 		if verifyErr != nil {
 			return verifyErr
 		}
-		if m.Object != "full" || m.Metadata["restore_verified"] != backupProofVerified {
+		if m.Object != backupObjectFull || m.Metadata["restore_verified"] != backupProofVerified {
 			return errors.New("previous full recovery receipt required")
 		}
 		sha, hashErr := backupretention.HashFile(filepath.Join(previous, "manifest.json"))
@@ -267,13 +272,19 @@ func runFullBackup() error {
 		}
 		paths := append([]string{"plan.json", "recovery.json", "manifest.json", "audit", "runtime/state", "runtime/logs", "runtime/metrics.db"},
 			oldPlan.AuditPaths...)
+		for _, e := range m.Entries {
+			if strings.HasPrefix(e.Path, "snapshots/") && (strings.HasSuffix(e.Path, "/manifest.json") ||
+				strings.HasSuffix(e.Path, "/restore.log") || strings.HasSuffix(e.Path, "/.retention-audit.jsonl")) {
+				paths = append(paths, e.Path)
+			}
+		}
 		if _, err = backupretention.ArchiveFullAudit(filepath.Join(backupsDir(), "full-audit"), sha, previous, paths); err != nil {
 			return err
 		}
 	} else if !os.IsNotExist(statErr) {
 		return statErr
 	}
-	dest, err := backupretention.Publish(root, "full", stage, started, metadata)
+	dest, err := backupretention.Publish(root, backupObjectFull, stage, started, metadata)
 	if err != nil {
 		return err
 	}
@@ -282,8 +293,8 @@ func runFullBackup() error {
 			return fmt.Errorf("new full retained; legacy cleanup: %w", err)
 		}
 	}
-	if err = backupretention.PruneLegacyRuntimes(home); err != nil {
-		return fmt.Errorf("new full retained; runtime cleanup: %w", err)
+	if err = pruneFullNativeSnapshots(dest); err != nil {
+		return fmt.Errorf("new full retained; native snapshot cleanup: %w", err)
 	}
 	fmt.Println("full backup ok: independent recovery PASS · one verified full copy · audit retained")
 	return nil
@@ -296,27 +307,6 @@ func sortedFullNames(m map[string]string) []string {
 	}
 	slices.Sort(names)
 	return names
-}
-
-func copyFullSnapshot(root, stage, name string, proofs map[string]backupretention.Manifest) error {
-	unlock, err := backupretention.Lock(root, "operation-snapshot-"+name)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	source := filepath.Join(root, "snapshot-"+name)
-	m, err := backupretention.Verify(source)
-	if err != nil {
-		return err
-	}
-	if err = checkSnapshotManifest(m, name); err != nil {
-		return err
-	}
-	if err = backupretention.CopyInto(source, filepath.Join(stage, "snapshots", name)); err != nil {
-		return err
-	}
-	proofs[name] = m
-	return nil
 }
 
 func writeFullJSON(path string, value any) error {
@@ -423,8 +413,8 @@ func checkFullRecovery(restored string, plan fullBackupPlan, proofs map[string]b
 	if err != nil {
 		return err
 	}
-	for name, m := range proofs {
-		snapshot := filepath.Join(restored, "snapshots", name, "snapshot.snapshot")
+	for _, m := range proofs {
+		snapshot := filepath.Join(restored, "snapshots", m.Object, "snapshot.snapshot")
 		proof, verifyErr := verifySnapshotWithBinary(snapshot, home, filepath.Join(bin, "qdrant"+ext))
 		if verifyErr != nil {
 			return verifyErr

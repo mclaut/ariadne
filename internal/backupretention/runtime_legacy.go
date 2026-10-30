@@ -37,6 +37,9 @@ var probeRuntimeVersion = readRuntimeVersion
 // removes release/bin or an active executable: only exact previous-runtime trees
 // already captured by a restored full set, older than the canonical runtime.
 func PruneLegacyRuntimes(home string) error {
+	if _, enabled, err := FullOnlyKeeper(home); enabled || err != nil {
+		return err
+	}
 	base := filepath.Join(home, ".ariadne")
 	releases := filepath.Join(base, "releases")
 	if _, err := os.Lstat(releases); os.IsNotExist(err) {

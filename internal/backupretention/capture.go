@@ -271,6 +271,12 @@ func CaptureRuntime(home string) (string, error) {
 }
 
 func CaptureRuntimeWithApp(home, app string) (string, error) {
+	if keeper, enabled, err := FullOnlyKeeper(home); enabled || err != nil {
+		if err == nil {
+			err = verifyFullRuntime(home, app, keeper)
+		}
+		return keeper, err
+	}
 	names := []string{"ariadne", "ariadnectl", "import", "ariadne-hook", "ariadne-launcher", "ariadne-tray", "qdrant"}
 	sources := make(map[string]string, len(names)+1)
 	for _, name := range names {
@@ -306,6 +312,11 @@ func CaptureRuntimeWithApp(home, app string) (string, error) {
 
 // CaptureRuntimeBeforeUpgrade keeps the last different runtime on idempotent installs.
 func CaptureRuntimeBeforeUpgrade(home, app, nextVersion string) (string, error) {
+	if keeper, enabled, err := FullOnlyKeeper(home); err != nil {
+		return "", err
+	} else if enabled {
+		return keeper, verifyFullRuntime(home, app, keeper)
+	}
 	ctl := filepath.Join(home, ".ariadne", "bin", "ariadnectl")
 	if runtime.GOOS == runtimeWindows {
 		ctl += ".exe"
@@ -329,6 +340,9 @@ func CaptureConfig(home, object, path string) (string, error) {
 	expected := ClientConfigPath(home, object)
 	if filepath.Clean(path) != expected {
 		return "", errors.New("client backup path does not match its component")
+	}
+	if keeper, enabled, err := FullOnlyKeeper(home); enabled || err != nil {
+		return keeper, err
 	}
 	objectID := object
 	if object == "codex-mcp" && expected != filepath.Join(home, ".codex", "config.toml") {

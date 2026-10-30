@@ -35,12 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.24 also migrates legacy release-local runtime backups into the canonical verified retention policy.
+Version 0.8.25 keeps one independently restored full recovery set when an explicit full-backup plan is configured.
 
-- **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
-- **Recovery checked before rotation.** Snapshot size and SHA-256 must match Qdrant; an isolated local Qdrant restores the snapshot, checks the source count and vector schema, and reads every point with its payload and vectors.
-- **Bounded backup storage.** After successful verification, older matching downloaded/archive snapshots and redundant native snapshots expire automatically. Older historical backup states are intentionally discarded.
-- **Working state stays available.** Live memory, session data, access-request history and audit logs remain outside rotation. Modified or in-use previous generations block replacement.
+- **One full set.** Runtime, client configuration and collection snapshots are included in the full set instead of accumulating separately.
+- **Recovery before rotation.** Files, databases and configured models pass independent recovery before the previous full set expires.
+- **Safe failures.** Failed recovery keeps the previous full. A stale full blocks runtime upgrades instead of silently creating another component copy.
+- **Audit preserved.** Access history, manifests and restore logs remain outside rotation. Existing extra copies require an explicit cleanup plan.
 
 ## Links
 

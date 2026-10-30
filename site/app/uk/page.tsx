@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.24</a>
+          <a href="#new">Нове у 0.8.25</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.24 виправляє ротацію старих runtime-копій</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.25 залишає одну повну перевірену копію</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.24</span><h2>Одна runtime-копія. Аудит збережено.</h2><p>Старі release-копії теж переходять до canonical-ротації. Спочатку перевіряється відновлення; аудит зберігається.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.25</span><h2>Одна повна копія. Аудит збережено.</h2><p>За налаштованим планом full зберігається один перевірений набір замість окремих runtime і snapshots. Аудит залишається.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck /><h3>Старі формати враховано</h3><p>Каталоги previous-runtime переходять до правила однієї перевіреної runtime-копії.</p></article>
-            <article className="new-item accent-blue"><Database /><h3>Спочатку відновлення</h3><p>Збережений runtime незалежно відновлюється, перевіряється за SHA та запускається для визначення версії.</p></article>
-            <article className="new-item accent-coral"><Network /><h3>Активні клієнти захищені</h3><p>Змінені, новіші, невідомі або використовувані копії блокують прибирання. Поточні програми й MCP-сесії працюють далі.</p></article>
-            <article className="new-item accent-black"><Terminal /><h3>Аудит залишається</h3><p>Старі маніфести, метадані застосунку та інвентар файлів зберігаються окремо від runtime payload.</p></article>
+            <article className="new-item accent-green"><ShieldCheck /><h3>Один повний набір</h3><p>Runtime, налаштування клієнтів і snapshots колекцій входять до однієї повної копії.</p></article>
+            <article className="new-item accent-blue"><Database /><h3>Спочатку відновлення</h3><p>Файли, бази та налаштовані моделі незалежно відновлюються до ротації попередньої full-копії.</p></article>
+            <article className="new-item accent-coral"><Network /><h3>Безпечна відмова</h3><p>Невдале відновлення зберігає попередню full. Застаріла копія блокує оновлення без створення ще одного runtime.</p></article>
+            <article className="new-item accent-black"><Terminal /><h3>Аудит залишається</h3><p>Історія доступу, маніфести та журнали перевірки зберігаються поза ротацією. Наявні зайві копії потребують окремого погодження.</p></article>
           </div>
         </div>
       </section>
@@ -110,7 +110,7 @@ export default function UkrainianHome() {
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
             <p className="install-note">Якщо tray досі працює на v0.8.13 або старішій версії, один раз запустіть закріплений інсталятор v0.8.16. Він збереже дані Qdrant, резервні копії, налаштування й журнали. Після цього підтверджені оновлення з tray синхронно оновлюватимуть app і binaries.</p>
             <div className="command-window"><div className="command-title"><span>Одноразове оновлення старої версії</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh</code></pre></div>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.24">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.25">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>

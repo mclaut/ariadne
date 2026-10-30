@@ -26,7 +26,16 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.24
+## What's New in v0.8.25
+
+With a declared full-backup plan, the only retained recovery set is
+`backups/previous/full`. Collection snapshots are captured inside that set;
+upgrades and client integration reuse its verified recovery proof instead of
+creating separate runtime or configuration copies. Existing component copies
+require an explicit cleanup plan and are not silently removed. Audit remains
+outside rotation.
+
+## Previously in v0.8.24
 
 - **Legacy runtime copies rotate too.** Release-local `previous-runtime` copies join the canonical one-copy retention policy.
 - **Restore before removal.** The retained runtime is independently copied, checksum-verified and version-probed before obsolete copies expire.
@@ -811,31 +820,28 @@ Automatic consolidation creates a native Qdrant backup only when archival is
 needed and the latest backup is older than seven days (override with
 `ARIADNE_BACKUP_MIN_INTERVAL`); manual `ariadnectl backup` is unconditional.
 
-Backups live under `~/.ariadne/backups/previous/snapshot-<collection>/` with a
-checksummed manifest and recovery proof. The configured `ARIADNE_COLLECTION` is
-the default scope. Set `ARIADNE_BACKUP_COLLECTIONS=ariadne,sessions` explicitly
-when both collections belong to this installation; shared Qdrant collections
-are never selected just because they exist. A compatible local Qdrant binary
-must be installed at `~/.ariadne/bin/qdrant` (Windows: `qdrant.exe`) for recovery
-verification, including when the source Qdrant is remote.
-
-**Retention change in v0.8.23:** successful backups expire older matching native
-snapshots and timestamped downloads in the backup root and `backups/archive`.
-Older payload/metadata history in those copies is intentionally lost. Export or
-move any required historical checkpoint outside those managed names before the
-next backup. Enrolled full backup sets also rotate after independent recovery verification. JSONL
-exports and audit evidence are retained. Incomplete or modified generations remain
-for diagnosis.
-Runtime and client-configuration recovery copies use `previous/runtime` and
-`previous/config-*`; a same-version reinstall preserves the previous different
-runtime. Platform-owned process cancellation also stops its verifier children.
-
 With a private `~/.ariadne/full-backup.json` plan, `ariadnectl backup-full`, ordinary
-`backup` and due automatic backups also retain one full set at `previous/full`.
-Every file is restored independently; copied Qdrant, SQLite and model runtimes are
-checked before rotation. Access/activity history and receipts from retired full
-sets are preserved in `backups/full-audit`, outside rotation. See the
-[full backup setup](docs/backup-full.md). Audit archives intentionally remain unbounded.
+`backup` and due automatic backups retain **only one full set** at `previous/full`.
+Snapshots are created inside its private stage, then independently restored with
+the copied Qdrant, SQLite and model runtimes before publication. Only native
+snapshot sources recorded by that successful full set expire afterward.
+Runtime and client-configuration capture reuse the verified full keeper and fail
+closed if its checksums or successful recovery receipt are missing or invalid.
+They do not create `previous/runtime` or `previous/config-*` copies in this mode.
+Existing standalone snapshots, runtime copies and legacy evidence require a
+separately approved cleanup plan; changing the policy does not delete them.
+Access/activity history, manifests and collection restore logs from retired full
+sets are archived outside rotation in `backups/full-audit`. Failed/interrupted
+stages remain for diagnosis. See the [full backup setup](docs/backup-full.md).
+
+Without a full-backup plan, the existing component-only backup mode remains
+available: one verified snapshot per explicitly configured collection, plus one
+runtime/configuration recovery copy on updates. The configured `ARIADNE_COLLECTION`
+is the default scope. Set `ARIADNE_BACKUP_COLLECTIONS=ariadne,sessions` explicitly
+when both collections belong to this installation. A compatible local Qdrant
+binary at `~/.ariadne/bin/qdrant` (Windows: `qdrant.exe`) is required for snapshot
+recovery checks. Shared collections are never selected merely because they exist.
+JSONL exports and audit evidence remain outside automatic rotation.
 
 New memories are saved before source diary entries are marked archived; source
 text and vectors remain intact. Deterministic failures remain active and receive
@@ -960,7 +966,7 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.24 — current release. Legacy runtime copies join verified single-copy rotation; audit remains preserved.
+v0.8.25 — current release. One restore-verified full set replaces separate runtime, configuration and snapshot copies; audit remains preserved.
 
 v0.8.18 placed the access section near the top of the tray,
 with a pending-only decision queue, retained history in pages of ten, and

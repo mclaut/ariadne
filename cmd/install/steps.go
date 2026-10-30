@@ -38,7 +38,7 @@ func makePlan(r *report, o opts) []action {
 			run:   func() error { return ensureDirs(home) },
 		},
 		{
-			title: "keep one verified previous runtime before upgrade",
+			title: "verify recovery copy before upgrade (full-only when configured)",
 			run: func() error {
 				app := ""
 				if r.os == osDarwin {
