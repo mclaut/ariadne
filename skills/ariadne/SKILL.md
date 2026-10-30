@@ -142,7 +142,7 @@ when both scoped associations are intentionally useful.
 ~/.ariadne/bin/ariadnectl metrics       # tokens saved by recalls + corpus attribution profile
 ~/.ariadne/bin/ariadnectl backfill-attribution  # dry-run legacy diary attribution; add --apply to write
 ~/.ariadne/bin/ariadnectl start|stop|restart
-~/.ariadne/bin/ariadnectl backup        # 10 recent snapshots; older ones → backups/archive
+~/.ariadne/bin/ariadnectl backup        # one restored full set when full-backup.json is configured
 ~/.ariadne/bin/ariadnectl restore <f>   # DESTRUCTIVE: replace collection from snapshot
 ~/.ariadne/bin/ariadnectl export [f]    # portable JSONL (no vectors, re-embeddable)
 ~/.ariadne/bin/ariadnectl maintenance  # sync + consolidate, bounded retries
@@ -194,7 +194,14 @@ measured savings, attribution coverage, recall count, and unattributed cost;
 CLI/JSON expose the complete counters. These are conservative context-reuse
 estimates, not provider billing or a counterfactual A/B result.
 
-Backup vs export: **backup** = fast 1:1 snapshot tied to the embedding model;
+With a private `~/.ariadne/full-backup.json` plan, `backup` and `backup-full`
+retain only one independently restored full set. Runtime, configuration and
+collection snapshots are included in it instead of accumulating separately.
+A stale full blocks upgrades until a fresh full is verified. Audit stays outside
+rotation; existing extra copies require a separately approved cleanup plan.
+Without a full plan, the compatible component-only mode remains available.
+
+Backup vs export: **backup** = recovery set tied to the embedding model;
 **export** = portable text that any future model can re-embed. Before risky
 operations (restore, migration, bulk import) run a backup first.
 
