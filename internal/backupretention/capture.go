@@ -1,7 +1,6 @@
 package backupretention
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -9,7 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -228,6 +226,45 @@ func copyItem(source, destination string) error {
 	return nil
 }
 
+// legacyRuntimeRelease selects a namespace, never permission to delete its data.
+func legacyRuntimeRelease(name string) bool {
+	if len(name) == 0 || name[0] != 'v' {
+		return false
+	}
+	version, suffix, ok := strings.Cut(name, "-")
+	if !ok || suffix == "" {
+		return false
+	}
+	if len(version) < 2 || version[0] != 'v' {
+		return false
+	}
+	parts := strings.Split(version[1:], ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, p := range parts {
+		if p == "" {
+			return false
+		}
+		for i := 0; i < len(p); i++ {
+			if p[i] < '0' || p[i] > '9' {
+				return false
+			}
+		}
+	}
+	for i := 0; i < len(suffix); i++ {
+		c := suffix[i]
+		if c == 0 || c == '/' || c == '\\' {
+			return false
+		}
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 // CaptureRuntime preserves installed binaries and the native app before upgrade.
 func CaptureRuntime(home string) (string, error) {
 	return CaptureRuntimeWithApp(home, "")
@@ -237,7 +274,7 @@ func CaptureRuntimeWithApp(home, app string) (string, error) {
 	names := []string{"ariadne", "ariadnectl", "import", "ariadne-hook", "ariadne-launcher", "ariadne-tray", "qdrant"}
 	sources := make(map[string]string, len(names)+1)
 	for _, name := range names {
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == runtimeWindows {
 			name += ".exe"
 		}
 		sources["bin/"+name] = filepath.Join(home, ".ariadne", "bin", name)
@@ -260,27 +297,25 @@ func CaptureRuntimeWithApp(home, app string) (string, error) {
 		sources["services/"+unit] = filepath.Join(home, ".config", "systemd", "user", unit)
 	}
 	sources["services/ariadne-tray.desktop"] = filepath.Join(home, ".config", "autostart", "ariadne-tray.desktop")
-	return Capture(filepath.Join(home, ".ariadne", "backups", "previous"), "runtime", sources)
+	dest, err := Capture(filepath.Join(home, ".ariadne", "backups", "previous"), "runtime", sources)
+	if err != nil {
+		return dest, err
+	}
+	return dest, PruneLegacyRuntimes(home)
 }
 
 // CaptureRuntimeBeforeUpgrade keeps the last different runtime on idempotent installs.
 func CaptureRuntimeBeforeUpgrade(home, app, nextVersion string) (string, error) {
 	ctl := filepath.Join(home, ".ariadne", "bin", "ariadnectl")
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == runtimeWindows {
 		ctl += ".exe"
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, ctl, "version") //nolint:gosec // fixed installed control binary; read-only version command
-	command.Env = []string{"HOME=" + home, "USERPROFILE=" + home, "PATH=" + os.Getenv("PATH")}
-	if systemRoot := os.Getenv("SystemRoot"); systemRoot != "" {
-		command.Env = append(command.Env, "SystemRoot="+systemRoot)
-	}
-	out, err := command.Output()
+	current, err := probeRuntimeVersion(ctl)
+	next, nextErr := parseRuntimeVersion(nextVersion)
 	previous := filepath.Join(home, ".ariadne", "backups", "previous", "runtime")
-	if err == nil && strings.TrimSpace(string(out)) == nextVersion {
+	if err == nil && nextErr == nil && slices.Equal(current, next) {
 		if manifest, verifyErr := Verify(previous); verifyErr == nil && manifest.Object == "runtime" {
-			return previous, nil
+			return previous, PruneLegacyRuntimes(home)
 		}
 	}
 	return CaptureRuntimeWithApp(home, app)

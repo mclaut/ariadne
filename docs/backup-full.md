@@ -60,6 +60,17 @@ the already restored full keeper and retries only enrolled legacy cleanup. It
 does not create a second full set or bypass the immutable recovery proof.
 
 Full sets are component-consistent captures, not global transactions or OS images.
+
+Legacy runtime copies under `releases/vX.Y.Z-<suffix>/previous-runtime` also migrate
+to the one verified `backups/previous/runtime` policy. Migration requires exact
+matches against a restored full set, an older actual CLI version, an unused copy,
+and an independently restored canonical runtime. Manifests, app metadata, logs and
+other audit evidence are preserved under `backups/runtime-audit` before removal.
+Release binaries outside `previous-runtime` are never selected. Modified, newer,
+unrecognized or active copies remain protected. The migration runs on runtime
+capture, same-version reinstalls, and successful backups; it can also be retried
+without another full backup using `ariadnectl backup-retention runtime-cleanup`.
+
 OS frameworks and hardware remain external dependencies. Nested symlinks are
 preserved; when relocating an installation, rebase installation-owned absolute
 links in a new destination before activation. Merge saved client sections into

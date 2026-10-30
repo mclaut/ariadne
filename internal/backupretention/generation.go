@@ -335,7 +335,7 @@ func removeEntries(dir string, inventoryEntries []Entry, managedManifest bool) e
 		return strings.Compare(b.Path, a.Path)
 	})
 	for _, e := range entries {
-		if !fs.ValidPath(e.Path) || e.Path == "." || e.Path == manifestName {
+		if !fs.ValidPath(e.Path) || e.Path == "." || (managedManifest && e.Path == manifestName) {
 			return errors.New("invalid managed manifest entry")
 		}
 		info, statErr := root.Lstat(filepath.FromSlash(e.Path))

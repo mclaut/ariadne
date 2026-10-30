@@ -426,7 +426,7 @@ func appendBackupRetentionAudit(event map[string]any) error {
 
 func backupRetentionCmd(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: ariadnectl backup-retention {runtime|claude-mcp|claude-hooks|codex-mcp}")
+		fmt.Fprintln(os.Stderr, "usage: ariadnectl backup-retention {runtime|runtime-cleanup|claude-mcp|claude-hooks|codex-mcp}")
 		return 2
 	}
 	home, err := os.UserHomeDir()
@@ -436,6 +436,15 @@ func backupRetentionCmd(args []string) int {
 	}
 	var dest string
 	switch args[0] {
+	case "runtime-cleanup":
+		unlock, lockErr := backupretention.Lock(filepath.Join(home, ".ariadne"), "install")
+		if lockErr != nil {
+			err = lockErr
+			break
+		}
+		err = backupretention.PruneLegacyRuntimes(home)
+		unlock()
+		dest = filepath.Join(home, ".ariadne", "backups", "previous", "runtime")
 	case "runtime":
 		app := ""
 		if runtime.GOOS == "darwin" {

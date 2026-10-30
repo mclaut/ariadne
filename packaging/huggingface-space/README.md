@@ -35,7 +35,7 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.23 keeps one verified recovery copy per component.
+Version 0.8.24 also migrates legacy release-local runtime backups into the canonical verified retention policy.
 
 - **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
 - **Recovery checked before rotation.** Snapshot size and SHA-256 must match Qdrant; an isolated local Qdrant restores the snapshot, checks the source count and vector schema, and reads every point with its payload and vectors.
@@ -81,3 +81,7 @@ MIT licensed. The source of this Space is maintained in
 ## Full backup rotation in v0.8.23
 
 An explicit full-backup plan keeps one independently restored full recovery set. Older full sets expire only after the replacement passes file, database and model recovery checks. Audit is preserved separately, outside rotation.
+
+## Runtime rotation fixed in v0.8.24
+
+Old release-local previous-runtime directories expire only after exact full-backup matching and independent recovery of the retained runtime. Audit metadata and retired-file inventories are preserved separately. Active, modified, newer or unknown copies stay protected.

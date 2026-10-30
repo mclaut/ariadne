@@ -155,6 +155,13 @@ func retryFullCleanup() error {
 			return err
 		}
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	if err = backupretention.PruneLegacyRuntimes(home); err != nil {
+		return err
+	}
 	fmt.Println("full cleanup ok: verified keeper retained · audit preserved")
 	return nil
 }
@@ -274,6 +281,9 @@ func runFullBackup() error {
 		if err = backupretention.PruneLegacyFull(backupsDir(), dest, legacy); err != nil {
 			return fmt.Errorf("new full retained; legacy cleanup: %w", err)
 		}
+	}
+	if err = backupretention.PruneLegacyRuntimes(home); err != nil {
+		return fmt.Errorf("new full retained; runtime cleanup: %w", err)
 	}
 	fmt.Println("full backup ok: independent recovery PASS · one verified full copy · audit retained")
 	return nil

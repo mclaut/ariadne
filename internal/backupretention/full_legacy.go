@@ -170,10 +170,17 @@ func PruneLegacyFull(root, keeper string, old LegacyFull) error {
 }
 
 func ArchiveFullAudit(root, id, source string, paths []string) (string, error) {
+	return archiveBackupAudit(root, "full", id, source, paths, nil)
+}
+
+func archiveBackupAudit(root, kind, id, source string, paths []string, provenance any) (string, error) {
+	if kind != "full" && kind != "runtime" {
+		return "", errors.New("invalid backup audit kind")
+	}
 	if len(id) != 64 || strings.Trim(id, "0123456789abcdef") != "" {
 		return "", errors.New("invalid full audit identity")
 	}
-	object := "full-" + id
+	object := kind + "-" + id
 	dest := filepath.Join(root, object)
 	if _, err := os.Lstat(dest); err == nil {
 		m, verifyErr := Verify(dest)
@@ -221,5 +228,26 @@ func ArchiveFullAudit(root, id, source string, paths []string) (string, error) {
 			return "", err
 		}
 	}
-	return Publish(root, object, stage, time.Now(), map[string]string{"source_manifest_sha256": id, "purpose": "preserved-full-backup-audit"})
+	key := "source_manifest_sha256"
+	if kind == "runtime" {
+		key = "source_inventory_sha256"
+	}
+	if provenance != nil {
+		data, jsonErr := json.MarshalIndent(provenance, "", "  ")
+		if jsonErr != nil {
+			return "", jsonErr
+		}
+		//nolint:gosec // exclusive receipt in the new private audit stage
+		f, openErr := os.OpenFile(filepath.Join(stage, "provenance.json"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if openErr != nil {
+			return "", openErr
+		}
+		_, writeErr := f.Write(data)
+		syncErr := f.Sync()
+		closeErr := f.Close()
+		if err = errors.Join(writeErr, syncErr, closeErr); err != nil {
+			return "", err
+		}
+	}
+	return Publish(root, object, stage, time.Now(), map[string]string{key: id, "purpose": "preserved-" + kind + "-backup-audit"})
 }

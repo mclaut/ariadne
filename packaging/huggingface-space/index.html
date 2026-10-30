@@ -19,7 +19,7 @@
         Ariadne
       </a>
       <div class="nav-links">
-        <a href="#new">New in 0.8.23</a>
+        <a href="#new">New in 0.8.24</a>
         <a href="#architecture">Architecture</a>
         <a href="#install">Install</a>
       </div>
@@ -40,7 +40,7 @@
         <div class="hero-content">
           <div class="release-kicker">
             <span data-lucide="sparkles" aria-hidden="true"></span>
-            v0.8.23 keeps one verified recovery copy per component
+            v0.8.24 fixes rotation of older runtime backups
           </div>
           <h1>Ariadne</h1>
           <p class="hero-lead">
@@ -58,7 +58,7 @@
             </a>
             <a
               class="button button-secondary"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.23"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.24"
               target="_blank"
               rel="noreferrer"
             >
@@ -78,14 +78,14 @@
       <section class="new-band" id="new">
         <div class="section-shell">
           <div class="section-heading">
-            <span class="eyebrow">New in v0.8.23</span>
-            <h2>One previous copy. Verified recovery.</h2>
-            <p>A replacement passes recovery checks before older backup history expires.</p>
+            <span class="eyebrow">New in v0.8.24</span>
+            <h2>One runtime copy. Audit preserved.</h2>
+            <p>Legacy release-local runtime copies now join canonical retention. The retained runtime is restored before cleanup; audit is preserved.</p>
           </div>
           <div class="feature-grid">
-            <article class="feature feature-green"><span data-lucide="check-circle-2" aria-hidden="true"></span><h3>One copy per component</h3><p>Each configured collection keeps one verified snapshot. Upgrades preserve one previous runtime and changed client configuration.</p></article>
-            <article class="feature feature-blue"><span data-lucide="scan-search" aria-hidden="true"></span><h3>Recovery checked first</h3><p>Checksum, restored record counts, vector schema and every readable point are checked before rotation.</p></article>
-            <article class="feature feature-coral"><span data-lucide="list-filter" aria-hidden="true"></span><h3>Working data stays available</h3><p>Live memory and access audit remain intact. Older matching backup files expire automatically after a verified replacement.</p></article>
+            <article class="feature feature-green"><span data-lucide="check-circle-2" aria-hidden="true"></span><h3>One copy per component</h3><p>One verified canonical runtime replaces obsolete previous-runtime directories from older releases.</p></article>
+            <article class="feature feature-blue"><span data-lucide="scan-search" aria-hidden="true"></span><h3>Recovery checked first</h3><p>The retained runtime is independently restored, checksum-checked and version-probed before older copies expire.</p></article>
+            <article class="feature feature-coral"><span data-lucide="list-filter" aria-hidden="true"></span><h3>Working data stays available</h3><p>Old manifests and retired-file inventories are preserved separately. Busy, changed, newer and unknown copies block cleanup.</p></article>
           </div>
         </div>
       </section>
@@ -224,6 +224,6 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre>
 
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <script src="app.js"></script>
-  <section class="section"><h2>Full backup rotation · v0.8.23</h2><p>Keep one verified full recovery set. Older full sets expire only after independent recovery checks pass. Access and activity audit remain preserved outside rotation.</p></section>
+  <section class="section"><h2>Full backup rotation · v0.8.24</h2><p>Keep one verified full recovery set. Older full sets expire only after independent recovery checks pass. Access and activity audit remain preserved outside rotation.</p></section>
 </body>
 </html>

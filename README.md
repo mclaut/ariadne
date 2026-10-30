@@ -26,7 +26,14 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.23
+## What's New in v0.8.24
+
+- **Legacy runtime copies rotate too.** Release-local `previous-runtime` copies join the canonical one-copy retention policy.
+- **Restore before removal.** The retained runtime is independently copied, checksum-verified and version-probed before obsolete copies expire.
+- **Audit remains available.** Old manifests, application metadata, sidecar history and a complete retired-file inventory are preserved separately. Active, changed, newer or unknown copies block cleanup.
+- **Repeatable migration.** Backup, upgrades and same-version reinstalls run the migration; an explicit retry is available through `backup-retention runtime-cleanup`.
+
+## Previously in v0.8.23
 
 - **Full sets rotate too.** An explicit full-backup plan retains one independently restored full recovery set. The previous full set expires only after recovery passes; its audit is preserved separately.
 - **One verified copy per component.** Configured Qdrant collections retain one recovery snapshot. Upgrades keep one previous runtime and one previous copy of each changed client configuration.
@@ -953,7 +960,7 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.23 — current release. Verified recovery precedes automatic single-copy backup rotation.
+v0.8.24 — current release. Legacy runtime copies join verified single-copy rotation; audit remains preserved.
 
 v0.8.18 placed the access section near the top of the tray,
 with a pending-only decision queue, retained history in pages of ten, and

@@ -43,6 +43,17 @@ func backupCmd() (code int) {
 		code = 1
 	} else {
 		code = managedBackupCmd()
+		if code == 0 {
+			home, homeErr := os.UserHomeDir()
+			if homeErr != nil {
+				message = homeErr.Error()
+				return 1
+			}
+			if err = backupretention.PruneLegacyRuntimes(home); err != nil {
+				fmt.Fprintln(os.Stderr, "runtime retention:", err)
+				code = 1
+			}
+		}
 	}
 	if code != 0 {
 		message = "verified backup or retention failed"
