@@ -100,6 +100,15 @@ func CopyInto(source, destination string) error {
 // checks the restored inventory before invoking component recovery checks.
 // Failed copies remain available for diagnosis; only a verified derivative is removed.
 func CheckRecoveryCopy(source, root string, check func(string) error) error {
+	return checkRecoveryCopy(source, root, check, false)
+}
+
+// CheckRecoveryCopyPreserving keeps the verified independent restore as repair evidence.
+func CheckRecoveryCopyPreserving(source, root string, check func(string) error) error {
+	return checkRecoveryCopy(source, root, check, true)
+}
+
+func checkRecoveryCopy(source, root string, check func(string) error, preserve bool) error {
 	before, err := inventory(source)
 	if err != nil {
 		return err
@@ -133,6 +142,9 @@ func CheckRecoveryCopy(source, root string, check func(string) error) error {
 	}
 	if busy {
 		return errors.New("restored full test still in use; retained")
+	}
+	if preserve {
+		return nil
 	}
 	return RemoveVerified(sealed)
 }

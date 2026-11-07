@@ -35,12 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.25 keeps one independently restored full recovery set when an explicit full-backup plan is configured.
+Version 0.8.26 keeps backup failures visible and reports every new failed attempt.
 
-- **One full set.** Runtime, client configuration and collection snapshots are included in the full set instead of accumulating separately.
-- **Recovery before rotation.** Files, databases and configured models pass independent recovery before the previous full set expires.
-- **Safe failures.** Failed recovery keeps the previous full. A stale full blocks runtime upgrades instead of silently creating another component copy.
-- **Audit preserved.** Access history, manifests and restore logs remain outside rotation. Existing extra copies require an explicit cleanup plan.
+- **Honest health.** New maintenance progress cannot hide failed backups or retry warnings.
+- **Failure messages.** The menu shows the current issue; new failures notify again, and failed notification commands are retried.
+- **Preserving repair mode.** Explicit repair mode retains the previous full and verification copies without skipping independent recovery checks.
+- **Audit preserved.** Normal one-full retention stays unchanged. Repair artifacts require a separately approved cleanup plan.
 
 ## Links
 

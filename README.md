@@ -26,7 +26,13 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.25
+## What's New in v0.8.26
+
+- **Backup failures stay visible.** New maintenance progress cannot hide a failed backup or a retry warning.
+- **Messages for each failed attempt.** The tray shows the issue and sends a new notification for a new failure; failed notification commands are retried.
+- **Preserving repair mode.** Explicit `ARIADNE_BACKUP_PRESERVE=1` retains the prior full and verification copies while still requiring recovery checks. Normal one-full retention is unchanged.
+
+## Previously in v0.8.25
 
 With a declared full-backup plan, the only retained recovery set is
 `backups/previous/full`. Collection snapshots are captured inside that set;
@@ -966,7 +972,7 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.25 — current release. One restore-verified full set replaces separate runtime, configuration and snapshot copies; audit remains preserved.
+v0.8.26 — current release. Backup failures stay visible, failed attempts notify, and preserving repair mode retains verified recovery evidence.
 
 v0.8.18 placed the access section near the top of the tray,
 with a pending-only decision queue, retained history in pages of ten, and

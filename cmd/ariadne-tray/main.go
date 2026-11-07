@@ -86,13 +86,15 @@ type status struct {
 }
 
 var (
-	mu         sync.Mutex // serializes UI updates across poll/switch goroutines
-	lang       i18n.Lang
-	lastIssues []string
+	mu           sync.Mutex // serializes UI updates across poll/switch goroutines
+	lang         i18n.Lang
+	lastIssues   []string
+	lastFailures = map[string]string{}
 
 	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints                                       *systray.MenuItem
 	rowTokens, rowCoverage, rowUnattributed, rowDisk, rowMaintenance                             *systray.MenuItem
 	rowApproval                                                                                  *systray.MenuItem
+	rowIssue                                                                                     *systray.MenuItem
 	mUpdate, mStart, mStop, mRestart, mMaintenance, mBackup, mExport, mData, mLogs, mLang, mQuit *systray.MenuItem
 	langItems                                                                                    map[i18n.Lang]*systray.MenuItem
 	maintenanceRunning                                                                           bool
@@ -167,6 +169,8 @@ func onReady() {
 
 	rowVersion = infoRow("Ariadne " + version.Tag)
 	rowHealth = infoRow("…")
+	rowIssue = infoRow("")
+	rowIssue.Hide()
 	rowApproval = infoRow("")
 	approvalQueueMenu = systray.AddMenuItem("", "")
 	approvalHistoryMenu = systray.AddMenuItem("", "")
@@ -310,6 +314,12 @@ func poll() {
 	systray.SetTooltip("Ariadne " + version.Tag + " — " + word)
 	rowVersion.SetTitle("Ariadne " + version.Tag)
 	rowHealth.SetTitle("ariadne — " + word)
+	if len(s.Issues) == 0 {
+		rowIssue.Hide()
+	} else {
+		rowIssue.SetTitle("⚠ " + strings.Join(s.Issues, " · "))
+		rowIssue.Show()
+	}
 	qdrantRow := serviceRow("Qdrant", upWord(s.Qdrant.Up), s.Qdrant.PID, s.Qdrant.RSSMB)
 	if s.Qdrant.FDLimit > 0 {
 		qdrantRow += fmt.Sprintf(" · FDs %d/%d", s.Qdrant.OpenFDs, s.Qdrant.FDLimit)
@@ -352,8 +362,19 @@ func poll() {
 		notify("⚠️ ariadne", strings.Join(s.Issues, " · "))
 	}
 	lastIssues = s.Issues
+	failures := newFailureNotices(s.Maintenance, lastFailures)
 	activeLang := lang
 	mu.Unlock()
+	for _, failure := range failures {
+		label := i18n.T(activeLang, "notify.maintenance")
+		if failure.Operation == "backup" {
+			label = i18n.T(activeLang, "notify.backup")
+		}
+		message := label + ": " + i18n.T(activeLang, "notify.failed") + " · " +
+			failure.Operation + ": " + failure.Status + " · " + failure.At.Local().Format("15:04:05") +
+			" · " + i18n.T(activeLang, "notify.see_logs")
+		go deliverFailureNotice(failure, message)
+	}
 	if approvalNotice != nil {
 		notify(i18n.T(activeLang, "notify.approval"), approvalNotification(activeLang, *approvalNotice))
 	}
@@ -486,7 +507,9 @@ func maintenanceClicked() {
 	mu.Unlock()
 	result := i18n.T(activeLang, "notify.done")
 	if err != nil {
-		result = i18n.T(activeLang, "notify.failed")
+		result = i18n.T(activeLang, "notify.failed") + " · " + shortServiceError(err) + " · " +
+			i18n.T(activeLang, "notify.see_logs")
+		log.Printf("manual maintenance failed: %v", err)
 	}
 	notify("ariadne", i18n.T(activeLang, "notify.maintenance")+": "+result)
 	poll()
@@ -586,7 +609,13 @@ func openPath(p string) {
 }
 
 func notify(title, msg string) {
-	_ = notificationCommand(context.Background(), title, msg).Start()
+	go func() {
+		if err := notifySync(title, msg); err != nil {
+			log.Printf("notification failed: title=%q error=%q", title, err)
+		} else {
+			log.Printf("notification command completed: title=%q", title)
+		}
+	}()
 }
 
 func notifySync(title, msg string) error {

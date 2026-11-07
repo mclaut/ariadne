@@ -60,6 +60,9 @@ func verifySnapshotWithBinary(snapshot, home, binary string) (proof snapshotProo
 	}
 	// This workspace contains only a derivative of the snapshot retained by the caller.
 	defer func() {
+		if os.Getenv("ARIADNE_BACKUP_PRESERVE") == "1" {
+			return
+		}
 		if err := os.RemoveAll(work); err != nil {
 			returnErr = errors.Join(returnErr, err)
 		}

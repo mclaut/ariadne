@@ -162,7 +162,7 @@ func requeueEmptyCmd(args []string) int {
 			return 1
 		}
 	}
-	_ = activity.Append(activity.Event{Operation: "requeue_empty", Status: "complete", Counters: map[string]int64{
+	_ = activity.Append(activity.Event{Operation: "requeue_empty", Status: backupStatusComplete, Counters: map[string]int64{
 		"records": int64(len(points)),
 	}})
 	fmt.Printf("requeue-empty: %d records active for a confirming pass\n", len(points))
@@ -299,7 +299,7 @@ func consolidateCmd(args []string) int {
 		interval := durationEnv("ARIADNE_BACKUP_MIN_INTERVAL", 7*24*time.Hour)
 		if backupIfDue(time.Now(), interval) != 0 {
 			fmt.Fprintln(os.Stderr, "consolidate: due backup failed; refusing lifecycle changes")
-			_ = activity.Append(activity.Event{Operation: "consolidate", Status: "failed", Message: "due backup failed"})
+			_ = activity.Append(activity.Event{Operation: "consolidate", Status: maintenanceStatusFailed, Message: "due backup failed"})
 			return 1
 		}
 	}
@@ -348,12 +348,12 @@ func consolidateCmd(args []string) int {
 
 func consolidationFailureStatus(retryable, deferred int64) (string, int) {
 	if retryable > 0 {
-		return "partial", 1
+		return maintenanceStatusPartial, 1
 	}
 	if deferred > 0 {
-		return "deferred", consolidateDeferredExitCode
+		return maintenanceStatusDeferred, consolidateDeferredExitCode
 	}
-	return "complete", 0
+	return backupStatusComplete, 0
 }
 
 func eligibleDiaryPoints(points []diaryPoint, pipelineKey string) ([]diaryPoint, int64) {
@@ -948,7 +948,7 @@ func conservativeRoom(room, text string) string {
 		"entschied", "decisione", "decidió", "décid", "decyz",
 	}
 	gotchaSignals := []string{
-		"root cause", "caused", "due to", "failed", "failure", "error", "problem", "fixed", "resolved",
+		"root cause", "caused", "due to", maintenanceStatusFailed, "failure", "error", "problem", "fixed", "resolved",
 		"blocks", "mismatch", "причин", "помил", "проблем", "виправ", "блоку", "невідповід", "збій",
 		"ursache", "fehler", "causa", "errore", "problème", "błąd",
 	}

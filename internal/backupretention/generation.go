@@ -190,6 +190,16 @@ func Verify(dir string) (Manifest, error) {
 // Publish commits an independently verified stage and keeps exactly one generation.
 // Unknown or modified prior generations block replacement; they are never erased.
 func Publish(root, object, stage string, created time.Time, metadata map[string]string) (string, error) {
+	return publish(root, object, stage, created, metadata, false)
+}
+
+// PublishPreserving activates a verified generation while archiving its predecessor intact.
+// It is intended for explicitly non-destructive repair operations.
+func PublishPreserving(root, object, stage string, created time.Time, metadata map[string]string) (string, error) {
+	return publish(root, object, stage, created, metadata, true)
+}
+
+func publish(root, object, stage string, created time.Time, metadata map[string]string, preserve bool) (string, error) {
 	physical, err := physicalDirectory(root)
 	if err != nil {
 		return "", err
@@ -295,7 +305,7 @@ func Publish(root, object, stage string, created time.Time, metadata map[string]
 	if err = syncDirectory(root); err != nil {
 		return destination, err
 	}
-	if retired != "" {
+	if retired != "" && !preserve {
 		if err = RemoveVerified(retired); err != nil {
 			return destination, fmt.Errorf("new backup retained; old generation cleanup: %w", err)
 		}
@@ -305,6 +315,7 @@ func Publish(root, object, stage string, created time.Time, metadata map[string]
 	}
 	if err = appendAudit(root, map[string]any{
 		"action": "replace_previous", "status": "complete", "object": object,
+		"preserved_previous": preserve && retired != "", "previous_path": retired,
 	}); err != nil {
 		return destination, err
 	}

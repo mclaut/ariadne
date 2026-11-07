@@ -29,6 +29,10 @@ func backupsDir() string {
 // it survives loss of the data dir. One verified generation is retained per
 // collection, and legacy/native copies rotate only after recovery verification.
 func backupCmd() (code int) {
+	_, planErr := os.Lstat(fullPlanPath())
+	if planErr == nil {
+		return fullBackupCmd()
+	}
 	status, message := "failed", ""
 	defer func() {
 		counters := map[string]int64{"copies_per_object": 1}
@@ -36,10 +40,8 @@ func backupCmd() (code int) {
 			Operation: "backup", Status: status, Message: message, Counters: counters,
 		})
 	}()
-	if _, err := os.Lstat(fullPlanPath()); err == nil {
-		code = fullBackupCmd()
-	} else if !os.IsNotExist(err) {
-		fmt.Fprintln(os.Stderr, "full backup plan:", err)
+	if !os.IsNotExist(planErr) {
+		fmt.Fprintln(os.Stderr, "full backup plan:", planErr)
 		code = 1
 	} else {
 		code = managedBackupCmd()
@@ -49,7 +51,7 @@ func backupCmd() (code int) {
 				message = homeErr.Error()
 				return 1
 			}
-			if err = backupretention.PruneLegacyRuntimes(home); err != nil {
+			if err := backupretention.PruneLegacyRuntimes(home); err != nil {
 				fmt.Fprintln(os.Stderr, "runtime retention:", err)
 				code = 1
 			}

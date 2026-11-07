@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ariadne/internal/activity"
 	"ariadne/internal/backupretention"
 	"context"
 	"database/sql"
@@ -119,7 +120,17 @@ func loadFullPlan() (fullBackupPlan, []byte, error) {
 	return plan, data, nil
 }
 
-func fullBackupCmd() int {
+func fullBackupCmd() (code int) {
+	defer func() {
+		status, message := backupStatusComplete, ""
+		if code != 0 {
+			status, message = maintenanceStatusFailed, "full backup or verification failed; see maintenance.log"
+		}
+		_ = activity.Append(activity.Event{
+			Operation: "backup", Status: status, Message: message,
+			Counters: map[string]int64{"copies_per_object": 1},
+		})
+	}()
 	if hasFlag("--retry-cleanup") {
 		if err := retryFullCleanup(); err != nil {
 			fmt.Fprintln(os.Stderr, "full cleanup:", err)
@@ -235,7 +246,14 @@ func runFullBackup() error {
 		proofs[name] = proof
 	}
 	fmt.Println("full backup: testing independent file, database and model recovery")
-	if err = backupretention.CheckRecoveryCopy(stage, filepath.Join(backupsDir(), "full-recovery-checks"), func(restored string) error {
+	checkRecovery := backupretention.CheckRecoveryCopy
+	publishFull := backupretention.Publish
+	preserve := os.Getenv("ARIADNE_BACKUP_PRESERVE") == "1"
+	if preserve {
+		checkRecovery = backupretention.CheckRecoveryCopyPreserving
+		publishFull = backupretention.PublishPreserving
+	}
+	if err = checkRecovery(stage, filepath.Join(backupsDir(), "full-recovery-checks"), func(restored string) error {
 		return verifyFullRecovery(restored, plan, proofs)
 	}); err != nil {
 		return fmt.Errorf("full recovery failed; previous full copies retained: %w", err)
@@ -284,9 +302,13 @@ func runFullBackup() error {
 	} else if !os.IsNotExist(statErr) {
 		return statErr
 	}
-	dest, err := backupretention.Publish(root, backupObjectFull, stage, started, metadata)
+	dest, err := publishFull(root, backupObjectFull, stage, started, metadata)
 	if err != nil {
 		return err
+	}
+	if preserve {
+		fmt.Println("full backup ok: independent recovery PASS · previous full and verification copies preserved · no pruning")
+		return nil
 	}
 	for _, legacy := range plan.Legacy {
 		if err = backupretention.PruneLegacyFull(backupsDir(), dest, legacy); err != nil {
@@ -451,7 +473,7 @@ func fullReadCommand(binary string, args []string, home string) (string, error) 
 	}
 	out, err := command.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("full recovery command failed: %w", err)
+		return "", fmt.Errorf("full recovery %s command failed: %w", filepath.Base(binary), err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }

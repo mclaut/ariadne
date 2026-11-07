@@ -264,6 +264,9 @@ func gather() status {
 	if issue := maintenanceHealthIssue(time.Now(), s.Maintenance, lang); issue != "" {
 		s.Issues = append(s.Issues, issue)
 	}
+	if issue := backupHealthIssue(s.Maintenance, lang); issue != "" {
+		s.Issues = append(s.Issues, issue)
+	}
 	s.OK = len(s.Issues) == 0
 	return s
 }

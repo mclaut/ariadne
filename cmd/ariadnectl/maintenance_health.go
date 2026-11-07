@@ -8,11 +8,33 @@ import (
 )
 
 const (
+	maintenanceStatusFailed      = "failed"
+	maintenanceStatusPartial     = "partial"
+	maintenanceStatusDeferred    = "deferred"
 	defaultMaintenanceStaleAfter = 36 * time.Hour
 	defaultMaintenanceStuckAfter = 2 * time.Hour
 )
 
 func maintenanceHealthIssue(now time.Time, events map[string]activity.Event, lang i18n.Lang) string {
+	maintenance, hasMaintenance := events["maintenance"]
+	if hasMaintenance && maintenance.Status == "retrying" {
+		if now.Sub(maintenance.At) > durationEnv("ARIADNE_MAINTENANCE_STUCK_AFTER", defaultMaintenanceStuckAfter) {
+			return fmt.Sprintf(i18n.T(lang, "issue.maintenance_stuck"), maintenanceEventTime(maintenance))
+		}
+		return i18n.T(lang, "issue.maintenance_retrying")
+	}
+	for _, operation := range []string{"maintenance", "memfile_sync", "consolidate"} {
+		child, ok := events[operation]
+		if !ok || (child.Status != maintenanceStatusFailed && child.Status != maintenanceStatusPartial &&
+			child.Status != maintenanceStatusDeferred) {
+			continue
+		}
+		if hasMaintenance && (maintenance.Status == backupStatusComplete || maintenance.Status == "complete_with_deferred") &&
+			!maintenance.At.Before(child.At) {
+			continue
+		}
+		return fmt.Sprintf(i18n.T(lang, "issue.maintenance_failed"), operation+": "+child.Status)
+	}
 	event, ok := latestMaintenanceEvent(events)
 	if !ok {
 		return i18n.T(lang, "issue.maintenance_missing")
@@ -22,9 +44,9 @@ func maintenanceHealthIssue(now time.Time, events map[string]activity.Event, lan
 		age = 0
 	}
 	switch event.Status {
-	case "failed":
+	case maintenanceStatusFailed:
 		return fmt.Sprintf(i18n.T(lang, "issue.maintenance_failed"), event.Status)
-	case "partial", "deferred":
+	case maintenanceStatusPartial, maintenanceStatusDeferred:
 		return fmt.Sprintf(i18n.T(lang, "issue.maintenance_degraded"), event.Status)
 	case "running", "retrying":
 		if age > durationEnv("ARIADNE_MAINTENANCE_STUCK_AFTER", defaultMaintenanceStuckAfter) {
@@ -37,6 +59,14 @@ func maintenanceHealthIssue(now time.Time, events map[string]activity.Event, lan
 		}
 		return ""
 	}
+}
+
+func backupHealthIssue(events map[string]activity.Event, lang i18n.Lang) string {
+	event, ok := events["backup"]
+	if !ok || event.Status == backupStatusComplete {
+		return ""
+	}
+	return fmt.Sprintf(i18n.T(lang, "issue.backup_failed"), event.Status)
 }
 
 func latestMaintenanceEvent(events map[string]activity.Event) (activity.Event, bool) {

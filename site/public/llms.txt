@@ -41,3 +41,5 @@ v0.8.12 adds owner-approved persistent credential trust for one exact source win
 Full backup rotation: a private explicit plan retains one independently verified full recovery set. Audit is retained outside rotation. See https://github.com/mclaut/ariadne/blob/main/docs/backup-full.md
 
 Runtime rotation v0.8.24: legacy release-local previous-runtime copies join canonical retention after independent runtime recovery; audit metadata and retired-file inventories are preserved.
+
+Version 0.8.26 surfaces failed backups independently of maintenance progress, warns during retries, and sends notifications for each new failed attempt. Explicit preserving repair mode retains previous full and verification copies; recovery checks remain mandatory.
