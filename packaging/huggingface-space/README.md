@@ -35,12 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.26 keeps backup failures visible and reports every new failed attempt.
+Version 0.8.27 is a security maintenance release.
 
-- **Honest health.** New maintenance progress cannot hide failed backups or retry warnings.
-- **Failure messages.** The menu shows the current issue; new failures notify again, and failed notification commands are retried.
-- **Preserving repair mode.** Explicit repair mode retains the previous full and verification copies without skipping independent recovery checks.
-- **Audit preserved.** Normal one-full retention stays unchanged. Repair artifacts require a separately approved cleanup plan.
+- **Patched Go toolchain.** Built with Go 1.26.11, closing 24 reachable standard-library advisories in HTTP/2, HTTP/1, TLS, certificate validation and file-system root handling.
+- **Updated dependencies.** `golang.org/x/net` v0.63.0 and `grpc` v1.85.0.
+- **Vulnerability gate.** Every CI run and release runs `govulncheck`; a reachable vulnerability blocks the build.
+- **Drop-in upgrade.** No data, configuration or behavior changes; memories, backups and settings are kept.
 
 ## Links
 

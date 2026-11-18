@@ -26,7 +26,14 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.26
+## What's New in v0.8.27
+
+- **Patched Go toolchain.** Binaries are built with Go 1.26.11, closing 24 reachable standard-library advisories (HTTP/2 and HTTP/1 servers, TLS, certificate validation, file-system root escape).
+- **Updated network dependencies.** `golang.org/x/net` v0.63.0 and `grpc` v1.85.0.
+- **Vulnerability gate.** CI and releases run `govulncheck`; a reachable vulnerability blocks the build. No data, configuration or behavior changes.
+
+## Previously in v0.8.26
+
 
 - **Backup failures stay visible.** New maintenance progress cannot hide a failed backup or a retry warning.
 - **Messages for each failed attempt.** The tray shows the issue and sends a new notification for a new failure; failed notification commands are retried.
@@ -972,7 +979,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.26 — current release. Backup failures stay visible, failed attempts notify, and preserving repair mode retains verified recovery evidence.
+v0.8.27 — current release. A security maintenance build on Go 1.26.11 with updated network dependencies and a `govulncheck` release gate.
+
+v0.8.26 kept backup failures visible, notified on each failed attempt, and added a preserving repair mode.
 
 v0.8.18 placed the access section near the top of the tray,
 with a pending-only decision queue, retained history in pages of ten, and

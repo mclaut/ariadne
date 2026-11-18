@@ -19,7 +19,7 @@
         Ariadne
       </a>
       <div class="nav-links">
-        <a href="#new">New in 0.8.26</a>
+        <a href="#new">New in 0.8.27</a>
         <a href="#architecture">Architecture</a>
         <a href="#install">Install</a>
       </div>
@@ -40,7 +40,7 @@
         <div class="hero-content">
           <div class="release-kicker">
             <span data-lucide="sparkles" aria-hidden="true"></span>
-            v0.8.26 makes backup failures visible
+            v0.8.27 patches Go and gates releases on govulncheck
           </div>
           <h1>Ariadne</h1>
           <p class="hero-lead">
@@ -58,7 +58,7 @@
             </a>
             <a
               class="button button-secondary"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.26"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.27"
               target="_blank"
               rel="noreferrer"
             >
@@ -78,14 +78,14 @@
       <section class="new-band" id="new">
         <div class="section-shell">
           <div class="section-heading">
-            <span class="eyebrow">New in v0.8.26</span>
-            <h2>Backup failures stay visible.</h2>
-            <p>See the current issue, receive a message for each new failed attempt, and preserve recovery copies during repairs.</p>
+            <span class="eyebrow">New in v0.8.27</span>
+            <h2>Patched, and kept that way.</h2>
+            <p>A security maintenance release: a patched Go toolchain, updated network dependencies, and a vulnerability gate on every build.</p>
           </div>
           <div class="feature-grid">
-            <article class="feature feature-green"><span data-lucide="check-circle-2" aria-hidden="true"></span><h3>Errors stay visible</h3><p>Failed backups and retry warnings cannot be hidden by newer maintenance progress. The menu keeps the reason visible.</p></article>
-            <article class="feature feature-blue"><span data-lucide="scan-search" aria-hidden="true"></span><h3>Every failed attempt</h3><p>New failed attempts notify again. Notification command failures are logged and retried; system notification settings apply.</p></article>
-            <article class="feature feature-coral"><span data-lucide="list-filter" aria-hidden="true"></span><h3>Preserving repair mode</h3><p>Explicit repair mode retains the previous full and verification copies. Independent recovery stays required; audit is preserved.</p></article>
+            <article class="feature feature-green"><span data-lucide="check-circle-2" aria-hidden="true"></span><h3>Go 1.26.11</h3><p>Closes 24 reachable standard-library advisories in HTTP/2, HTTP/1, TLS, certificate validation and file-system root handling.</p></article>
+            <article class="feature feature-blue"><span data-lucide="scan-search" aria-hidden="true"></span><h3>Vulnerability gate</h3><p>CI and every release run govulncheck. A reachable vulnerability blocks the build instead of shipping.</p></article>
+            <article class="feature feature-coral"><span data-lucide="list-filter" aria-hidden="true"></span><h3>Drop-in upgrade</h3><p>Updated x/net and gRPC. No data, configuration or behavior changes; memories, backups and settings are kept.</p></article>
           </div>
         </div>
       </section>
