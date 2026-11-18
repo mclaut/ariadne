@@ -26,7 +26,13 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.27
+## What's New in v0.8.28
+
+- **Updates install again.** The Go bootstrap now takes its checksum from `dl.google.com`; `go.dev` started returning HTML, which made v0.8.27 updates fail with `checksum mismatch`. Update from the tray once more.
+- **Reboots are not hangs.** Maintenance cut short by a system restart is reported as interrupted and retried by the next scheduled run, instead of "appears stuck".
+
+## Previously in v0.8.27
+
 
 - **Patched Go toolchain.** Binaries are built with Go 1.26.11, closing 24 reachable standard-library advisories (HTTP/2 and HTTP/1 servers, TLS, certificate validation, file-system root escape).
 - **Updated network dependencies.** `golang.org/x/net` v0.63.0 and `grpc` v1.85.0.
@@ -979,7 +985,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.27 — current release. A security maintenance build on Go 1.26.11 with updated network dependencies and a `govulncheck` release gate.
+v0.8.28 — current release. Fixes Go checksum verification for tray updates and reports maintenance interrupted by a reboot as interrupted, not stuck.
+
+v0.8.27 was a security maintenance build on Go 1.26.11 with updated network dependencies and a `govulncheck` release gate.
 
 v0.8.26 kept backup failures visible, notified on each failed attempt, and added a preserving repair mode.
 

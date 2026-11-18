@@ -35,7 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.27 is a security maintenance release.
+Version 0.8.28 fixes the update path and reboot-aware maintenance health.
+
+- **Updates install again.** The Go bootstrap verifies its checksum from `dl.google.com`; v0.8.27 updates that failed with a checksum mismatch succeed now.
+- **Reboots are not hangs.** Maintenance cut short by a restart is reported as interrupted and retried on schedule.
+
+Version 0.8.27 was a security maintenance release.
 
 - **Patched Go toolchain.** Built with Go 1.26.11, closing 24 reachable standard-library advisories in HTTP/2, HTTP/1, TLS, certificate validation and file-system root handling.
 - **Updated dependencies.** `golang.org/x/net` v0.63.0 and `grpc` v1.85.0.

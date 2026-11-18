@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.27",
+  softwareVersion: "0.8.28",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.27</a>
+          <a href="#new">New in 0.8.28</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.27 patches Go and gates releases on govulncheck
+            v0.8.28 fixes tray updates and reboot-aware health
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,15 +186,15 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.27</span>
-            <h2>Patched, and kept that way.</h2>
-            <p>A security maintenance release: a patched Go toolchain, updated network dependencies, and a vulnerability gate on every build.</p>
+            <span className="eyebrow">New in v0.8.28</span>
+            <h2>Updates install again.</h2>
+            <p>A hotfix for the v0.8.27 update path and for maintenance health after a reboot, on top of the patched Go 1.26.11 toolchain.</p>
           </div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Go 1.26.11</h3><p>Binaries are rebuilt on a patched toolchain, closing 24 reachable standard-library advisories in HTTP/2, HTTP/1, TLS and certificate validation.</p></article>
-            <article className="new-item accent-blue"><Monitor aria-hidden="true" /><h3>Vulnerability gate</h3><p>CI and every release run govulncheck. A reachable vulnerability blocks the build instead of shipping.</p></article>
-            <article className="new-item accent-coral"><Database aria-hidden="true" /><h3>Updated dependencies</h3><p>golang.org/x/net v0.63.0 and gRPC v1.85.0 replace versions with known advisories.</p></article>
-            <article className="new-item accent-black"><Network aria-hidden="true" /><h3>Drop-in upgrade</h3><p>No data, configuration or behavior changes. Memories, backups and settings are kept.</p></article>
+            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Verified Go bootstrap</h3><p>Go and its SHA-256 come from dl.google.com. Only a real digest is accepted, and the old toolchain is replaced only after verification.</p></article>
+            <article className="new-item accent-blue"><Monitor aria-hidden="true" /><h3>Reboots are not hangs</h3><p>Maintenance cut short by a system restart is reported as interrupted and retried by the next scheduled run.</p></article>
+            <article className="new-item accent-coral"><Database aria-hidden="true" /><h3>Still patched</h3><p>Go 1.26.11, golang.org/x/net v0.63.0, gRPC v1.85.0 and the govulncheck release gate carry forward.</p></article>
+            <article className="new-item accent-black"><Network aria-hidden="true" /><h3>Update once more</h3><p>If a v0.8.27 update failed with a checksum mismatch, update from the tray again. Memories, backups and settings are kept.</p></article>
           </div>
         </div>
       </section>
@@ -338,7 +338,7 @@ export default function Home() {
             </div>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.27"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.28"
               target="_blank"
               rel="noreferrer"
             >
