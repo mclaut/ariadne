@@ -40,8 +40,16 @@ func TestMaintenanceHealthIssueMissing(t *testing.T) {
 	}
 }
 
+func stubSystemBootTime(t *testing.T, boot time.Time, known bool) {
+	t.Helper()
+	previous := systemBootTime
+	systemBootTime = func() (time.Time, bool) { return boot, known }
+	t.Cleanup(func() { systemBootTime = previous })
+}
+
 func TestMaintenanceHealthIssueStaleAndStuck(t *testing.T) {
 	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+	stubSystemBootTime(t, now.Add(-24*time.Hour), true)
 	t.Setenv("ARIADNE_MAINTENANCE_STALE_AFTER", "36h")
 	t.Setenv("ARIADNE_MAINTENANCE_STUCK_AFTER", "2h")
 	stale := maintenanceHealthIssue(now, map[string]activity.Event{
@@ -102,5 +110,46 @@ func TestBackupFailureSurvivesMaintenanceCompletion(t *testing.T) {
 	events["backup"] = activity.Event{At: now, Operation: "backup", Status: backupStatusComplete}
 	if issue := backupHealthIssue(events, i18n.UK); issue != "" {
 		t.Fatalf("successful backup did not clear warning: %q", issue)
+	}
+}
+
+func TestMaintenanceHealthIssueInterruptedByRestart(t *testing.T) {
+	now := time.Date(2026, 11, 18, 9, 9, 0, 0, time.UTC)
+	stubSystemBootTime(t, now.Add(-25*time.Minute), true)
+	t.Setenv("ARIADNE_MAINTENANCE_STUCK_AFTER", "2h")
+	for _, status := range []string{"running", "retrying"} {
+		issue := maintenanceHealthIssue(now, map[string]activity.Event{
+			"maintenance": {At: now.Add(-3 * time.Hour), Operation: "maintenance", Status: status},
+		}, i18n.EN)
+		if !strings.Contains(issue, "interrupted by a system restart") {
+			t.Fatalf("%s before boot: issue = %q", status, issue)
+		}
+	}
+
+	// A run that started after boot is still live and keeps the stuck timeout.
+	stubSystemBootTime(t, now.Add(-6*time.Hour), true)
+	stuck := maintenanceHealthIssue(now, map[string]activity.Event{
+		"maintenance": {At: now.Add(-3 * time.Hour), Operation: "maintenance", Status: "running"},
+	}, i18n.EN)
+	if !strings.Contains(stuck, "stuck") {
+		t.Fatalf("running after boot: issue = %q", stuck)
+	}
+
+	// Unknown boot time falls back to the stuck timeout.
+	stubSystemBootTime(t, time.Time{}, false)
+	if fallback := maintenanceHealthIssue(now, map[string]activity.Event{
+		"maintenance": {At: now.Add(-3 * time.Hour), Operation: "maintenance", Status: "running"},
+	}, i18n.EN); !strings.Contains(fallback, "stuck") {
+		t.Fatalf("unknown boot: issue = %q", fallback)
+	}
+}
+
+func TestReadSystemBootTimeIsInThePast(t *testing.T) {
+	boot, ok := readSystemBootTime()
+	if !ok {
+		t.Skip("boot time unavailable on this platform")
+	}
+	if !boot.Before(time.Now()) {
+		t.Fatalf("boot time %v is not in the past", boot)
 	}
 }

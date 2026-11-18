@@ -15,9 +15,21 @@ const (
 	defaultMaintenanceStuckAfter = 2 * time.Hour
 )
 
+// systemBootTime reports when the OS started. A running or retrying event
+// recorded before boot cannot belong to a live process.
+var systemBootTime = readSystemBootTime
+
+func interruptedByRestart(event activity.Event) bool {
+	boot, ok := systemBootTime()
+	return ok && event.At.Before(boot)
+}
+
 func maintenanceHealthIssue(now time.Time, events map[string]activity.Event, lang i18n.Lang) string {
 	maintenance, hasMaintenance := events["maintenance"]
 	if hasMaintenance && maintenance.Status == "retrying" {
+		if interruptedByRestart(maintenance) {
+			return fmt.Sprintf(i18n.T(lang, "issue.maintenance_interrupted"), maintenanceEventTime(maintenance))
+		}
 		if now.Sub(maintenance.At) > durationEnv("ARIADNE_MAINTENANCE_STUCK_AFTER", defaultMaintenanceStuckAfter) {
 			return fmt.Sprintf(i18n.T(lang, "issue.maintenance_stuck"), maintenanceEventTime(maintenance))
 		}
@@ -49,6 +61,9 @@ func maintenanceHealthIssue(now time.Time, events map[string]activity.Event, lan
 	case maintenanceStatusPartial, maintenanceStatusDeferred:
 		return fmt.Sprintf(i18n.T(lang, "issue.maintenance_degraded"), event.Status)
 	case "running", "retrying":
+		if interruptedByRestart(event) {
+			return fmt.Sprintf(i18n.T(lang, "issue.maintenance_interrupted"), maintenanceEventTime(event))
+		}
 		if age > durationEnv("ARIADNE_MAINTENANCE_STUCK_AFTER", defaultMaintenanceStuckAfter) {
 			return fmt.Sprintf(i18n.T(lang, "issue.maintenance_stuck"), maintenanceEventTime(event))
 		}

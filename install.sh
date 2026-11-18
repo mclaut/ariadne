@@ -77,14 +77,19 @@ if [ "$go_ok" -eq 1 ]; then
   say "Go present: $(go version)"
 else
   gover="$GO_VERSION"
-  go_url="https://go.dev/dl/${gover}.${goos}-${arch}.tar.gz"
+  go_file="${gover}.${goos}-${arch}.tar.gz"
+  go_url="https://dl.google.com/go/${go_file}"
+  # go.dev/dl/*.sha256 now serves an HTML page; dl.google.com serves the digest.
   go_sha="${ARIADNE_GO_SHA256:-$(curl -fsSL "${go_url}.sha256" | awk '{print $1}')}"
-  [ -n "$go_sha" ] || die "could not determine checksum for $go_url"
+  case "$go_sha" in
+    *[!0-9a-f]* | '') die "could not determine a SHA-256 checksum for $go_url" ;;
+  esac
+  [ "${#go_sha}" -eq 64 ] || die "could not determine a SHA-256 checksum for $go_url"
   say "Installing $gover -> $GOLOCAL"
   mkdir -p "$HOME/.ariadne"
-  rm -rf "$GOLOCAL"
-  tmp_tar="$HOME/.ariadne/${gover}.${goos}-${arch}.tar.gz"
+  tmp_tar="$HOME/.ariadne/${go_file}"
   download_verified "$go_url" "$go_sha" "$tmp_tar"
+  rm -rf "$GOLOCAL"
   tar -C "$HOME/.ariadne" -xzf "$tmp_tar"
   rm -f "$tmp_tar"
   PATH="$GOLOCAL/bin:$PATH"
