@@ -42,4 +42,6 @@ Full backup rotation: a private explicit plan retains one independently verified
 
 Runtime rotation v0.8.24: legacy release-local previous-runtime copies join canonical retention after independent runtime recovery; audit metadata and retired-file inventories are preserved.
 
-Version 0.8.26 surfaces failed backups independently of maintenance progress, warns during retries, and sends notifications for each new failed attempt. Explicit preserving repair mode retains previous full and verification copies; recovery checks remain mandatory.
+Version 0.8.27 is a security maintenance release: binaries are built with Go 1.26.11 (24 reachable standard-library advisories closed), golang.org/x/net v0.63.0 and gRPC v1.85.0, and CI plus every release run govulncheck so a reachable vulnerability blocks the build. No data, configuration or behavior changes.
+
+Version 0.8.26 surfaced failed backups independently of maintenance progress, warned during retries, and sent notifications for each new failed attempt. Explicit preserving repair mode retains previous full and verification copies; recovery checks remain mandatory.

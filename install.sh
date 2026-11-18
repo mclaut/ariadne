@@ -21,7 +21,7 @@ REPO="mclaut/ariadne"
 REF="${ARIADNE_REF:-${ARIADNE_BRANCH:-main}}"
 SRC="${ARIADNE_SRC:-$HOME/.ariadne/src}"
 GOLOCAL="$HOME/.ariadne/go"
-GO_VERSION="${ARIADNE_GO_VERSION:-go1.26.2}"
+GO_VERSION="${ARIADNE_GO_VERSION:-go1.26.11}"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
