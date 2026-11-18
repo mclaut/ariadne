@@ -633,7 +633,7 @@ curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/main/install.sh | sh
 (sudo — for distro packages and the official Ollama installer on Linux —
 prompts on the terminal, so the pipe is fine.)
 
-Supply-chain defaults are pinned: `install.sh` installs `go1.26.2` unless
+Supply-chain defaults are pinned: `install.sh` installs `go1.26.11` unless
 `ARIADNE_GO_VERSION` is set, verifies the Go tarball SHA256 before unpacking,
 and the Go installer installs Qdrant from a pinned `-qdrant-version` release
 (default `v1.18.2`) after checking the GitHub release-asset digest. For locked
