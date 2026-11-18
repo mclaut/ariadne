@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.26",
+  softwareVersion: "0.8.27",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.26</a>
+          <a href="#new">New in 0.8.27</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.26 makes backup failures visible
+            v0.8.27 patches Go and gates releases on govulncheck
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,15 +186,15 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.26</span>
-            <h2>Backup failures stay visible.</h2>
-            <p>See what failed, receive a message for each new failed attempt, and preserve recovery evidence during repairs.</p>
+            <span className="eyebrow">New in v0.8.27</span>
+            <h2>Patched, and kept that way.</h2>
+            <p>A security maintenance release: a patched Go toolchain, updated network dependencies, and a vulnerability gate on every build.</p>
           </div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Errors stay visible</h3><p>A failed backup remains a warning until a successful backup completes. New maintenance progress cannot hide it.</p></article>
-            <article className="new-item accent-blue"><Monitor aria-hidden="true" /><h3>Every failed attempt</h3><p>The menu keeps the current issue visible. New failed attempts notify again, and failed notification commands are retried.</p></article>
-            <article className="new-item accent-coral"><Database aria-hidden="true" /><h3>Recovery before rotation</h3><p>New full sets still pass independent file, database and model recovery checks before replacing the keeper.</p></article>
-            <article className="new-item accent-black"><Network aria-hidden="true" /><h3>Preserving repair mode</h3><p>Explicit repair mode keeps the previous full and verification copies. Audit remains available; cleanup requires approval.</p></article>
+            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Go 1.26.11</h3><p>Binaries are rebuilt on a patched toolchain, closing 24 reachable standard-library advisories in HTTP/2, HTTP/1, TLS and certificate validation.</p></article>
+            <article className="new-item accent-blue"><Monitor aria-hidden="true" /><h3>Vulnerability gate</h3><p>CI and every release run govulncheck. A reachable vulnerability blocks the build instead of shipping.</p></article>
+            <article className="new-item accent-coral"><Database aria-hidden="true" /><h3>Updated dependencies</h3><p>golang.org/x/net v0.63.0 and gRPC v1.85.0 replace versions with known advisories.</p></article>
+            <article className="new-item accent-black"><Network aria-hidden="true" /><h3>Drop-in upgrade</h3><p>No data, configuration or behavior changes. Memories, backups and settings are kept.</p></article>
           </div>
         </div>
       </section>
@@ -338,7 +338,7 @@ export default function Home() {
             </div>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.26"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.27"
               target="_blank"
               rel="noreferrer"
             >
