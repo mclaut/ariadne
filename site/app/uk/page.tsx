@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.28</a>
+          <a href="#new">Нове у 0.8.29</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.28 лагодить оновлення з tray</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.29 тримає Qdrant і розбирає всю чергу</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.28</span><h2>Оновлення знову працюють.</h2><p>Виправлення шляху оновлення v0.8.27 і стану обслуговування після перезавантаження — поверх виправленого Go 1.26.11.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.29</span><h2>Уся черга за один запуск.</h2><p>Оновлення більше не залишають Qdrant вимкненим, а нічна консолідація доводить до кінця все, що почала, нічого не відкладаючи.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck /><h3>Перевірений bootstrap Go</h3><p>Go і його SHA-256 беруться з dl.google.com. Приймається лише справжній хеш, а старий toolchain замінюється тільки після перевірки.</p></article>
-            <article className="new-item accent-blue"><Terminal /><h3>Перезавантаження — не зависання</h3><p>Обслуговування, обірване перезапуском системи, позначається як перерване й повторюється за розкладом.</p></article>
-            <article className="new-item accent-coral"><Database /><h3>Захист лишається</h3><p>Go 1.26.11, golang.org/x/net v0.63.0, gRPC v1.85.0 і перевірка govulncheck у релізах зберігаються.</p></article>
-            <article className="new-item accent-black"><Network /><h3>Оновіться ще раз</h3><p>Якщо оновлення до v0.8.27 впало з checksum mismatch, оновіться з tray ще раз. Пам’ять, резервні копії та налаштування зберігаються.</p></article>
+            <article className="new-item accent-green"><ShieldCheck /><h3>Qdrant не зупиняється</h3><p>Інсталятор чекає, поки launchd звільнить службу, перш ніж запустити її знову, і повторює запуск замість того, щоб лишити її вимкненою.</p></article>
+            <article className="new-item accent-blue"><Terminal /><h3>Без спільного ліміту</h3><p>Кожен запит до моделі має власний таймаут. Помилки Ollama й таймаути повторюються на місці, а кожна група зберігається одразу.</p></article>
+            <article className="new-item accent-coral"><Database /><h3>Нічого не відкладається</h3><p>Пакети, що не вклалися в час, більше не відкладаються на всю ревізію пайплайну. Відкладені раніше пакети буде оброблено ще раз.</p></article>
+            <article className="new-item accent-black"><Network /><h3>Чесний стан</h3><p>Довга обробка повідомляє про прогрес, тож її не сплутати із зависанням. Пам’ять, резервні копії та налаштування зберігаються.</p></article>
           </div>
         </div>
       </section>
@@ -110,7 +110,7 @@ export default function UkrainianHome() {
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
             <p className="install-note">Якщо tray досі працює на v0.8.13 або старішій версії, один раз запустіть закріплений інсталятор v0.8.16. Він збереже дані Qdrant, резервні копії, налаштування й журнали. Після цього підтверджені оновлення з tray синхронно оновлюватимуть app і binaries.</p>
             <div className="command-window"><div className="command-title"><span>Одноразове оновлення старої версії</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh</code></pre></div>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.28">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.29">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>

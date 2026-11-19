@@ -153,3 +153,19 @@ func TestReadSystemBootTimeIsInThePast(t *testing.T) {
 		t.Fatalf("boot time %v is not in the past", boot)
 	}
 }
+
+func TestLongConsolidationDrainWithProgressIsHealthy(t *testing.T) {
+	now := time.Date(2026, 11, 19, 9, 0, 0, 0, time.UTC)
+	stubSystemBootTime(t, now.Add(-24*time.Hour), true)
+	events := map[string]activity.Event{
+		"maintenance": {At: now.Add(-4 * time.Hour), Operation: "maintenance", Status: "running"},
+		"consolidate": {At: now.Add(-5 * time.Minute), Operation: "consolidate", Status: "running"},
+	}
+	if issue := maintenanceHealthIssue(now, events, i18n.EN); issue != "" {
+		t.Fatalf("a drain that keeps reporting progress is not stuck: %q", issue)
+	}
+	events["consolidate"] = activity.Event{At: now.Add(-3 * time.Hour), Operation: "consolidate", Status: "running"}
+	if issue := maintenanceHealthIssue(now, events, i18n.EN); issue == "" {
+		t.Fatal("a drain without progress for hours must still be reported as stuck")
+	}
+}

@@ -23,18 +23,25 @@ const (
 	defaultMaintenanceMaxRetryDelay = 30 * time.Minute
 )
 
-// defaultMaintenanceCommandTimeout stays close to consolidate's own 15-minute
-// deadline so an unresponsive child cannot leave scheduled maintenance stuck.
+// defaultMaintenanceCommandTimeout bounds one memfile-sync attempt so an
+// unresponsive child cannot leave scheduled maintenance stuck.
 const defaultMaintenanceCommandTimeout = 20 * time.Minute
+
+// defaultConsolidateTimeout bounds one consolidation attempt. Consolidation
+// drains the whole diary queue in one run; every model request has its own
+// timeout and progress events keep a long drain visible to health checks.
+const defaultConsolidateTimeout = 12 * time.Hour
 
 type maintenanceConfig struct {
 	attempts       int
 	retryDelay     time.Duration
 	maxRetryDelay  time.Duration
 	commandTimeout time.Duration
-	before         time.Duration
-	importPath     string
-	ctlPath        string
+	// consolidateTimeout bounds one consolidation attempt; zero uses commandTimeout.
+	consolidateTimeout time.Duration
+	before             time.Duration
+	importPath         string
+	ctlPath            string
 }
 
 type maintenanceDeps struct {
@@ -60,7 +67,10 @@ func maintenanceCmd(args []string) int {
 		"maximum delay between retries")
 	fs.DurationVar(&config.commandTimeout, "command-timeout",
 		durationEnv("ARIADNE_MAINTENANCE_COMMAND_TIMEOUT", commandTimeout),
-		"timeout for one import or consolidation attempt")
+		"timeout for one import attempt")
+	fs.DurationVar(&config.consolidateTimeout, "consolidate-timeout",
+		durationEnv("ARIADNE_MAINTENANCE_CONSOLIDATE_TIMEOUT", defaultConsolidateTimeout),
+		"timeout for one consolidation attempt (drains the whole diary queue)")
 	fs.DurationVar(&config.before, "before", 24*time.Hour, "minimum diary age to consolidate")
 	fs.StringVar(&config.importPath, "import-path", defaultImportPath(), "path to the Ariadne importer")
 	if err := fs.Parse(args); err != nil {
@@ -94,6 +104,8 @@ func validateMaintenanceConfig(config maintenanceConfig) error {
 	switch {
 	case config.before <= 0:
 		return fmt.Errorf("before must be positive")
+	case config.consolidateTimeout < 0:
+		return fmt.Errorf("consolidate-timeout must not be negative")
 	case config.importPath == "":
 		return fmt.Errorf("import-path is required")
 	}
@@ -127,7 +139,7 @@ func runMaintenance(ctx context.Context, config maintenanceConfig, deps maintena
 		fmt.Fprintln(os.Stderr, "maintenance activity:", err)
 	}
 
-	importAttempts, err := runMaintenanceStage(ctx, "memfile_sync", config, deps,
+	importAttempts, err := runMaintenanceStage(ctx, "memfile_sync", config, config.commandTimeout, deps,
 		config.importPath, "-source", "memfiles", "-sync")
 	if err != nil {
 		_ = appendMaintenanceEvent(deps, "failed", "memfile sync failed after bounded retries", map[string]int64{
@@ -136,7 +148,11 @@ func runMaintenance(ctx context.Context, config maintenanceConfig, deps maintena
 		return fmt.Errorf("memfile sync failed after %d attempt(s): %w", importAttempts, err)
 	}
 
-	consolidateAttempts, err := runMaintenanceStage(ctx, "consolidate", config, deps,
+	consolidateTimeout := config.consolidateTimeout
+	if consolidateTimeout <= 0 {
+		consolidateTimeout = config.commandTimeout
+	}
+	consolidateAttempts, err := runMaintenanceStage(ctx, "consolidate", config, consolidateTimeout, deps,
 		config.ctlPath, "consolidate", "--before", config.before.String())
 	if err != nil {
 		if errors.Is(err, errMaintenanceDeferred) {
@@ -168,13 +184,14 @@ func runMaintenanceStage(
 	ctx context.Context,
 	stage string,
 	config maintenanceConfig,
+	timeout time.Duration,
 	deps maintenanceDeps,
 	path string,
 	args ...string,
 ) (int, error) {
 	return maintenancecore.RunStage(ctx, maintenancecore.RetryPolicy{
 		Attempts: config.attempts, Delay: config.retryDelay,
-		MaxDelay: config.maxRetryDelay, Timeout: config.commandTimeout,
+		MaxDelay: config.maxRetryDelay, Timeout: timeout,
 	}, maintenancecore.StageHooks{
 		Run:   func(attemptCtx context.Context) error { return deps.run(attemptCtx, path, args...) },
 		Sleep: deps.sleep,

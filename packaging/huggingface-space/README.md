@@ -35,7 +35,12 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.28 fixes the update path and reboot-aware maintenance health.
+Version 0.8.29 keeps Qdrant running through updates and drains the consolidation queue in one run.
+
+- **Updates keep Qdrant running.** The installer waits for launchd to release a service before restarting it and retries the start.
+- **The whole queue in one run.** Consolidation has no run-wide deadline; transient Ollama failures are retried in place and every group is saved as it finishes.
+
+Version 0.8.28 fixed the update path and reboot-aware maintenance health.
 
 - **Updates install again.** The Go bootstrap verifies its checksum from `dl.google.com`; v0.8.27 updates that failed with a checksum mismatch succeed now.
 - **Reboots are not hangs.** Maintenance cut short by a restart is reported as interrupted and retried on schedule.

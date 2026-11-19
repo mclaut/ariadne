@@ -26,12 +26,17 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.28
+## What's New in v0.8.29
+
+- **Updates keep Qdrant running.** The installer waits until launchd has released a service before starting it again, and retries the start. A v0.8.28 update could leave Qdrant stopped with `Bootstrap failed: 5: Input/output error`.
+- **Consolidation drains the whole queue in one run.** There is no run-wide 15-minute deadline any more: each model request has its own timeout, Ollama errors and timeouts are retried in place, and every group is saved as soon as it finishes. Timed-out batches are no longer set aside for the whole pipeline revision; batches deferred by earlier releases are retried once.
+
+## Previously in v0.8.28
 
 - **Updates install again.** The Go bootstrap now takes its checksum from `dl.google.com`; `go.dev` started returning HTML, which made v0.8.27 updates fail with `checksum mismatch`. Update from the tray once more.
 - **Reboots are not hangs.** Maintenance cut short by a system restart is reported as interrupted and retried by the next scheduled run, instead of "appears stuck".
 
-## Previously in v0.8.27
+## Earlier, in v0.8.27
 
 
 - **Patched Go toolchain.** Binaries are built with Go 1.26.11, closing 24 reachable standard-library advisories (HTTP/2 and HTTP/1 servers, TLS, certificate validation, file-system root escape).
@@ -335,9 +340,12 @@ then gives invalid model output one focused repair pass.
 Transient network and Ollama failures still receive bounded backoff;
 deterministic schema, language, local-path, and quality failures become
 explicit deferred work instead of replaying the whole stage. Unchanged sources
-are not retried again with the same model and pipeline revision. Source diaries
-remain active and append-only throughout, and safe deferred review does not
-misreport otherwise successful maintenance as unhealthy.
+are not retried again with the same model and pipeline revision. Consolidation
+drains the whole eligible queue in one run: there is no run-wide deadline, each
+model request has its own timeout, transient failures are retried in place, and
+each group is saved as soon as it finishes while progress keeps health current.
+Source diaries remain active and append-only throughout, and safe deferred review
+does not misreport otherwise successful maintenance as unhealthy.
 
 **A stronger curator without heavier capture.** Capture and consolidation can
 use different local models through `ARIADNE_CONSOLIDATION_MODEL` and
@@ -985,7 +993,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.28 — current release. Fixes Go checksum verification for tray updates and reports maintenance interrupted by a reboot as interrupted, not stuck.
+v0.8.29 — current release. Updates no longer leave Qdrant stopped, and consolidation drains the whole diary queue in one run instead of deferring what a 15-minute deadline cut off.
+
+v0.8.28 fixed Go checksum verification for tray updates and reported maintenance interrupted by a reboot as interrupted, not stuck.
 
 v0.8.27 was a security maintenance build on Go 1.26.11 with updated network dependencies and a `govulncheck` release gate.
 

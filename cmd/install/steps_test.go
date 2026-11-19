@@ -5,12 +5,14 @@ package main
 import (
 	"ariadne/internal/qdrantauth"
 	"encoding/binary"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWriteMacApplicationBundleCreatesLaunchableUserApp(t *testing.T) {
@@ -202,5 +204,76 @@ func TestQdrantBaseURLSupportsTLSAndIPv6Loopback(t *testing.T) {
 	o := opts{qdrantHost: "::1", qdrantREST: 6333}
 	if got := qdrantBaseURL(o); got != "https://[::1]:6333" {
 		t.Fatalf("base URL = %q", got)
+	}
+}
+
+func stubLaunchd(t *testing.T, run func(string, ...string) error, loaded func(string) []string) {
+	t.Helper()
+	prevRun, prevLoaded := launchctlRun, launchctlLoadedLabels
+	prevPoll, prevSettle, prevDelay := launchdPollInterval, launchdSettleTimeout, launchdRetryDelay
+	launchctlRun, launchctlLoadedLabels = run, loaded
+	launchdPollInterval, launchdSettleTimeout, launchdRetryDelay = time.Millisecond, time.Second, time.Millisecond
+	t.Cleanup(func() {
+		launchctlRun, launchctlLoadedLabels = prevRun, prevLoaded
+		launchdPollInterval, launchdSettleTimeout, launchdRetryDelay = prevPoll, prevSettle, prevDelay
+	})
+}
+
+func TestReplaceLaunchAgentWaitsForBootoutBeforeBootstrap(t *testing.T) {
+	stillLoaded := 3 // launchd keeps reporting the old job for a few polls
+	bootedOut := false
+	stubLaunchd(t, func(_ string, args ...string) error {
+		switch args[0] {
+		case "bootout":
+			bootedOut = true
+		case "bootstrap":
+			if stillLoaded > 0 {
+				return errors.New("Bootstrap failed: 5: Input/output error")
+			}
+		}
+		return nil
+	}, func(string) []string {
+		if !bootedOut {
+			return []string{"com.ariadne.qdrant"}
+		}
+		if stillLoaded > 0 {
+			stillLoaded--
+			return []string{"com.ariadne.qdrant"}
+		}
+		return nil
+	})
+	if err := replaceLaunchAgent(t.TempDir(), "com.ariadne.qdrant", "/x.plist"); err != nil {
+		t.Fatalf("bootstrap must wait until launchd released the old job: %v", err)
+	}
+}
+
+func TestReplaceLaunchAgentRetriesTransientBootstrapFailure(t *testing.T) {
+	bootstraps := 0
+	stubLaunchd(t, func(_ string, args ...string) error {
+		if args[0] == "bootstrap" {
+			bootstraps++
+			if bootstraps < 3 {
+				return errors.New("Bootstrap failed: 5: Input/output error")
+			}
+		}
+		return nil
+	}, func(string) []string { return nil })
+	if err := replaceLaunchAgent(t.TempDir(), "com.ariadne.qdrant", "/x.plist"); err != nil || bootstraps != 3 {
+		t.Fatalf("err=%v bootstraps=%d", err, bootstraps)
+	}
+}
+
+func TestReplaceLaunchAgentReportsPersistentFailure(t *testing.T) {
+	bootstraps := 0
+	stubLaunchd(t, func(_ string, args ...string) error {
+		if args[0] == "bootstrap" {
+			bootstraps++
+			return errors.New("Bootstrap failed: 5: Input/output error")
+		}
+		return nil
+	}, func(string) []string { return nil })
+	if err := replaceLaunchAgent(t.TempDir(), "com.ariadne.qdrant", "/x.plist"); err == nil ||
+		bootstraps != launchdBootstrapAttempts {
+		t.Fatalf("err=%v bootstraps=%d", err, bootstraps)
 	}
 }
