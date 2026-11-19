@@ -3,6 +3,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -24,5 +26,24 @@ func TestAppleScriptQuoteEscapesUserVisibleErrors(t *testing.T) {
 	want := `"path \"quoted\" \\\\ failed"`
 	if got != want {
 		t.Fatalf("quote = %q, want %q", got, want)
+	}
+}
+
+func TestPanelURLFromHandleAcceptsOnlyLoopback(t *testing.T) {
+	dir := t.TempDir()
+	write := func(body string) string {
+		path := filepath.Join(dir, "panel.json")
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	if url, ok := panelURLFromHandle(write(`{"url":"http://127.0.0.1:5000/#t=abc"}`)); !ok || url != "http://127.0.0.1:5000/#t=abc" {
+		t.Fatalf("url=%q ok=%v", url, ok)
+	}
+	for _, body := range []string{`{"url":"https://evil.example/"}`, `{"url":"file:///etc/passwd"}`, `not json`} {
+		if _, ok := panelURLFromHandle(write(body)); ok {
+			t.Fatalf("accepted %s", body)
+		}
 	}
 }

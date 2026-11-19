@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ariadne</title>
+<style>
+:root {
+  --bg: #f4f5ef; --card: #ffffff; --ink: #142821; --muted: #5d6e66; --line: #dfe4dc;
+  --green: #2ecc71; --orange: #f39c12; --red: #e74c3c; --gray: #95a5a6; --accent: #173a30;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f1714; --card: #17221e; --ink: #e8efe9; --muted: #95a69d; --line: #26352f; --accent: #d8f6a2; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.muted { color: var(--muted); font-size: 13px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.status { display: flex; gap: 16px; align-items: flex-start; }
+.dot { width: 22px; height: 22px; border-radius: 50%; flex: none; margin-top: 3px; background: var(--gray); }
+.dot.green { background: var(--green); } .dot.orange { background: var(--orange); }
+.dot.red { background: var(--red); } .dot.gray { background: var(--gray); }
+.health { font-size: 20px; font-weight: 650; }
+.issues { margin: 8px 0 0; padding-left: 20px; }
+.issues li { margin: 4px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.svc { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.svc:last-child { border-bottom: 0; }
+.pill { font-size: 12px; padding: 1px 8px; border-radius: 999px; color: #fff; }
+.pill.up { background: #239a55; } .pill.down { background: var(--red); }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.event { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.event:last-child { border-bottom: 0; }
+.event .head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.event .when { color: var(--muted); font-family: var(--mono); }
+.event .detail { color: var(--muted); font-family: var(--mono); font-size: 12px; word-break: break-word; }
+.st { font-family: var(--mono); white-space: nowrap; }
+.st.bad { color: var(--red); } .st.warn { color: var(--orange); } .st.ok { color: #239a55; }
+.scroll { max-height: 360px; overflow: auto; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tabs button.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+pre { margin: 0; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow: auto; background: var(--bg); padding: 10px; border-radius: 8px; }
+#toast { min-height: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title">Ariadne</h1>
+    <span class="muted"><span id="version"></span> · <span id="updatedLabel"></span> <span id="updated"></span></span>
+  </header>
+
+  <section class="card status" aria-live="polite">
+    <div id="dot" class="dot gray" aria-hidden="true"></div>
+    <div>
+      <div class="health" id="health">…</div>
+      <div id="why" class="muted"></div>
+      <ul class="issues" id="issues"></ul>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 id="controlsLabel"></h2>
+    <div class="buttons">
+      <button data-action="start" data-label="menu.start"></button>
+      <button data-action="stop" data-label="menu.stop"></button>
+      <button data-action="restart" data-label="menu.restart"></button>
+      <button data-action="maintenance" data-label="menu.maintenance" class="primary"></button>
+      <button data-action="backup" data-label="menu.backup"></button>
+      <button data-action="logs" data-label="menu.logs" data-always="1"></button>
+      <button data-action="data" data-label="menu.data" data-always="1"></button>
+    </div>
+    <div id="toast" class="muted"></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2 id="servicesLabel"></h2>
+      <div id="services"></div>
+      <div id="facts"></div>
+    </section>
+    <section class="card">
+      <h2 id="activityLabel"></h2>
+      <div class="scroll" id="activity"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2 id="logsLabel"></h2>
+    <div class="tabs" id="tabs"></div>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script>
+"use strict";
+const token = new URLSearchParams(location.hash.slice(1)).get("t") || "";
+const logNames = ["maintenance.log", "tray.log", "update.log", "capture.log", "qdrant.err.log"];
+let currentLog = logNames[0];
+let labels = {};
+
+function text(id, value) { document.getElementById(id).textContent = value; }
+function el(tag, cls, value) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (value !== undefined) node.textContent = value;
+  return node;
+}
+async function api(path, options) {
+  const response = await fetch(path, Object.assign({ headers: { "X-Ariadne-Token": token, "Content-Type": "application/json" } }, options));
+  if (!response.ok) throw new Error(String(response.status));
+  return response.json();
+}
+function statusClass(status) {
+  if (/fail|error|partial/.test(status)) return "bad";
+  if (/deferred|retrying|running/.test(status)) return "warn";
+  return "ok";
+}
+function counters(c) {
+  if (!c) return "";
+  return Object.entries(c).filter(([, v]) => v).map(([k, v]) => k + "=" + v).join(" ");
+}
+function render(state) {
+  labels = state.labels || {};
+  document.documentElement.lang = state.lang || "en";
+  text("title", labels["panel.title"] || "Ariadne");
+  text("version", state.version);
+  text("updatedLabel", labels["panel.updated"] || "");
+  text("updated", new Date(state.updated_at).toLocaleTimeString());
+  document.getElementById("dot").className = "dot " + state.color;
+  text("health", state.health);
+  text("why", state.why);
+  const issues = document.getElementById("issues");
+  issues.replaceChildren(...(state.issues || []).map((issue) => el("li", "", issue)));
+  text("controlsLabel", labels["panel.controls"] || "");
+  text("servicesLabel", labels["panel.services"] || "");
+  text("activityLabel", labels["panel.activity"] || "");
+  text("logsLabel", labels["panel.logs"] || "");
+  document.querySelectorAll("button[data-action]").forEach((button) => {
+    button.textContent = labels[button.dataset.label] || button.dataset.action;
+    button.disabled = state.busy && !button.dataset.always;
+  });
+  document.getElementById("services").replaceChildren(...state.services.map((s) => {
+    const row = el("div", "svc");
+    const name = el("span", "", s.name + "  ");
+    name.append(el("span", "pill " + (s.up ? "up" : "down"), s.up ? "up" : "down"));
+    row.append(name, el("span", "muted", s.detail));
+    return row;
+  }));
+  document.getElementById("facts").replaceChildren(...state.facts.map((f) => {
+    const row = el("div", "svc");
+    row.append(el("span", "", f.label), el("span", "muted", f.value));
+    return row;
+  }));
+  document.getElementById("activity").replaceChildren(...(state.activity || []).map((e) => {
+    const row = el("div", "event");
+    const head = el("div", "head");
+    head.append(el("span", "when", new Date(e.at).toLocaleString()), el("span", "", e.operation),
+      el("span", "st " + statusClass(e.status), e.status));
+    row.append(head);
+    const detail = [e.message || "", counters(e.counters)].filter(Boolean).join(" · ");
+    if (detail) row.append(el("div", "detail", detail));
+    return row;
+  }));
+}
+async function refresh() {
+  try {
+    render(await api("/api/state"));
+  } catch (err) {
+    text("health", labels["panel.offline"] || "The tray is not reachable. Open the panel from the Ariadne menu.");
+    document.getElementById("dot").className = "dot gray";
+  }
+}
+async function loadLog() {
+  try {
+    const data = await api("/api/log?name=" + encodeURIComponent(currentLog));
+    const pre = document.getElementById("log");
+    pre.textContent = data.text || "—";
+    pre.scrollTop = pre.scrollHeight;
+  } catch (err) { /* the state refresh reports connectivity */ }
+}
+function renderTabs() {
+  document.getElementById("tabs").replaceChildren(...logNames.map((name) => {
+    const button = el("button", name === currentLog ? "active" : "", name);
+    button.addEventListener("click", () => { currentLog = name; renderTabs(); loadLog(); });
+    return button;
+  }));
+}
+document.querySelectorAll("button[data-action]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    try {
+      await api("/api/action", { method: "POST", body: JSON.stringify({ action: button.dataset.action }) });
+      text("toast", (labels["panel.sent"] || "Started") + ": " + button.textContent);
+    } catch (err) {
+      text("toast", labels["panel.busy"] || "Busy");
+    }
+    setTimeout(refresh, 800);
+  });
+});
+renderTabs();
+refresh();
+loadLog();
+setInterval(refresh, 5000);
+setInterval(loadLog, 10000);
+</script>
+</body>
+</html>

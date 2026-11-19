@@ -7,8 +7,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +28,57 @@ func main() {
 		showLaunchError(err)
 		os.Exit(1)
 	}
+	// Opening Ariadne.app (double-click in Finder, Spotlight, Launchpad) also
+	// shows the panel that explains the tray state and offers its controls.
+	if url, ok := waitForPanel(panelHandlePath(), 6*time.Second); ok {
+		_ = exec.CommandContext(context.Background(), "open", url).Run() //nolint:gosec // loopback URL written by our tray
+	}
+}
+
+func panelHandlePath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".ariadne", "state", "panel.json")
+}
+
+// waitForPanel returns the panel URL once the tray's loopback server answers.
+func waitForPanel(handle string, wait time.Duration) (string, bool) {
+	deadline := time.Now().Add(wait)
+	client := &http.Client{Timeout: time.Second}
+	for {
+		if url, ok := panelURLFromHandle(handle); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.SplitN(url, "#", 2)[0], http.NoBody)
+			if err == nil {
+				if resp, doErr := client.Do(req); doErr == nil {
+					_ = resp.Body.Close()
+					cancel()
+					if resp.StatusCode == http.StatusOK {
+						return url, true
+					}
+				}
+			}
+			cancel()
+		}
+		if time.Now().After(deadline) {
+			return "", false
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// panelURLFromHandle accepts only a loopback http URL from the tray's handle.
+func panelURLFromHandle(handle string) (string, bool) {
+	data, err := os.ReadFile(handle) //nolint:gosec // fixed runtime state file
+	if err != nil {
+		return "", false
+	}
+	var h struct {
+		URL string `json:"url"`
+	}
+	if json.Unmarshal(data, &h) != nil || !strings.HasPrefix(h.URL, "http://127.0.0.1:") {
+		return "", false
+	}
+	return h.URL, true
 }
 
 func launchTray() error {
