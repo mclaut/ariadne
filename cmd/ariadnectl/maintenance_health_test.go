@@ -169,3 +169,20 @@ func TestLongConsolidationDrainWithProgressIsHealthy(t *testing.T) {
 		t.Fatal("a drain without progress for hours must still be reported as stuck")
 	}
 }
+
+func TestPreviousDeferralIsNotAFailureWhenNextRunStarts(t *testing.T) {
+	now := time.Now()
+	events := map[string]activity.Event{
+		"consolidate":  {At: now.Add(-time.Hour), Operation: "consolidate", Status: maintenanceStatusDeferred},
+		"memfile_sync": {At: now.Add(-time.Hour), Operation: "memfile_sync", Status: backupStatusComplete},
+		"maintenance":  {At: now, Operation: "maintenance", Status: "running"},
+	}
+	if issue := maintenanceHealthIssue(now, events, i18n.EN); issue != "" {
+		t.Fatalf("previous run's deferral reported while the next run starts: %q", issue)
+	}
+	delete(events, "maintenance")
+	issue := maintenanceHealthIssue(now, events, i18n.EN)
+	if !strings.Contains(issue, "deferred work") || strings.Contains(issue, "failed") {
+		t.Fatalf("standalone deferral must read as deferred work, not failure: %q", issue)
+	}
+}
