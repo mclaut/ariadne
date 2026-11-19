@@ -595,3 +595,20 @@ func TestConsolidationRecordsProgressAfterEveryBatch(t *testing.T) {
 		t.Fatalf("progress events = %d, want at least one per batch (%d)", got, len(group))
 	}
 }
+
+func TestOllamaHasModelReadsLocalTags(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tags" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"models":[{"name":"bge-m3:latest"},{"name":"qwen2.5:14b"}]}`))
+	}))
+	defer server.Close()
+	if !ollamaHasModel(server.URL, "qwen2.5:14b") || ollamaHasModel(server.URL, "qwen2.5:32b") {
+		t.Fatal("model presence must follow the local tag list")
+	}
+	if ollamaHasModel("https://models.example", "qwen2.5:14b") {
+		t.Fatal("a remote endpoint must never be probed")
+	}
+}
