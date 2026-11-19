@@ -257,7 +257,9 @@ func consolidateCmd(args []string) int {
 		defer func() { _ = opened.Close() }()
 		st = opened
 	}
-	run := consolidationRun{total: int64(len(batches)), emptyGrace: *emptyGrace, pipelineKey: pipelineKey}
+	run := consolidationRun{
+		total: int64(len(batches)), emptyGrace: *emptyGrace, pipelineKey: pipelineKey, dryRun: *dryRun,
+	}
 	for _, group := range groupConsolidationBatches(batches) {
 		if code, stop := run.processGroup(st, group, *dryRun); stop {
 			return code
@@ -273,6 +275,7 @@ type consolidationRun struct {
 	emptyGrace                                    time.Duration
 	pipelineKey                                   string
 	backupChecked                                 bool
+	dryRun                                        bool
 }
 
 func groupConsolidationBatches(batches []consolidationBatch) [][]consolidationBatch {
@@ -317,9 +320,11 @@ func (r *consolidationRun) processGroup(st consolidationWriter, group []consolid
 			} else {
 				r.retryableFailures++
 			}
+			r.recordProgress()
 			continue
 		}
 		results = append(results, consolidationResult{batch: batch, memories: memories})
+		r.recordProgress()
 	}
 	results = coalesceConsolidationResults(results)
 	for _, result := range results {
@@ -362,9 +367,18 @@ func (r *consolidationRun) processGroup(st consolidationWriter, group []consolid
 		r.totals.Archived += outcome.Archived
 		r.totals.Candidates += outcome.Candidates
 	}
-	// Progress keeps a long drain visibly alive for health checks.
-	_ = activity.Append(activity.Event{Operation: "consolidate", Status: "running", Counters: r.counters(0)})
+	r.recordProgress()
 	return 0, false
+}
+
+// recordProgress keeps a long drain visibly alive for health checks. It runs
+// after every batch, so the heartbeat interval stays bounded by one batch even
+// when a single diary group holds many entries.
+func (r *consolidationRun) recordProgress() {
+	if r.dryRun {
+		return
+	}
+	_ = activity.Append(activity.Event{Operation: "consolidate", Status: "running", Counters: r.counters(0)})
 }
 
 func (r *consolidationRun) counters(skippedDeferred int64) map[string]int64 {

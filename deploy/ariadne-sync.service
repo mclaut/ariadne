@@ -11,7 +11,10 @@ After=ariadne-qdrant.service
 Type=oneshot
 # __ARIADNE_ENV__
 ExecStart=%h/.ariadne/bin/ariadnectl maintenance
-TimeoutStartSec=4h
+# maintenance bounds itself: memfile sync 3 x 20m, consolidation 3 x 12h
+# (ARIADNE_MAINTENANCE_CONSOLIDATE_TIMEOUT) plus retry delays. Keep systemd's
+# ceiling above that so it never cuts off a healthy queue drain.
+TimeoutStartSec=40h
 WorkingDirectory=%h/.ariadne
 StandardOutput=append:%h/.ariadne/logs/maintenance.log
 StandardError=append:%h/.ariadne/logs/maintenance.log
