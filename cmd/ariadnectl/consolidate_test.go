@@ -612,3 +612,96 @@ func TestOllamaHasModelReadsLocalTags(t *testing.T) {
 		t.Fatal("a remote endpoint must never be probed")
 	}
 }
+
+// qualityGateServer answers generation requests with the next queued response
+// and quality-gate requests by review kind: "set", "one" or "duplicates".
+func qualityGateServer(t *testing.T, generations []string, verdict func(kind, input string) bool) (*httptest.Server, *[]string, *[]string) {
+	t.Helper()
+	var systems, reviews []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Messages []map[string]string `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		system := request.Messages[0]["content"]
+		if strings.Contains(system, "durable-memory quality gate") {
+			kind := "set"
+			switch {
+			case strings.Contains(system, "for duplicates only"):
+				kind = "duplicates"
+			case strings.Contains(system, "Review one candidate."):
+				kind = "one"
+			}
+			reviews = append(reviews, kind)
+			body, _ := json.Marshal(map[string]any{"message": map[string]string{
+				"content": fmt.Sprintf(`{"valid":%t,"reason":"%s review"}`, verdict(kind, request.Messages[1]["content"]), kind),
+			}})
+			_, _ = w.Write(body)
+			return
+		}
+		systems = append(systems, system)
+		content := generations[min(len(systems), len(generations))-1]
+		body, _ := json.Marshal(map[string]any{"message": map[string]string{"content": content}})
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("ARIADNE_SUMMARY_OLLAMA", server.URL)
+	return server, &systems, &reviews
+}
+
+const twoUnrelatedMemories = `{"memories":[` +
+	`{"room":"reference","text":"The nightly backup now prunes abandoned staging directories before it creates a new stage."},` +
+	`{"room":"gotchas","text":"The installer must wait until launchd releases the old job before it bootstraps the agent again."}]}`
+
+func TestQualityReviewAcceptsUnrelatedCandidatesJudgedAlone(t *testing.T) {
+	_, systems, reviews := qualityGateServer(t, []string{twoUnrelatedMemories}, func(kind, _ string) bool {
+		return kind != "set" // the set-level judge objects only because the subjects are unrelated
+	})
+	memories, err := consolidateGroupWithKeepAlive(context.Background(), []diaryPoint{{
+		Text: "The nightly backup prunes abandoned stages. The installer waits for launchd before bootstrap.",
+	}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(memories) != 2 || len(*systems) != 1 || strings.Join(*reviews, ",") != "set,one,one,duplicates" {
+		t.Fatalf("memories=%d generations=%d reviews=%v", len(memories), len(*systems), *reviews)
+	}
+}
+
+func TestQualityReviewSplitsCandidateThatJoinsIndependentFacts(t *testing.T) {
+	merged := `{"memories":[` +
+		`{"room":"reference","text":"The nightly backup now prunes abandoned staging directories before it creates a new stage."},` +
+		`{"room":"reference","text":"The tray panel listens on loopback only, and separately the installer waits for launchd."}]}`
+	_, systems, _ := qualityGateServer(t, []string{merged, twoUnrelatedMemories}, func(kind, input string) bool {
+		return kind == "duplicates" || !strings.Contains(input, "separately")
+	})
+	memories, err := consolidateGroupWithKeepAlive(context.Background(), []diaryPoint{{
+		Text: "The nightly backup prunes abandoned stages. The panel is loopback only. The installer waits for launchd.",
+	}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*systems) != 2 || len(memories) != 2 ||
+		!strings.Contains((*systems)[1], "Split them") || !strings.Contains((*systems)[1], "candidate 2") {
+		t.Fatalf("generations=%d memories=%d repair=%q", len(*systems), len(memories), (*systems)[len(*systems)-1])
+	}
+}
+
+func TestQualityReviewRejectsDuplicatesWithMergeGuidance(t *testing.T) {
+	_, systems, _ := qualityGateServer(t, []string{twoUnrelatedMemories}, func(kind, _ string) bool {
+		return kind == "one"
+	})
+	_, err := consolidateGroupWithKeepAlive(context.Background(), []diaryPoint{{
+		Text: "The nightly backup prunes abandoned stages. The installer waits for launchd before bootstrap.",
+	}}, 0)
+	if err == nil || !isDeferredConsolidationError(err) || !strings.Contains(err.Error(), qualityDuplicateMarker) {
+		t.Fatalf("err = %v", err)
+	}
+	if len(*systems) != 2 || !strings.Contains((*systems)[1], "merge duplicates") {
+		t.Fatalf("generations=%d repair=%q", len(*systems), (*systems)[len(*systems)-1])
+	}
+}
