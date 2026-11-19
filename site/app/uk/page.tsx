@@ -30,7 +30,7 @@ export default function UkrainianHome() {
           <span className="status-dot" /> Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">Нове у 0.8.30</a>
+          <a href="#new">Нове у 0.8.31</a>
           <a href="#architecture">Архітектура</a>
           <a href="#install">Встановлення</a>
         </div>
@@ -67,7 +67,7 @@ export default function UkrainianHome() {
           </div>
         </div>
         <div className="hero-content">
-          <div className="release-kicker"><Sparkles size={16} /> v0.8.30 пояснює колір трею і прибирає бекапи</div>
+          <div className="release-kicker"><Sparkles size={16} /> v0.8.31 заспокоює трей і менше відкладає</div>
           <h1>Ariadne</h1>
           <p className="hero-lead">Локальна пам’ять для AI-агентів, яким потрібно пам’ятати між сесіями, мовами та паралельними задачами.</p>
           <p className="hero-detail">Go, Qdrant, Ollama та bge-m3. Контекст залишається на вашому комп’ютері — без хмарного акаунта, API-ключа й тихого доступу до інших проєктів.</p>
@@ -81,12 +81,12 @@ export default function UkrainianHome() {
 
       <section className="new-band" id="new">
         <div className="section-shell">
-          <div className="section-heading"><span className="eyebrow">Нове у v0.8.30</span><h2>Видно чому, а не лише колір.</h2><p>Локальна панель пояснює кожну жовту чи червону крапку з логами й керуванням, перервані бекапи більше не накопичуються, а сильніший куратор використовується, якщо встановлений.</p></div>
+          <div className="section-heading"><span className="eyebrow">Нове у v0.8.31</span><h2>Без хибних тривог.</h2><p>Трей більше не підсвічує відкладення попереднього запуску й секундні збої, а консолідація оцінює записи по одному, тож відкладається значно менше пакетів.</p></div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck /><h3>Панель Ariadne</h3><p>Причина кольору крапки, стан сервісів, останнє обслуговування, хвости логів і керування. Лише loopback, з разовим токеном.</p></article>
-            <article className="new-item accent-blue"><Terminal /><h3>Без залишків бекапів</h3><p>Повний бекап, що впав або перервався, більше не лишає по собі ~15 ГБ. Рештки прибирає наступний запуск.</p></article>
-            <article className="new-item accent-coral"><Database /><h3>Сильніший куратор</h3><p>Без заданої моделі консолідація бере qwen2.5:14b, якщо вона встановлена, тож відкладається значно менше пакетів.</p></article>
-            <article className="new-item accent-black"><Network /><h3>Зрозумілий колір</h3><p>Кожна зміна кольору крапки пишеться в tray.log разом із причинами. Пам’ять, резервні копії та налаштування зберігаються.</p></article>
+            <article className="new-item accent-green"><ShieldCheck /><h3>Спокійний старт</h3><p>Відкладення попереднього запуску більше не показується як помилка, коли стартує обслуговування.</p></article>
+            <article className="new-item accent-blue"><Terminal /><h3>Без секундних збоїв</h3><p>Крапка змінює колір і сповіщає, лише коли дві перевірки поспіль збігаються.</p></article>
+            <article className="new-item accent-coral"><Database /><h3>Менше відкладеного</h3><p>Записи оцінюються по одному; запис, що змішує незалежні факти, розбивається, а раніше відкладені пакети буде оброблено ще раз.</p></article>
+            <article className="new-item accent-black"><Network /><h3>Як і раніше пояснено</h3><p>Панель Ariadne і tray.log зберігають причину кожного встановленого кольору. Пам’ять, резервні копії та налаштування зберігаються.</p></article>
           </div>
         </div>
       </section>
@@ -110,7 +110,7 @@ export default function UkrainianHome() {
             <p className="install-note">Для Windows доступний нативний PowerShell-інсталятор. Готові збірки є у GitHub Release.</p>
             <p className="install-note">Якщо tray досі працює на v0.8.13 або старішій версії, один раз запустіть закріплений інсталятор v0.8.16. Він збереже дані Qdrant, резервні копії, налаштування й журнали. Після цього підтверджені оновлення з tray синхронно оновлюватимуть app і binaries.</p>
             <div className="command-window"><div className="command-title"><span>Одноразове оновлення старої версії</span></div><pre><code>curl -fsSL https://raw.githubusercontent.com/mclaut/ariadne/v0.8.16/install.sh | sh</code></pre></div>
-            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.30">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
+            <a className="release-link" href="https://github.com/mclaut/ariadne/releases/tag/v0.8.31">Опис релізу та завантаження <ArrowUpRight size={16} /></a>
           </div>
         </div>
       </section>
