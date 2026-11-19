@@ -198,11 +198,22 @@ func runFullBackup() error {
 		return err
 	}
 	defer unlock()
+	if removed, pruneErr := backupretention.PruneAbandonedStages(root, backupObjectFull); pruneErr != nil {
+		return pruneErr
+	} else if removed > 0 {
+		fmt.Printf("full backup: removed %d abandoned unpublished stage(s)\n", removed)
+	}
 	started := time.Now().UTC()
 	stage, err := backupretention.NewStage(root, backupObjectFull)
 	if err != nil {
 		return err
 	}
+	published := false
+	defer func() {
+		if !published {
+			_ = os.RemoveAll(stage) // an unpublished stage is never a valid backup
+		}
+	}()
 	if err = writeFullJSON(filepath.Join(stage, "plan.json"), json.RawMessage(data)); err != nil {
 		return err
 	}
@@ -306,6 +317,7 @@ func runFullBackup() error {
 	if err != nil {
 		return err
 	}
+	published = true
 	if preserve {
 		fmt.Println("full backup ok: independent recovery PASS · previous full and verification copies preserved · no pruning")
 		return nil

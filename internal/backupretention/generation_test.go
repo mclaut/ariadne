@@ -101,3 +101,37 @@ func TestGenerationSymlinkCannotDeleteExternalDirectory(t *testing.T) {
 		t.Fatal("external data lost")
 	}
 }
+
+func TestPruneAbandonedStagesRemovesOnlyThisObjectsStages(t *testing.T) {
+	root := t.TempDir()
+	abandoned, err := NewStage(root, "full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(abandoned, "partial"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	other, err := NewStage(root, "full-restore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	published := filepath.Join(root, "full")
+	if err = os.Mkdir(published, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := PruneAbandonedStages(root, "full")
+	if err != nil || removed != 1 {
+		t.Fatalf("removed=%d err=%v", removed, err)
+	}
+	for path, want := range map[string]bool{abandoned: false, other: true, published: true} {
+		if _, statErr := os.Lstat(path); (statErr == nil) != want {
+			t.Fatalf("%s exists=%v, want %v", filepath.Base(path), statErr == nil, want)
+		}
+	}
+}
+
+func TestPruneAbandonedStagesToleratesMissingRoot(t *testing.T) {
+	if removed, err := PruneAbandonedStages(filepath.Join(t.TempDir(), "absent"), "full"); err != nil || removed != 0 {
+		t.Fatalf("removed=%d err=%v", removed, err)
+	}
+}
