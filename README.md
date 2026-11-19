@@ -26,20 +26,25 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.31
+## What's New in v0.8.32
+
+- **The curator's language is judged by prose, not code.** A Ukrainian diary full of paths, commands and identifiers looked English to the language check, while the curator was told to write Ukrainian, so such batches were set aside on every run. Code spans, URLs and identifier-like tokens no longer count, and the check, the prompt and the repair guidance name the same language. In a test run language deferrals fell from 11 to 2.
+- **Clear language deferrals.** A batch set aside for language now names the expected and the actual language. Earlier deferrals are reconsidered once.
+
+## Previously in v0.8.31
 
 - **No false alarm when maintenance starts.** The previous run's deferred consolidation was shown as "maintenance failed" until the new run caught up. A deferral is now settled by any newer maintenance event and never reads as a failure.
 - **No notifications for one-second blips.** The tray changes the dot only when two consecutive polls agree, and notifies when a worse color settles or a new set of issues persists.
 - **Fewer batches set aside.** When the quality gate rejects a candidate set, each candidate is judged alone and the set only for duplicates; a candidate that really mixes independent facts is split into separate memories. Earlier deferrals are reconsidered once.
 
-## Previously in v0.8.30
+## Earlier, in v0.8.30
 
 - **Ariadne panel.** "Open Ariadne panel…" in the tray menu, a click on the warning row, or opening Ariadne.app shows why the dot is yellow or red in plain language, service state, recent maintenance, log tails and the start/stop/restart/maintenance/backup controls. It is served on loopback only with a per-run token. Every color change is also written to `tray.log` with its reasons.
 - **Interrupted backups no longer pile up.** A full backup that failed or was killed left its ~15 GB unpublished stage behind; failed runs now remove it and the next run prunes any leftovers.
 - **A stronger curator when installed.** With no model configured, consolidation uses `qwen2.5:14b` whenever Ollama has it, so the quality gate sets far fewer batches aside.
 - **Steady heartbeat.** Consolidation records progress after every batch, and the Linux maintenance unit allows the full drain.
 
-## Earlier, in v0.8.29
+## Also earlier, in v0.8.29
 
 - **Updates keep Qdrant running.** The installer waits until launchd has released a service before starting it again, and retries the start. A v0.8.28 update could leave Qdrant stopped with `Bootstrap failed: 5: Input/output error`.
 - **Consolidation drains the whole queue in one run.** There is no run-wide 15-minute deadline any more: each model request has its own timeout, Ollama errors and timeouts are retried in place, and every group is saved as soon as it finishes. Timed-out batches are no longer set aside for the whole pipeline revision; batches deferred by earlier releases are retried once.
@@ -1006,7 +1011,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.31 — current release. Stops false yellow alarms and one-poll notifications in the tray, and judges consolidation candidates one by one so far fewer batches are set aside.
+v0.8.32 — current release. Judges the curator's language by prose rather than code, so code-heavy Ukrainian diaries are no longer set aside on every run.
+
+v0.8.31 stopped false yellow alarms and one-poll notifications in the tray, and judged consolidation candidates one by one so far fewer batches were set aside.
 
 v0.8.30 added the Ariadne panel that explains the tray color with logs and controls, removed abandoned backup stages, and preferred the installed 14B curator.
 

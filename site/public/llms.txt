@@ -42,6 +42,8 @@ Full backup rotation: a private explicit plan retains one independently verified
 
 Runtime rotation v0.8.24: legacy release-local previous-runtime copies join canonical retention after independent runtime recovery; audit metadata and retired-file inventories are preserved.
 
+Version 0.8.32 judges the consolidation curator's language by prose rather than code: code spans, URLs and identifier-like tokens no longer make a Ukrainian diary full of commands look English, and the language check, the prompt hint and the repair guidance name the same language, so such batches are no longer set aside on every run. A language deferral names the expected and the actual language, and earlier deferrals are reconsidered once.
+
 Version 0.8.31 keeps the tray calm: a deferred consolidation from the previous run is no longer reported as a maintenance failure when the next run starts, and the tray changes its dot color or notifies only after two consecutive polls agree. When the consolidation quality gate rejects a candidate set, each candidate is judged alone and the set only for duplicates; a candidate that mixes independent facts is split into separate memories, and earlier deferrals are reconsidered once.
 
 Version 0.8.30 adds the Ariadne panel: a loopback-only, token-protected local page opened from the tray or Ariadne.app that explains why the tray dot is yellow or red, with service state, recent maintenance, log tails and controls; tray color changes are logged with reasons. Failed or interrupted full backups no longer leave their unpublished stage behind, and consolidation uses qwen2.5:14b when it is installed and no model is configured.
