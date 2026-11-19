@@ -53,7 +53,7 @@ const jsonLd = {
   name: "Ariadne",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Windows, macOS, Linux",
-  softwareVersion: "0.8.29",
+  softwareVersion: "0.8.30",
   description:
     "Local-first multilingual memory server for Codex, Claude Code, and MCP clients.",
   codeRepository: "https://github.com/mclaut/ariadne",
@@ -94,7 +94,7 @@ export default function Home() {
           Ariadne
         </a>
         <div className="nav-links">
-          <a href="#new">New in 0.8.29</a>
+          <a href="#new">New in 0.8.30</a>
           <a href="#architecture">Architecture</a>
           <a href="#install">Install</a>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="release-kicker">
             <Sparkles size={16} aria-hidden="true" />
-            v0.8.29 keeps Qdrant up and drains the whole queue
+            v0.8.30 explains the tray and tidies backups
           </div>
           <h1>Ariadne</h1>
           <p className="hero-lead">
@@ -186,15 +186,15 @@ export default function Home() {
       <section className="new-band" id="new">
         <div className="section-shell">
           <div className="section-heading">
-            <span className="eyebrow">New in v0.8.29</span>
-            <h2>The whole queue, in one run.</h2>
-            <p>Updates no longer leave Qdrant stopped, and nightly consolidation finishes everything it starts instead of setting work aside.</p>
+            <span className="eyebrow">New in v0.8.30</span>
+            <h2>See why, not just a color.</h2>
+            <p>A local panel explains every yellow or red dot with logs and controls, interrupted backups stop piling up, and a stronger curator is used when installed.</p>
           </div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Qdrant stays up</h3><p>The installer waits until launchd has released a service before starting it again, and retries the start instead of leaving it stopped.</p></article>
-            <article className="new-item accent-blue"><Monitor aria-hidden="true" /><h3>No run-wide deadline</h3><p>Each model request has its own timeout. Ollama errors and timeouts are retried in place, and every group is saved as it finishes.</p></article>
-            <article className="new-item accent-coral"><Database aria-hidden="true" /><h3>Nothing set aside</h3><p>Timed-out batches are no longer deferred for the whole pipeline revision. Batches deferred by earlier releases are retried once.</p></article>
-            <article className="new-item accent-black"><Network aria-hidden="true" /><h3>Health stays honest</h3><p>A long drain reports progress, so it is not mistaken for a hang. Memories, backups and settings are kept.</p></article>
+            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Ariadne panel</h3><p>The reason behind the dot color, service state, recent maintenance, log tails and controls. Loopback only, with a per-run token.</p></article>
+            <article className="new-item accent-blue"><Monitor aria-hidden="true" /><h3>No leftover backups</h3><p>A failed or interrupted full backup no longer leaves its ~15 GB stage behind. Leftovers are pruned on the next run.</p></article>
+            <article className="new-item accent-coral"><Database aria-hidden="true" /><h3>Stronger curator</h3><p>Consolidation uses qwen2.5:14b when it is installed and no model is configured, so far fewer batches are set aside.</p></article>
+            <article className="new-item accent-black"><Network aria-hidden="true" /><h3>Traceable color</h3><p>Every change of the dot color is written to tray.log with its reasons. Memories, backups and settings are kept.</p></article>
           </div>
         </div>
       </section>
@@ -338,7 +338,7 @@ export default function Home() {
             </div>
             <a
               className="release-link"
-              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.29"
+              href="https://github.com/mclaut/ariadne/releases/tag/v0.8.30"
               target="_blank"
               rel="noreferrer"
             >

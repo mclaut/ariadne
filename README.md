@@ -26,17 +26,24 @@ starve under several concurrent MCP sessions. ariadne is a **server**: one
 Qdrant handles concurrent writes natively, so the whole single-writer /
 lock-starvation class simply doesn't exist.
 
-## What's New in v0.8.29
+## What's New in v0.8.30
+
+- **Ariadne panel.** "Open Ariadne panel…" in the tray menu, a click on the warning row, or opening Ariadne.app shows why the dot is yellow or red in plain language, service state, recent maintenance, log tails and the start/stop/restart/maintenance/backup controls. It is served on loopback only with a per-run token. Every color change is also written to `tray.log` with its reasons.
+- **Interrupted backups no longer pile up.** A full backup that failed or was killed left its ~15 GB unpublished stage behind; failed runs now remove it and the next run prunes any leftovers.
+- **A stronger curator when installed.** With no model configured, consolidation uses `qwen2.5:14b` whenever Ollama has it, so the quality gate sets far fewer batches aside.
+- **Steady heartbeat.** Consolidation records progress after every batch, and the Linux maintenance unit allows the full drain.
+
+## Previously in v0.8.29
 
 - **Updates keep Qdrant running.** The installer waits until launchd has released a service before starting it again, and retries the start. A v0.8.28 update could leave Qdrant stopped with `Bootstrap failed: 5: Input/output error`.
 - **Consolidation drains the whole queue in one run.** There is no run-wide 15-minute deadline any more: each model request has its own timeout, Ollama errors and timeouts are retried in place, and every group is saved as soon as it finishes. Timed-out batches are no longer set aside for the whole pipeline revision; batches deferred by earlier releases are retried once.
 
-## Previously in v0.8.28
+## Earlier, in v0.8.28
 
 - **Updates install again.** The Go bootstrap now takes its checksum from `dl.google.com`; `go.dev` started returning HTML, which made v0.8.27 updates fail with `checksum mismatch`. Update from the tray once more.
 - **Reboots are not hangs.** Maintenance cut short by a system restart is reported as interrupted and retried by the next scheduled run, instead of "appears stuck".
 
-## Earlier, in v0.8.27
+## Also earlier, in v0.8.27
 
 
 - **Patched Go toolchain.** Binaries are built with Go 1.26.11, closing 24 reachable standard-library advisories (HTTP/2 and HTTP/1 servers, TLS, certificate validation, file-system root escape).
@@ -993,7 +1000,9 @@ must omit it so unchanged revisions stay out of the embedding queue.
 
 ## Status
 
-v0.8.29 — current release. Updates no longer leave Qdrant stopped, and consolidation drains the whole diary queue in one run instead of deferring what a 15-minute deadline cut off.
+v0.8.30 — current release. Adds the Ariadne panel that explains the tray color with logs and controls, removes abandoned backup stages, and prefers the installed 14B curator.
+
+v0.8.29 kept Qdrant running through updates and drained the whole diary queue in one run.
 
 v0.8.28 fixed Go checksum verification for tray updates and reported maintenance interrupted by a reboot as interrupted, not stuck.
 
