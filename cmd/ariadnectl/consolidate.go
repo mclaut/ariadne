@@ -70,7 +70,7 @@ const (
 	defaultConsolidationTokenBudget = int64(6000)
 	defaultEmptyGrace               = 7 * 24 * time.Hour
 	consolidateDeferredExitCode     = 3
-	consolidationPipelineRevision   = "atomic-v3"
+	consolidationPipelineRevision   = "atomic-v4"
 	roomDecisions                   = "decisions"
 	roomGotchas                     = "gotchas"
 	roomReference                   = "reference"
@@ -863,6 +863,13 @@ func consolidationRepairGuidance(points []diaryPoint, err error) string {
 	case strings.Contains(message, "credential material"):
 		return "Remove every credential value, password, token, private key, credential URI, and secret assignment. " +
 			"Retain only the non-sensitive operational conclusion and, when needed, the variable name without its value."
+	case strings.Contains(message, qualityRejectionPrefix) && strings.Contains(message, qualityDuplicateMarker):
+		return "The previous response repeated the same durable fact in more than one memory (" + message +
+			"). Write each fact once; merge duplicates into a single memory."
+	case strings.Contains(message, qualityRejectionPrefix):
+		return "The previous response joined independent facts in one memory (" + message + "). Split them: " +
+			"write each independently useful fact as its own memory, and combine facts only when one explains or " +
+			"supports the other. Keep every durable fact."
 	default:
 		return "The previous response failed this validation rule: " + message + ". Correct that rule."
 	}
@@ -963,30 +970,64 @@ func requestConsolidatedMemories(
 	return memories, nil
 }
 
+const (
+	qualityCohesionRule = "Each candidate must cover one cohesive reusable subject. A report may include " +
+		"its scope, method, key measurements, caveats, and verification. An incident may include its symptom, cause, " +
+		"fix, and verification. A release may include related changes and checks. Reject a candidate only when it joins " +
+		"facts that are useful independently and neither fact explains or supports the other."
+	qualityDuplicateRule = "Reject the set only when two candidates express the same durable fact. Candidates " +
+		"about different subjects, even unrelated ones, are valid."
+	qualityRejectionPrefix = "candidate set failed quality review"
+	qualityDuplicateMarker = "duplicate candidates"
+)
+
 func validateConsolidatedQuality(
 	ctx context.Context, base string, finalKeepAlive any, memories []consolidatedMemory,
 ) error {
 	if len(memories) == 0 {
 		return nil
 	}
+	valid, reason, err := requestConsolidationVerdict(ctx, base, finalKeepAlive,
+		"Review the complete candidate set. "+qualityCohesionRule+" Also reject duplicate "+
+			"candidates that express the same durable fact. Related but distinct candidates are valid.",
+		qualityCandidates(memories))
+	if err != nil || valid {
+		return err
+	}
+	if len(memories) == 1 {
+		return qualityRejection(reason)
+	}
+	// Judged together, a set of candidates about unrelated subjects from one
+	// diary is often rejected for being unrelated, which is not a defect.
+	// Split the review: judge each candidate alone, then the set for duplicates.
+	for i := range memories {
+		valid, reason, err = requestConsolidationVerdict(ctx, base, finalKeepAlive,
+			"Review one candidate. "+qualityCohesionRule, qualityCandidates(memories[i:i+1]))
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return qualityRejection(fmt.Sprintf("candidate %d: %s", i+1, reason))
+		}
+	}
+	valid, reason, err = requestConsolidationVerdict(ctx, base, finalKeepAlive,
+		"Review the complete candidate set for duplicates only. "+qualityDuplicateRule, qualityCandidates(memories))
+	if err != nil || valid {
+		return err
+	}
+	return qualityRejection(qualityDuplicateMarker + ": " + reason)
+}
+
+func qualityCandidates(memories []consolidatedMemory) string {
 	var candidates strings.Builder
 	for i, memory := range memories {
 		fmt.Fprintf(&candidates, "CANDIDATE %d [%s]:\n%s\n\n", i+1, memory.Room, memory.Text)
 	}
-	valid, reason, err := requestConsolidationVerdict(ctx, base, finalKeepAlive,
-		"Review the complete candidate set. Each candidate must cover one cohesive reusable subject. A report may include "+
-			"its scope, method, key measurements, caveats, and verification. An incident may include its symptom, cause, "+
-			"fix, and verification. A release may include related changes and checks. Reject a candidate only when it joins "+
-			"facts that are useful independently and neither fact explains or supports the other. Also reject duplicate "+
-			"candidates that express the same durable fact. Related but distinct candidates are valid.",
-		candidates.String())
-	if err != nil {
-		return err
-	}
-	if !valid {
-		return &consolidationOutputError{err: fmt.Errorf("candidate set failed quality review: %s", reason)}
-	}
-	return nil
+	return candidates.String()
+}
+
+func qualityRejection(reason string) error {
+	return &consolidationOutputError{err: fmt.Errorf("%s: %s", qualityRejectionPrefix, reason)}
 }
 
 func requestConsolidationVerdict(

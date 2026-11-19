@@ -87,16 +87,24 @@ var (
 )
 
 // healthColor is the single source of the dot color for the icon and the panel.
+// Health colors shared by the tray icon, its log and the panel.
+const (
+	healthGray   = "gray"
+	healthRed    = "red"
+	healthOrange = "orange"
+	healthGreen  = "green"
+)
+
 func healthColor(s status) string {
 	switch {
 	case !s.reachable:
-		return "gray"
+		return healthGray
 	case !s.Qdrant.Up || !s.Ollama.Up:
-		return "red"
+		return healthRed
 	case len(s.Issues) > 0:
-		return "orange"
+		return healthOrange
 	default:
-		return "green"
+		return healthGreen
 	}
 }
 
@@ -107,7 +115,7 @@ func colorExplanation(l i18n.Lang, color string) string {
 func newPanelState(s status, l i18n.Lang, busy bool, events []activity.Event) panelState {
 	color := healthColor(s)
 	issues := append([]string(nil), s.Issues...)
-	if color == "red" && len(issues) == 0 {
+	if color == healthRed && len(issues) == 0 {
 		issues = append(issues, i18n.T(l, "health.down"))
 	}
 	state := panelState{
@@ -129,11 +137,11 @@ func newPanelState(s status, l i18n.Lang, busy bool, events []activity.Event) pa
 
 func healthWord(l i18n.Lang, color string) string {
 	switch color {
-	case "gray":
+	case healthGray:
 		return i18n.T(l, "health.unreachable")
-	case "red":
+	case healthRed:
 		return i18n.T(l, "health.down")
-	case "orange":
+	case healthOrange:
 		return i18n.T(l, "health.warn")
 	default:
 		return i18n.T(l, "health.ok")
@@ -366,7 +374,7 @@ func openPanel() {
 	}
 }
 
-var dotColors = map[string]color.RGBA{"gray": gray, "red": red, "orange": orange, "green": green}
+var dotColors = map[string]color.RGBA{healthGray: gray, healthRed: red, healthOrange: orange, healthGreen: green}
 
 func orDash(s string) string {
 	if s == "" {

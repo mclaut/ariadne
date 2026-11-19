@@ -45,6 +45,15 @@ func maintenanceHealthIssue(now time.Time, events map[string]activity.Event, lan
 			!maintenance.At.Before(child.At) {
 			continue
 		}
+		if child.Status == maintenanceStatusDeferred {
+			// Deferral is a safe outcome, not a failure. Maintenance records
+			// complete_with_deferred right after it, so any newer maintenance
+			// event (for example the next run starting) means it is settled.
+			if hasMaintenance && !maintenance.At.Before(child.At) {
+				continue
+			}
+			return fmt.Sprintf(i18n.T(lang, "issue.maintenance_degraded"), operation+": "+child.Status)
+		}
 		return fmt.Sprintf(i18n.T(lang, "issue.maintenance_failed"), operation+": "+child.Status)
 	}
 	event, ok := latestMaintenanceEvent(events)

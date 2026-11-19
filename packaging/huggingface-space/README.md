@@ -35,13 +35,13 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.30 adds the Ariadne panel and cleans up after interrupted backups.
+Version 0.8.31 keeps the tray calm and sets far fewer consolidation batches aside.
 
-- **Ariadne panel.** A local, token-protected page explains why the tray dot is yellow or red, with service state, recent maintenance, log tails and controls.
-- **No leftover backups.** Failed or interrupted full backups no longer leave their ~15 GB stage behind.
-- **Stronger curator.** Consolidation uses `qwen2.5:14b` when it is installed and no model is configured.
+- **No false alarms.** The previous run's deferral no longer shows as a failure when maintenance starts.
+- **No one-second blips.** The dot changes and notifies only when two consecutive polls agree.
+- **Candidates judged one by one.** Unrelated memories from one diary are no longer rejected together; mixed ones are split.
 
-Version 0.8.29 kept Qdrant running through updates and drained the consolidation queue in one run.
+Version 0.8.30 added the Ariadne panel and cleaned up after interrupted backups.
 
 - **Updates keep Qdrant running.** The installer waits for launchd to release a service before restarting it and retries the start.
 - **The whole queue in one run.** Consolidation has no run-wide deadline; transient Ollama failures are retried in place and every group is saved as it finishes.
