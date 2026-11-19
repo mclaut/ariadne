@@ -188,10 +188,10 @@ export default function Home() {
           <div className="section-heading">
             <span className="eyebrow">New in v0.8.31</span>
             <h2>No false alarms.</h2>
-            <p>The tray stops flagging the previous run's deferral and one-second blips, and consolidation judges candidates one by one so far fewer batches are set aside.</p>
+            <p>The tray stops flagging the previous run’s deferral and one-second blips, and consolidation judges candidates one by one so far fewer batches are set aside.</p>
           </div>
           <div className="new-grid">
-            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Calm start</h3><p>The previous run's deferral no longer shows as a failure when maintenance starts.</p></article>
+            <article className="new-item accent-green"><ShieldCheck aria-hidden="true" /><h3>Calm start</h3><p>The previous run’s deferral no longer shows as a failure when maintenance starts.</p></article>
             <article className="new-item accent-blue"><Monitor aria-hidden="true" /><h3>No blips</h3><p>The dot changes and notifies only when two consecutive polls agree.</p></article>
             <article className="new-item accent-coral"><Database aria-hidden="true" /><h3>Fewer set aside</h3><p>Candidates are judged one by one; a memory that mixes independent facts is split, and earlier deferrals are reconsidered once.</p></article>
             <article className="new-item accent-black"><Network aria-hidden="true" /><h3>Still explained</h3><p>The Ariadne panel and tray.log keep the reason behind every settled color. Memories, backups and settings are kept.</p></article>
