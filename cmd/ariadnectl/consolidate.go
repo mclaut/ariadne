@@ -70,7 +70,7 @@ const (
 	defaultConsolidationTokenBudget = int64(6000)
 	defaultEmptyGrace               = 7 * 24 * time.Hour
 	consolidateDeferredExitCode     = 3
-	consolidationPipelineRevision   = "atomic-v4"
+	consolidationPipelineRevision   = "atomic-v5"
 	roomDecisions                   = "decisions"
 	roomGotchas                     = "gotchas"
 	roomReference                   = "reference"
@@ -849,12 +849,7 @@ func consolidationRepairGuidance(points []diaryPoint, err error) string {
 		for i, point := range points {
 			source[i] = point.Text
 		}
-		sourceText := strings.Join(source, "\n")
-		language := sourceLanguageHint(sourceText)
-		if language == "" {
-			language, _ = dominantScript(sourceText)
-			language += " script source language"
-		}
+		_, language, _ := proseLanguage(strings.Join(source, "\n"))
 		return "The previous response used the wrong language. Write every memory in " + language +
 			" exactly as the source does; do not translate it."
 	case strings.Contains(message, "unstable local artifact"):
@@ -880,10 +875,11 @@ func sourceLanguageGuidance(points []diaryPoint) string {
 	for i, point := range points {
 		source[i] = point.Text
 	}
-	if language := sourceLanguageHint(strings.Join(source, "\n")); language != "" {
-		return "The source language is " + language + ". Write every memory only in " + language + "; do not translate it."
+	script, language, count := proseLanguage(strings.Join(source, "\n"))
+	if count < 20 || language == script+" script" {
+		return ""
 	}
-	return ""
+	return "The source language is " + language + ". Write every memory only in " + language + "; do not translate it."
 }
 
 func redactUnstableArtifacts(text string) string {
@@ -1118,9 +1114,9 @@ func validateConsolidatedMemories(
 			return nil, &consolidationOutputError{err: fmt.Errorf(
 				"invalid memory %d: contains credential material (%s)", i+1, strings.Join(findings, ","))}
 		}
-		if !sameDominantScript(sourceText, memories[i].Text) {
+		if mismatch := languageMismatch(sourceText, memories[i].Text); mismatch != "" {
 			return nil, &consolidationOutputError{err: fmt.Errorf(
-				"invalid memory %d: output language differs from source", i+1)}
+				"invalid memory %d: output language differs from source (%s)", i+1, mismatch)}
 		}
 		memories[i].Room = conservativeRoom(memories[i].Room, memories[i].Text)
 		if !validConsolidated(memories[i]) {
@@ -1187,18 +1183,42 @@ func unstableArtifactReference(text string) bool {
 	})
 }
 
-func sameDominantScript(source, output string) bool {
-	sourceScript, sourceCount := dominantScript(source)
-	outputScript, outputCount := dominantScript(output)
+// codeTokenPattern matches code spans, URLs and identifier-like tokens (paths, dotted or
+// snake_case names, flags, numbers). They are Latin in any diary, so a Ukrainian diary
+// full of commands would otherwise look English and contradict the language guidance.
+var codeTokenPattern = regexp.MustCompile("(?s)```.*?```|`[^`]*`|https?://\\S+|\\S*[/\\\\_.=:#@0-9]\\S*")
+
+func proseText(text string) string {
+	return codeTokenPattern.ReplaceAllString(text, " ")
+}
+
+// proseLanguage names the language of the prose: Ukrainian or Russian for Cyrillic text
+// when the letters tell them apart, otherwise the dominant script.
+func proseLanguage(text string) (script, language string, count int) {
+	prose := proseText(text)
+	script, count = dominantScript(prose)
+	language = script + " script"
+	if script == "cyrillic" {
+		if hint := sourceLanguageHint(prose); hint != "" {
+			language = hint
+		}
+	}
+	return script, language, count
+}
+
+// languageMismatch describes how the output language differs from the source, or "".
+func languageMismatch(source, output string) string {
+	sourceScript, sourceLanguage, sourceCount := proseLanguage(source)
+	outputScript, outputLanguage, outputCount := proseLanguage(output)
 	if sourceCount < 20 || outputCount < 20 {
-		return true
+		return ""
 	}
-	if sourceScript != outputScript {
-		return false
+	if sourceScript != outputScript ||
+		(sourceScript == "cyrillic" && sourceLanguage != "cyrillic script" &&
+			outputLanguage != "cyrillic script" && sourceLanguage != outputLanguage) {
+		return "expected " + sourceLanguage + ", got " + outputLanguage
 	}
-	sourceLanguage := sourceLanguageHint(source)
-	outputLanguage := sourceLanguageHint(output)
-	return sourceLanguage == "" || outputLanguage == "" || sourceLanguage == outputLanguage
+	return ""
 }
 
 func sourceLanguageHint(text string) string {
