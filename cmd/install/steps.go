@@ -197,14 +197,7 @@ func installSyncAgent(r *report, o opts) error {
 		if err := os.WriteFile(dst, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
 			return err
 		}
-		uid := strconv.Itoa(os.Getuid())
-		for _, label := range loadedInstallLaunchAgents("com.ariadne.sync") {
-			_ = runCmd("launchctl", "bootout", "gui/"+uid+"/"+label) // ignore: job may exit concurrently
-		}
-		if err := archiveLegacyLaunchAgentPlists(r.home, "com.ariadne.sync"); err != nil {
-			return err
-		}
-		return runCmd("launchctl", "bootstrap", "gui/"+uid, dst)
+		return replaceLaunchAgent(r.home, "com.ariadne.sync", dst)
 	}
 	// linux: oneshot service + daily timer (systemd user units use %h natively)
 	unitDir := filepath.Dir(dst)
@@ -374,13 +367,7 @@ func installTrayAutostart(r *report, o opts) error {
 		if err := os.WriteFile(dst, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
 			return err
 		}
-		for _, label := range loadedInstallLaunchAgents("com.ariadne.tray") {
-			_ = runCmd("launchctl", "bootout", "gui/"+uid+"/"+label) // ignore: job may exit concurrently
-		}
-		if err := archiveLegacyLaunchAgentPlists(r.home, "com.ariadne.tray"); err != nil {
-			return err
-		}
-		return runCmd("launchctl", "bootstrap", "gui/"+uid, dst)
+		return replaceLaunchAgent(r.home, "com.ariadne.tray", dst)
 	}
 	tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "ariadne-tray.desktop")) //nolint:gosec // repo file
 	if err != nil {
@@ -586,14 +573,7 @@ func installService(r *report) error {
 		if err := os.WriteFile(svc, []byte(rendered), 0o644); err != nil { //nolint:gosec // launchd reads it
 			return err
 		}
-		uid := strconv.Itoa(os.Getuid())
-		for _, label := range loadedInstallQdrantAgents() {
-			_ = runCmd("launchctl", "bootout", "gui/"+uid+"/"+label) // ignore: job may exit concurrently
-		}
-		if err := archiveLegacyLaunchAgentPlists(r.home, "com.ariadne.qdrant"); err != nil {
-			return err
-		}
-		return runCmd("launchctl", "bootstrap", "gui/"+uid, svc)
+		return replaceLaunchAgent(r.home, "com.ariadne.qdrant", svc)
 	}
 	// linux: systemd user unit (uses %h natively — copy as-is)
 	tpl, err := os.ReadFile(filepath.Join(r.repoRoot, "deploy", "ariadne-qdrant.service"))
@@ -613,8 +593,42 @@ func installService(r *report) error {
 	return nil
 }
 
-func loadedInstallQdrantAgents() []string {
-	return loadedInstallLaunchAgents("com.ariadne.qdrant")
+// launchd removes a booted-out job asynchronously. Bootstrapping the same
+// label before it is gone fails with "5: Input/output error" and leaves the
+// service unloaded, so wait for the old jobs to disappear and retry.
+var (
+	launchctlRun             = runCmd
+	launchctlLoadedLabels    = loadedInstallLaunchAgents
+	launchdPollInterval      = 250 * time.Millisecond
+	launchdSettleTimeout     = 30 * time.Second
+	launchdBootstrapAttempts = 5
+	launchdRetryDelay        = time.Second
+)
+
+func replaceLaunchAgent(home, canonical, plist string) error {
+	domain := "gui/" + strconv.Itoa(os.Getuid())
+	for _, label := range launchctlLoadedLabels(canonical) {
+		_ = launchctlRun("launchctl", "bootout", domain+"/"+label) // ignore: job may exit concurrently
+	}
+	if err := archiveLegacyLaunchAgentPlists(home, canonical); err != nil {
+		return err
+	}
+	for deadline := time.Now().Add(launchdSettleTimeout); len(launchctlLoadedLabels(canonical)) > 0; {
+		if time.Now().After(deadline) {
+			break // bootstrap below reports the failure if the job is still there
+		}
+		time.Sleep(launchdPollInterval)
+	}
+	var err error
+	for attempt := 1; attempt <= launchdBootstrapAttempts; attempt++ {
+		if err = launchctlRun("launchctl", "bootstrap", domain, plist); err == nil {
+			return nil
+		}
+		if attempt < launchdBootstrapAttempts {
+			time.Sleep(time.Duration(attempt) * launchdRetryDelay)
+		}
+	}
+	return fmt.Errorf("launchctl bootstrap %s after %d attempts: %w", canonical, launchdBootstrapAttempts, err)
 }
 
 func loadedInstallLaunchAgents(canonical string) []string {

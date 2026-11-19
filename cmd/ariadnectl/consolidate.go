@@ -2,6 +2,7 @@ package main
 
 import (
 	"ariadne/internal/activity"
+	maintenancecore "ariadne/internal/maintenance"
 	"ariadne/internal/metrics"
 	"ariadne/internal/secretguard"
 	"ariadne/internal/store"
@@ -69,7 +70,7 @@ const (
 	defaultConsolidationTokenBudget = int64(6000)
 	defaultEmptyGrace               = 7 * 24 * time.Hour
 	consolidateDeferredExitCode     = 3
-	consolidationPipelineRevision   = "atomic-v2"
+	consolidationPipelineRevision   = "atomic-v3"
 	roomDecisions                   = "decisions"
 	roomGotchas                     = "gotchas"
 	roomReference                   = "reference"
@@ -104,10 +105,6 @@ type consolidationBatch struct {
 type consolidationResult struct {
 	batch    consolidationBatch
 	memories []consolidatedMemory
-}
-
-type deferredConsolidation struct {
-	batch consolidationBatch
 }
 
 type consolidationOutcome struct {
@@ -231,9 +228,9 @@ func consolidateCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "consolidate: --empty-grace must be non-negative and --max-source-tokens at least 256")
 		return 2
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-	defer cancel()
-	points, err := loadDiary(ctx, time.Now().Add(-*before).Unix())
+	listCtx, cancelList := context.WithTimeout(context.Background(), 2*time.Minute)
+	points, err := loadDiary(listCtx, time.Now().Add(-*before).Unix())
+	cancelList()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "consolidate: list diary:", err)
 		return 1
@@ -246,25 +243,79 @@ func consolidateCmd(args []string) int {
 		return 0
 	}
 	batches := buildConsolidationBatches(rawGroups, *maxSourceTokens)
-	results := make([]consolidationResult, 0, len(batches))
-	deferred := make([]deferredConsolidation, 0)
-	failures := int64(0)
-	retryableFailures := int64(0)
-	deferredFailures := int64(0)
-	for i, batch := range batches {
+	// The whole queue is drained in one run: there is no run-wide deadline.
+	// Every model request carries its own HTTP timeout, transient failures are
+	// retried in place, and each group is persisted as soon as it finishes, so
+	// an interrupted run keeps the work it already completed.
+	var st consolidationWriter // nil during a dry run, which never persists
+	if !*dryRun {
+		opened, err := consolidationStore()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "consolidate: store:", err)
+			return 1
+		}
+		defer func() { _ = opened.Close() }()
+		st = opened
+	}
+	run := consolidationRun{total: int64(len(batches)), emptyGrace: *emptyGrace, pipelineKey: pipelineKey}
+	for _, group := range groupConsolidationBatches(batches) {
+		if code, stop := run.processGroup(st, group, *dryRun); stop {
+			return code
+		}
+	}
+	return run.finish(*dryRun, skippedDeferred)
+}
+
+type consolidationRun struct {
+	total, done                                   int64
+	failures, retryableFailures, deferredFailures int64
+	totals                                        consolidationOutcome
+	emptyGrace                                    time.Duration
+	pipelineKey                                   string
+	backupChecked                                 bool
+}
+
+func groupConsolidationBatches(batches []consolidationBatch) [][]consolidationBatch {
+	groups := make([][]consolidationBatch, 0, len(batches))
+	for _, batch := range batches {
+		last := len(groups) - 1
+		if last >= 0 && batchGroupKey(groups[last][0]) == batchGroupKey(batch) {
+			groups[last] = append(groups[last], batch)
+			continue
+		}
+		groups = append(groups, []consolidationBatch{batch})
+	}
+	return groups
+}
+
+func batchGroupKey(batch consolidationBatch) string {
+	if batch.groupKey != "" {
+		return batch.groupKey
+	}
+	return batch.key
+}
+
+// processGroup consolidates one diary group and persists its outcome. It
+// reports stop=true with an exit code when the run must end early.
+func (r *consolidationRun) processGroup(st consolidationWriter, group []consolidationBatch, dryRun bool) (int, bool) {
+	ctx := context.Background() // no run-wide deadline: each model request is bounded on its own
+	results := make([]consolidationResult, 0, len(group))
+	deferred := make([]consolidationBatch, 0)
+	for _, batch := range group {
+		r.done++
 		keepAlive := any("5m")
-		if i == len(batches)-1 {
+		if r.done == r.total {
 			keepAlive = 0
 		}
-		memories, err := consolidateGroupWithKeepAlive(ctx, batch.points, keepAlive)
+		memories, err := consolidateBatchWithRetry(ctx, batch, keepAlive)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "consolidate: %s: %v; source diary kept\n", batch.key, err)
-			failures++
+			r.failures++
 			if isDeferredConsolidationError(err) {
-				deferredFailures++
-				deferred = append(deferred, deferredConsolidation{batch: batch})
+				r.deferredFailures++
+				deferred = append(deferred, batch)
 			} else {
-				retryableFailures++
+				r.retryableFailures++
 			}
 			continue
 		}
@@ -278,72 +329,103 @@ func consolidateCmd(args []string) int {
 			fmt.Printf("  %s: %s\n", memory.Room, memory.Text)
 		}
 	}
-	if *dryRun {
-		status := "dry_run"
-		exitCode := 0
-		if failures > 0 {
-			status, exitCode = consolidationFailureStatus(retryableFailures, deferredFailures)
-		}
-		fmt.Printf("consolidate dry-run summary: status=%s batches=%d failures=%d retryable=%d deferred=%d skipped=%d\n",
-			status, len(batches), failures, retryableFailures, deferredFailures, skippedDeferred)
-		return exitCode
+	if dryRun {
+		return 0, false
 	}
-	needsBackup := false
-	for _, result := range results {
-		if len(result.memories) > 0 || emptyWouldArchive(result.batch.points, time.Now(), *emptyGrace) {
-			needsBackup = true
-			break
-		}
-	}
-	if needsBackup {
+	if !r.backupChecked && consolidationNeedsBackup(results, r.emptyGrace) {
+		r.backupChecked = true
 		interval := durationEnv("ARIADNE_BACKUP_MIN_INTERVAL", 7*24*time.Hour)
 		if backupIfDue(time.Now(), interval) != 0 {
 			fmt.Fprintln(os.Stderr, "consolidate: due backup failed; refusing lifecycle changes")
 			_ = activity.Append(activity.Event{Operation: "consolidate", Status: maintenanceStatusFailed, Message: "due backup failed"})
-			return 1
+			return 1, true
 		}
 	}
-	st, err := consolidationStore()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "consolidate: store:", err)
-		return 1
-	}
-	defer func() { _ = st.Close() }()
-	// Model work has a firm deadline, but applying its safe, append-only outcome
-	// must still be possible after that deadline. In particular, a timed-out
-	// batch is deferred rather than retried by maintenance on every run.
-	persistenceCtx, persistenceCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer persistenceCancel()
-	totals := consolidationOutcome{}
+	persistCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
 	now := time.Now()
-	for _, item := range deferred {
-		if err := markDeferredConsolidation(persistenceCtx, st, item.batch.points, now, pipelineKey); err != nil {
-			fmt.Fprintf(os.Stderr, "consolidate: %s: persist deferred marker: %v\n", item.batch.key, err)
-			retryableFailures++
+	for _, batch := range deferred {
+		if err := markDeferredConsolidation(persistCtx, st, batch.points, now, r.pipelineKey); err != nil {
+			fmt.Fprintf(os.Stderr, "consolidate: %s: persist deferred marker: %v\n", batch.key, err)
+			r.retryableFailures++
 		}
 	}
 	for _, result := range results {
-		outcome, err := applyConsolidatedGroup(persistenceCtx, st, result.batch.points, result.memories, now, *emptyGrace)
+		outcome, err := applyConsolidatedGroup(persistCtx, st, result.batch.points, result.memories, now, r.emptyGrace)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "consolidate: %s: %v; source diary kept\n", result.batch.key, err)
-			failures++
-			retryableFailures++
+			r.failures++
+			r.retryableFailures++
 			continue
 		}
-		totals.Created += outcome.Created
-		totals.Archived += outcome.Archived
-		totals.Candidates += outcome.Candidates
+		r.totals.Created += outcome.Created
+		r.totals.Archived += outcome.Archived
+		r.totals.Candidates += outcome.Candidates
 	}
-	status, exitCode := consolidationFailureStatus(retryableFailures, deferredFailures)
-	_ = activity.Append(activity.Event{Operation: "consolidate", Status: status, Counters: map[string]int64{
-		"batches": int64(len(batches)), "failures": failures, "created": totals.Created,
-		"archived": totals.Archived, "empty_candidates": totals.Candidates,
-		"retryable_failures": retryableFailures, "deferred_failures": deferredFailures,
+	// Progress keeps a long drain visibly alive for health checks.
+	_ = activity.Append(activity.Event{Operation: "consolidate", Status: "running", Counters: r.counters(0)})
+	return 0, false
+}
+
+func (r *consolidationRun) counters(skippedDeferred int64) map[string]int64 {
+	return map[string]int64{
+		"batches": r.total, "batches_done": r.done, "failures": r.failures, "created": r.totals.Created,
+		"archived": r.totals.Archived, "empty_candidates": r.totals.Candidates,
+		"retryable_failures": r.retryableFailures, "deferred_failures": r.deferredFailures,
 		"skipped_deferred": skippedDeferred,
-	}})
+	}
+}
+
+func (r *consolidationRun) finish(dryRun bool, skippedDeferred int64) int {
+	if dryRun {
+		status := "dry_run"
+		exitCode := 0
+		if r.failures > 0 {
+			status, exitCode = consolidationFailureStatus(r.retryableFailures, r.deferredFailures)
+		}
+		fmt.Printf("consolidate dry-run summary: status=%s batches=%d failures=%d retryable=%d deferred=%d skipped=%d\n",
+			status, r.total, r.failures, r.retryableFailures, r.deferredFailures, skippedDeferred)
+		return exitCode
+	}
+	status, exitCode := consolidationFailureStatus(r.retryableFailures, r.deferredFailures)
+	_ = activity.Append(activity.Event{Operation: "consolidate", Status: status, Counters: r.counters(skippedDeferred)})
 	fmt.Printf("consolidate summary: created=%d archived=%d empty_candidates=%d failures=%d\n",
-		totals.Created, totals.Archived, totals.Candidates, failures)
+		r.totals.Created, r.totals.Archived, r.totals.Candidates, r.failures)
 	return exitCode
+}
+
+func consolidationNeedsBackup(results []consolidationResult, emptyGrace time.Duration) bool {
+	for _, result := range results {
+		if len(result.memories) > 0 || emptyWouldArchive(result.batch.points, time.Now(), emptyGrace) {
+			return true
+		}
+	}
+	return false
+}
+
+// consolidationBatchAttempts bounds in-run retries of transient failures
+// (Ollama restarts, HTTP 5xx, request timeouts) for one batch.
+const consolidationBatchAttempts = 3
+
+var consolidationRetryDelay = 15 * time.Second
+
+func consolidateBatchWithRetry(
+	ctx context.Context, batch consolidationBatch, keepAlive any,
+) ([]consolidatedMemory, error) {
+	var err error
+	for attempt := 1; attempt <= consolidationBatchAttempts; attempt++ {
+		var memories []consolidatedMemory
+		memories, err = consolidateGroupWithKeepAlive(ctx, batch.points, keepAlive)
+		if err == nil || isDeferredConsolidationError(err) || attempt == consolidationBatchAttempts {
+			return memories, err
+		}
+		fmt.Fprintf(os.Stderr, "consolidate: %s: attempt %d/%d failed: %v; retrying\n",
+			batch.key, attempt, consolidationBatchAttempts, err)
+		if sleepErr := maintenancecore.SleepContext(ctx, time.Duration(attempt)*consolidationRetryDelay); sleepErr != nil {
+			return nil, err
+		}
+	}
+	return nil, err
 }
 
 func consolidationFailureStatus(retryable, deferred int64) (string, int) {
@@ -901,7 +983,7 @@ func requestConsolidationVerdict(
 func isDeferredConsolidationError(err error) bool {
 	var outputErr *consolidationOutputError
 	var deferredErr *consolidationDeferredError
-	return errors.As(err, &outputErr) || errors.As(err, &deferredErr) || errors.Is(err, context.DeadlineExceeded)
+	return errors.As(err, &outputErr) || errors.As(err, &deferredErr)
 }
 
 func validateConsolidatedMemories(

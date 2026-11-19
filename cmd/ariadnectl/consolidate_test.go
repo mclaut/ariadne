@@ -510,8 +510,60 @@ func TestConsolidationFailureStatusPrefersRetryableFailures(t *testing.T) {
 	}
 }
 
-func TestDeadlineExceededIsDeferredConsolidationError(t *testing.T) {
-	if !isDeferredConsolidationError(context.DeadlineExceeded) {
-		t.Fatal("context deadline must defer consolidation instead of retrying the whole maintenance stage")
+func TestDeadlineExceededIsNotDeferredConsolidationError(t *testing.T) {
+	if isDeferredConsolidationError(context.DeadlineExceeded) {
+		t.Fatal("a timeout is transient: deferring it would skip the batch for the whole pipeline revision")
+	}
+}
+
+func TestConsolidateBatchRetriesTransientFailures(t *testing.T) {
+	previous := consolidationRetryDelay
+	consolidationRetryDelay = time.Millisecond
+	t.Cleanup(func() { consolidationRetryDelay = previous })
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls < consolidationBatchAttempts {
+			http.Error(w, "model loading", http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(`{"message":{"content":"{\"memories\":[]}"}}`))
+	}))
+	defer server.Close()
+	t.Setenv("ARIADNE_SUMMARY_OLLAMA", server.URL)
+	batch := consolidationBatch{key: "w/2026-11-18", points: []diaryPoint{{Text: "Routine progress only."}}}
+	if _, err := consolidateBatchWithRetry(context.Background(), batch, 0); err != nil {
+		t.Fatalf("transient failures must be retried in the same run: %v", err)
+	}
+	if calls != consolidationBatchAttempts {
+		t.Fatalf("calls=%d, want %d", calls, consolidationBatchAttempts)
+	}
+}
+
+func TestConsolidateBatchDoesNotRetryDeferredFailures(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		http.Error(w, "model not found", http.StatusNotFound)
+	}))
+	defer server.Close()
+	t.Setenv("ARIADNE_SUMMARY_OLLAMA", server.URL)
+	batch := consolidationBatch{key: "w/2026-11-18", points: []diaryPoint{{Text: "Routine progress only."}}}
+	_, err := consolidateBatchWithRetry(context.Background(), batch, 0)
+	if !isDeferredConsolidationError(err) || calls != 1 {
+		t.Fatalf("err=%v calls=%d; a deterministic rejection must not be retried", err, calls)
+	}
+}
+
+func TestGroupConsolidationBatchesKeepsGroupsTogether(t *testing.T) {
+	batches := []consolidationBatch{
+		{key: "a#1", groupKey: "a"},
+		{key: "a#2", groupKey: "a"},
+		{key: "b", groupKey: "b"},
+		{key: "c"},
+	}
+	groups := groupConsolidationBatches(batches)
+	if len(groups) != 3 || len(groups[0]) != 2 || groups[1][0].key != "b" || groups[2][0].key != "c" {
+		t.Fatalf("groups=%#v", groups)
 	}
 }

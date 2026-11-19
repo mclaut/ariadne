@@ -177,3 +177,31 @@ func TestDefaultMaintenanceCommandTimeoutBoundsUnresponsiveChild(t *testing.T) {
 		t.Fatalf("default maintenance command timeout = %s, want 20m", defaultMaintenanceCommandTimeout)
 	}
 }
+
+func TestRunMaintenanceGivesConsolidationItsOwnTimeout(t *testing.T) {
+	config := maintenanceConfig{
+		attempts: 1, retryDelay: time.Second, maxRetryDelay: time.Second,
+		commandTimeout: time.Minute, consolidateTimeout: 12 * time.Hour, before: 24 * time.Hour,
+		importPath: "import", ctlPath: "ariadnectl",
+	}
+	budgets := map[string]time.Duration{}
+	deps := maintenanceDeps{
+		run: func(ctx context.Context, path string, _ ...string) error {
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatalf("%s ran without a deadline", path)
+			}
+			budgets[path] = time.Until(deadline)
+			return nil
+		},
+		sleep:  func(context.Context, time.Duration) error { return nil },
+		append: func(activity.Event) error { return nil },
+		now:    time.Now,
+	}
+	if err := runMaintenance(context.Background(), config, deps); err != nil {
+		t.Fatal(err)
+	}
+	if budgets["import"] > time.Minute || budgets["ariadnectl"] <= time.Hour {
+		t.Fatalf("budgets = %#v; consolidation needs room to drain the queue", budgets)
+	}
+}
