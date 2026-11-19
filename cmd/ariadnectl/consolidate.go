@@ -1186,7 +1186,9 @@ func unstableArtifactReference(text string) bool {
 // codeTokenPattern matches code spans, URLs and identifier-like tokens (paths, dotted or
 // snake_case names, flags, numbers). They are Latin in any diary, so a Ukrainian diary
 // full of commands would otherwise look English and contradict the language guidance.
-var codeTokenPattern = regexp.MustCompile("(?s)```.*?```|`[^`]*`|https?://\\S+|\\S*[/\\\\_.=:#@0-9]\\S*")
+// A dot or colon marks code only inside a token: a word ending a sentence is prose.
+var codeTokenPattern = regexp.MustCompile(
+	"(?s)```.*?```|`[^`]*`|https?://\\S+|\\S*(?:[/\\\\_=#@0-9]|[.:][^\\s.,;:!?)\\]»\"'])\\S*")
 
 func proseText(text string) string {
 	return codeTokenPattern.ReplaceAllString(text, " ")

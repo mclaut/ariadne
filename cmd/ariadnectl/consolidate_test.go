@@ -379,6 +379,21 @@ func TestLanguageCheckIgnoresCodeInUkrainianDiary(t *testing.T) {
 	}
 }
 
+func TestLanguageCheckKeepsProseWordsBeforeSentencePunctuation(t *testing.T) {
+	source := "Успішно оновлено конфігурації. Повністю перевірено міграції. SaveBatch now retries temporary Upsert failures."
+	if script, language, _ := proseLanguage(source); script != "cyrillic" || language != "Ukrainian" {
+		t.Fatalf("sentence-ending words were dropped: script=%s language=%s", script, language)
+	}
+	ukrainian := "Оновлено конфігурації та міграції; збереження пакетами тепер повторює тимчасово невдалі записи."
+	if mismatch := languageMismatch(source, ukrainian); mismatch != "" {
+		t.Fatalf("Ukrainian memory rejected: %s", mismatch)
+	}
+	if prose := proseText("Оновлено config.yaml і pkg:name. Готово:"); strings.Contains(prose, "config") ||
+		strings.Contains(prose, "pkg") || !strings.Contains(prose, "Готово:") {
+		t.Fatalf("prose = %q", prose)
+	}
+}
+
 func TestLanguageCheckKeepsEnglishDiaryWithUkrainianQuote(t *testing.T) {
 	source := "The release pipeline now validates the version before tagging, and the owner confirmed it with the note " +
 		"«так, випускай». All checks passed and the tag was created from the merge commit."
