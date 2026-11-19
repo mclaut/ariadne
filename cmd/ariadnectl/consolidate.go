@@ -228,6 +228,8 @@ func consolidateCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "consolidate: --empty-grace must be non-negative and --max-source-tokens at least 256")
 		return 2
 	}
+	preferInstalledCurator()
+	fmt.Printf("consolidate: curator %s, quality gate %s\n", consolidationModel(), consolidationJudgeModel())
 	listCtx, cancelList := context.WithTimeout(context.Background(), 2*time.Minute)
 	points, err := loadDiary(listCtx, time.Now().Add(-*before).Unix())
 	cancelList()
@@ -257,7 +259,9 @@ func consolidateCmd(args []string) int {
 		defer func() { _ = opened.Close() }()
 		st = opened
 	}
-	run := consolidationRun{total: int64(len(batches)), emptyGrace: *emptyGrace, pipelineKey: pipelineKey}
+	run := consolidationRun{
+		total: int64(len(batches)), emptyGrace: *emptyGrace, pipelineKey: pipelineKey, dryRun: *dryRun,
+	}
 	for _, group := range groupConsolidationBatches(batches) {
 		if code, stop := run.processGroup(st, group, *dryRun); stop {
 			return code
@@ -273,6 +277,7 @@ type consolidationRun struct {
 	emptyGrace                                    time.Duration
 	pipelineKey                                   string
 	backupChecked                                 bool
+	dryRun                                        bool
 }
 
 func groupConsolidationBatches(batches []consolidationBatch) [][]consolidationBatch {
@@ -317,9 +322,11 @@ func (r *consolidationRun) processGroup(st consolidationWriter, group []consolid
 			} else {
 				r.retryableFailures++
 			}
+			r.recordProgress()
 			continue
 		}
 		results = append(results, consolidationResult{batch: batch, memories: memories})
+		r.recordProgress()
 	}
 	results = coalesceConsolidationResults(results)
 	for _, result := range results {
@@ -362,9 +369,18 @@ func (r *consolidationRun) processGroup(st consolidationWriter, group []consolid
 		r.totals.Archived += outcome.Archived
 		r.totals.Candidates += outcome.Candidates
 	}
-	// Progress keeps a long drain visibly alive for health checks.
-	_ = activity.Append(activity.Event{Operation: "consolidate", Status: "running", Counters: r.counters(0)})
+	r.recordProgress()
 	return 0, false
+}
+
+// recordProgress keeps a long drain visibly alive for health checks. It runs
+// after every batch, so the heartbeat interval stays bounded by one batch even
+// when a single diary group holds many entries.
+func (r *consolidationRun) recordProgress() {
+	if r.dryRun {
+		return
+	}
+	_ = activity.Append(activity.Event{Operation: "consolidate", Status: "running", Counters: r.counters(0)})
 }
 
 func (r *consolidationRun) counters(skippedDeferred int64) map[string]int64 {
@@ -689,8 +705,60 @@ func groupDiary(points []diaryPoint) map[string][]diaryPoint {
 	return out
 }
 
+// preferredConsolidationModel is the stronger local curator. In a fixed
+// validation it cleared every batch where qwen2.5:7b deferred almost half,
+// so a run uses it whenever it is installed and no model is configured.
+const preferredConsolidationModel = "qwen2.5:14b"
+
 func consolidationModel() string {
 	return envOr("ARIADNE_CONSOLIDATION_MODEL", envOr("ARIADNE_SUMMARY_MODEL", "qwen2.5:7b"))
+}
+
+// preferInstalledCurator selects the preferred curator for this run when the
+// operator configured none and the local Ollama has it.
+func preferInstalledCurator() {
+	if os.Getenv("ARIADNE_CONSOLIDATION_MODEL") != "" ||
+		!ollamaHasModel(summaryOllamaBase(), preferredConsolidationModel) {
+		return
+	}
+	_ = os.Setenv("ARIADNE_CONSOLIDATION_MODEL", preferredConsolidationModel)
+}
+
+func summaryOllamaBase() string {
+	return strings.TrimRight(envOr("ARIADNE_SUMMARY_OLLAMA", envOr("ARIADNE_OLLAMA", "http://localhost:11434")), "/")
+}
+
+// ollamaHasModel reports whether a local Ollama lists the model. Any error
+// means "unknown" and keeps the configured fallback.
+func ollamaHasModel(base, model string) bool {
+	if !localSummaryEndpoint(base) {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/tags", http.NoBody)
+	if err != nil {
+		return false
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var tags struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&tags) != nil {
+		return false
+	}
+	for _, m := range tags.Models {
+		if m.Name == model {
+			return true
+		}
+	}
+	return false
 }
 
 func consolidationJudgeModel() string {
@@ -848,7 +916,7 @@ func requestConsolidatedMemories(
 		},
 		"options": map[string]any{"temperature": 0.1, "num_ctx": 8192},
 	})
-	base := strings.TrimRight(envOr("ARIADNE_SUMMARY_OLLAMA", envOr("ARIADNE_OLLAMA", "http://localhost:11434")), "/")
+	base := summaryOllamaBase()
 	if !localSummaryEndpoint(base) && envOr("ARIADNE_CAPTURE_REMOTE", "0") != "1" {
 		return nil, &consolidationDeferredError{err: errors.New(
 			"remote summary endpoint blocked; set ARIADNE_CAPTURE_REMOTE=1 to allow")}

@@ -53,6 +53,45 @@ func NewStage(root, object string) (string, error) {
 	return os.MkdirTemp(physical, ".pending-"+object+"-")
 }
 
+// PruneAbandonedStages removes unpublished ".pending-<object>-*" stages left
+// behind by an interrupted or failed run. Callers must hold the operation lock
+// that serializes creation of this object, so no live run can own a stage.
+// A stage never contains a published generation, so nothing verified is lost.
+func PruneAbandonedStages(root, object string) (int, error) {
+	if !validObject(object) || !filepath.IsAbs(root) {
+		return 0, errors.New("invalid backup object")
+	}
+	physical, err := physicalDirectory(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	matches, err := filepath.Glob(filepath.Join(physical, ".pending-"+object+"-*"))
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	prefix := ".pending-" + object + "-"
+	for _, stage := range matches {
+		// MkdirTemp appends only digits; "full-restore" stages must not match "full".
+		suffix := strings.TrimPrefix(filepath.Base(stage), prefix)
+		if suffix == "" || strings.Trim(suffix, "0123456789") != "" {
+			continue
+		}
+		info, statErr := os.Lstat(stage)
+		if statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+		if err := os.RemoveAll(stage); err != nil {
+			return removed, fmt.Errorf("remove abandoned stage %s: %w", filepath.Base(stage), err)
+		}
+		removed++
+	}
+	return removed, nil
+}
+
 func physicalDirectory(path string) (string, error) {
 	if !filepath.IsAbs(path) {
 		return "", errors.New("backup path must be absolute")

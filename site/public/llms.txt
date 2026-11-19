@@ -42,6 +42,8 @@ Full backup rotation: a private explicit plan retains one independently verified
 
 Runtime rotation v0.8.24: legacy release-local previous-runtime copies join canonical retention after independent runtime recovery; audit metadata and retired-file inventories are preserved.
 
+Version 0.8.30 adds the Ariadne panel: a loopback-only, token-protected local page opened from the tray or Ariadne.app that explains why the tray dot is yellow or red, with service state, recent maintenance, log tails and controls; tray color changes are logged with reasons. Failed or interrupted full backups no longer leave their unpublished stage behind, and consolidation uses qwen2.5:14b when it is installed and no model is configured.
+
 Version 0.8.29 keeps Qdrant running through updates (the installer waits for launchd to release a service before restarting it and retries the start) and drains the whole consolidation queue in one run: no run-wide deadline, transient Ollama failures retried in place, each group saved as it finishes, and timed-out batches no longer deferred for the pipeline revision.
 
 Version 0.8.28 fixes tray updates and fresh installs that failed with a Go checksum mismatch (the bootstrap now verifies Go from dl.google.com) and reports maintenance cut short by a system restart as interrupted rather than stuck.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ariadne/internal/activity"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -565,5 +567,48 @@ func TestGroupConsolidationBatchesKeepsGroupsTogether(t *testing.T) {
 	groups := groupConsolidationBatches(batches)
 	if len(groups) != 3 || len(groups[0]) != 2 || groups[1][0].key != "b" || groups[2][0].key != "c" {
 		t.Fatalf("groups=%#v", groups)
+	}
+}
+
+func TestConsolidationRecordsProgressAfterEveryBatch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "model not found", http.StatusNotFound)
+	}))
+	defer server.Close()
+	t.Setenv("ARIADNE_SUMMARY_OLLAMA", server.URL)
+	group := []consolidationBatch{
+		{key: "w/d#1", groupKey: "w/d", points: []diaryPoint{{ID: 1, Text: "a"}}},
+		{key: "w/d#2", groupKey: "w/d", points: []diaryPoint{{ID: 2, Text: "b"}}},
+		{key: "w/d#3", groupKey: "w/d", points: []diaryPoint{{ID: 3, Text: "c"}}},
+	}
+	run := consolidationRun{total: 3, pipelineKey: "k"}
+	if _, stop := run.processGroup(&fakeConsolidationWriter{}, group, false); stop {
+		t.Fatal("run stopped early")
+	}
+	data, err := os.ReadFile(activity.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(data), `"status":"running"`); got < len(group) {
+		t.Fatalf("progress events = %d, want at least one per batch (%d)", got, len(group))
+	}
+}
+
+func TestOllamaHasModelReadsLocalTags(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tags" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"models":[{"name":"bge-m3:latest"},{"name":"qwen2.5:14b"}]}`))
+	}))
+	defer server.Close()
+	if !ollamaHasModel(server.URL, "qwen2.5:14b") || ollamaHasModel(server.URL, "qwen2.5:32b") {
+		t.Fatal("model presence must follow the local tag list")
+	}
+	if ollamaHasModel("https://models.example", "qwen2.5:14b") {
+		t.Fatal("a remote endpoint must never be probed")
 	}
 }

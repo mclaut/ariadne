@@ -90,6 +90,9 @@ func captureCollectionBackup(name, root string) error {
 		return err
 	}
 	defer unlock()
+	if _, err = backupretention.PruneAbandonedStages(root, object); err != nil {
+		return err
+	}
 	stage, err := backupretention.NewStage(root, object)
 	if err != nil {
 		return err

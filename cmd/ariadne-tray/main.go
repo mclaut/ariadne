@@ -94,6 +94,9 @@ var (
 	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints                                       *systray.MenuItem
 	rowTokens, rowCoverage, rowUnattributed, rowDisk, rowMaintenance                             *systray.MenuItem
 	rowApproval                                                                                  *systray.MenuItem
+	mPanel                                                                                       *systray.MenuItem
+	lastStatus                                                                                   status
+	lastColor                                                                                    string
 	rowIssue                                                                                     *systray.MenuItem
 	mUpdate, mStart, mStop, mRestart, mMaintenance, mBackup, mExport, mData, mLogs, mLang, mQuit *systray.MenuItem
 	langItems                                                                                    map[i18n.Lang]*systray.MenuItem
@@ -167,9 +170,11 @@ func onReady() {
 	systray.SetTitle("") // dot only — no text label
 	systray.SetTooltip("Ariadne " + version.Tag)
 
+	mPanel = systray.AddMenuItem("", "")
+	systray.AddSeparator()
 	rowVersion = infoRow("Ariadne " + version.Tag)
 	rowHealth = infoRow("…")
-	rowIssue = infoRow("")
+	rowIssue = systray.AddMenuItem("", "") // clickable: opens the panel with the full explanation
 	rowIssue.Hide()
 	rowApproval = infoRow("")
 	approvalQueueMenu = systray.AddMenuItem("", "")
@@ -205,6 +210,11 @@ func onReady() {
 	mQuit = systray.AddMenuItem("", "")
 
 	relabel()
+	if home, err := os.UserHomeDir(); err == nil {
+		if _, err = startPanel(home, panelSnapshot, panelAction); err != nil {
+			log.Printf("panel unavailable: %v", err)
+		}
+	}
 	// one click-listener goroutine per language item — extensible: new languages
 	// in i18n.Available get their own listener automatically.
 	for l, it := range langItems {
@@ -229,6 +239,10 @@ func loop() {
 		select {
 		case <-t.C:
 			poll()
+		case <-mPanel.ClickedCh:
+			openPanel()
+		case <-rowIssue.ClickedCh:
+			openPanel()
 		case <-mStart.ClickedCh:
 			serviceActionClicked(serviceStart)
 		case <-mStop.ClickedCh:
@@ -270,6 +284,7 @@ func relabel() {
 	defer mu.Unlock()
 	refreshServiceMenusLocked()
 	refreshMaintenanceMenuLocked()
+	mPanel.SetTitle(i18n.T(lang, "menu.panel"))
 	mBackup.SetTitle(i18n.T(lang, "menu.backup"))
 	mExport.SetTitle(i18n.T(lang, "menu.export"))
 	mData.SetTitle(i18n.T(lang, "menu.data"))
@@ -298,17 +313,13 @@ func poll() {
 	pending, approvalErr := approvalManager.Pending()
 	history, historyErr := approvalManager.History()
 	mu.Lock()
-	var icon []byte
-	var word string
-	switch {
-	case !s.reachable:
-		icon, word = dotIcon(gray), i18n.T(lang, "health.unreachable")
-	case !s.Qdrant.Up || !s.Ollama.Up:
-		icon, word = dotIcon(red), i18n.T(lang, "health.down")
-	case len(s.Issues) > 0:
-		icon, word = dotIcon(orange), i18n.T(lang, "health.warn")
-	default:
-		icon, word = dotIcon(green), i18n.T(lang, "health.ok")
+	health := healthColor(s)
+	icon, word := dotIcon(dotColors[health]), healthWord(lang, health)
+	lastStatus = s
+	if health != lastColor {
+		// The log explains every color change, so a yellow or red dot is traceable later.
+		log.Printf("health %s -> %s: %s", orDash(lastColor), health, orDash(strings.Join(healthReasons(s), " · ")))
+		lastColor = health
 	}
 	systray.SetIcon(icon)
 	systray.SetTooltip("Ariadne " + version.Tag + " — " + word)
