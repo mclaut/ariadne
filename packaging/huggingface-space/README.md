@@ -35,7 +35,13 @@ macOS, or Linux machine, where memories remain local.
 
 ## Current release
 
-Version 0.8.31 keeps the tray calm and sets far fewer consolidation batches aside.
+Version 0.8.32 judges the curator's language by prose, not code.
+
+- **Prose, not code.** Code spans, URLs, paths and identifiers no longer make a Ukrainian diary look English.
+- **One answer.** The check, the prompt and the repair guidance name the same language, so a retry can succeed.
+- **Fewer set aside.** In a test run language deferrals fell from 11 to 2; earlier deferrals are reconsidered once.
+
+Version 0.8.31 kept the tray calm and set far fewer consolidation batches aside.
 
 - **No false alarms.** The previous run's deferral no longer shows as a failure when maintenance starts.
 - **No one-second blips.** The dot changes and notifies only when two consecutive polls agree.

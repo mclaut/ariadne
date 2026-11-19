@@ -349,11 +349,57 @@ func TestQualityGateRejectsEphemeralJobIdentifier(t *testing.T) {
 func TestQualityGateDistinguishesUkrainianAndRussian(t *testing.T) {
 	ukrainian := "Завершено фінансовий аналіз підприємства: перевірені надходження, витрати й чистий потік за звітний період."
 	russian := "Завершён финансовый анализ предприятия: проверены внешние доходы, расходы и чистый денежный поток за отчётный период."
-	if sameDominantScript(ukrainian, russian) {
+	if languageMismatch(ukrainian, russian) == "" {
 		t.Fatal("Russian output should not match a clearly Ukrainian source")
 	}
 	if hint := sourceLanguageGuidance([]diaryPoint{{Text: ukrainian}}); !strings.Contains(hint, "Ukrainian") {
 		t.Fatalf("language guidance = %q", hint)
+	}
+}
+
+func TestLanguageCheckIgnoresCodeInUkrainianDiary(t *testing.T) {
+	source := "Виправлено `internal/store/qdrant_client.go`: `SaveBatch` тепер повторює `Upsert` після " +
+		"`codes.Unavailable`, а `go test -race ./internal/store/...` і `golangci-lint run` проходять. " +
+		"Перевірено на https://example.invalid/ci/run/12345 та у `cmd/ariadnectl/maintenance_health_test.go`."
+	if script, _ := dominantScript(source); script != "latin" {
+		t.Fatalf("fixture must look Latin to a raw letter count, got %s", script)
+	}
+	ukrainian := "Збереження пакетами тепер повторює запис після тимчасової недоступності Qdrant, тому обслуговування не губить памʼять."
+	if mismatch := languageMismatch(source, ukrainian); mismatch != "" {
+		t.Fatalf("Ukrainian memory of a code-heavy Ukrainian diary rejected: %s", mismatch)
+	}
+	english := "Batch saving now retries the write after a temporary Qdrant outage, so maintenance keeps every memory intact."
+	if mismatch := languageMismatch(source, english); !strings.Contains(mismatch, "expected Ukrainian") {
+		t.Fatalf("English memory accepted or misdescribed: %q", mismatch)
+	}
+	err := &consolidationOutputError{err: errors.New("invalid memory 1: output language differs from source")}
+	guidance := consolidationRepairGuidance([]diaryPoint{{Text: source}}, err)
+	if !strings.Contains(guidance, "Ukrainian") || !strings.Contains(sourceLanguageGuidance([]diaryPoint{{Text: source}}), "Ukrainian") {
+		t.Fatalf("guidance must name the language the check expects: %q", guidance)
+	}
+}
+
+func TestLanguageCheckKeepsProseWordsBeforeSentencePunctuation(t *testing.T) {
+	source := "Успішно оновлено конфігурації. Повністю перевірено міграції. SaveBatch now retries temporary Upsert failures."
+	if script, language, _ := proseLanguage(source); script != "cyrillic" || language != "Ukrainian" {
+		t.Fatalf("sentence-ending words were dropped: script=%s language=%s", script, language)
+	}
+	ukrainian := "Оновлено конфігурації та міграції; збереження пакетами тепер повторює тимчасово невдалі записи."
+	if mismatch := languageMismatch(source, ukrainian); mismatch != "" {
+		t.Fatalf("Ukrainian memory rejected: %s", mismatch)
+	}
+	if prose := proseText("Оновлено config.yaml і pkg:name. Готово:"); strings.Contains(prose, "config") ||
+		strings.Contains(prose, "pkg") || !strings.Contains(prose, "Готово:") {
+		t.Fatalf("prose = %q", prose)
+	}
+}
+
+func TestLanguageCheckKeepsEnglishDiaryWithUkrainianQuote(t *testing.T) {
+	source := "The release pipeline now validates the version before tagging, and the owner confirmed it with the note " +
+		"«так, випускай». All checks passed and the tag was created from the merge commit."
+	english := "The tag workflow validates the internal version against the request file before creating the release tag."
+	if mismatch := languageMismatch(source, english); mismatch != "" {
+		t.Fatalf("English memory of an English diary rejected: %s", mismatch)
 	}
 }
 
