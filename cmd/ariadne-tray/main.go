@@ -24,7 +24,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -88,7 +87,7 @@ type status struct {
 var (
 	mu           sync.Mutex // serializes UI updates across poll/switch goroutines
 	lang         i18n.Lang
-	lastIssues   []string
+	trayHealth   healthGate
 	lastFailures = map[string]string{}
 
 	rowVersion, rowHealth, rowQdrant, rowOllama, rowPoints                                       *systray.MenuItem
@@ -313,10 +312,10 @@ func poll() {
 	pending, approvalErr := approvalManager.Pending()
 	history, historyErr := approvalManager.History()
 	mu.Lock()
-	health := healthColor(s)
+	health, changed, issueNotice := trayHealth.observe(healthColor(s), s.Issues, s.reachable)
 	icon, word := dotIcon(dotColors[health]), healthWord(lang, health)
 	lastStatus = s
-	if health != lastColor {
+	if changed {
 		// The log explains every color change, so a yellow or red dot is traceable later.
 		log.Printf("health %s -> %s: %s", orDash(lastColor), health, orDash(strings.Join(healthReasons(s), " · ")))
 		lastColor = health
@@ -368,11 +367,10 @@ func poll() {
 	refreshApprovalMenuLocked()
 	refreshApprovalQueueLocked(history, historyErr)
 
-	// notify only when a NEW issue appears (or a service just dropped)
-	if s.reachable && len(s.Issues) > 0 && !slices.Equal(s.Issues, lastIssues) {
-		notify("⚠️ ariadne", strings.Join(s.Issues, " · "))
+	// notify only when a new issue has persisted (see healthGate)
+	if issueNotice != nil {
+		notify("⚠️ ariadne", strings.Join(issueNotice, " · "))
 	}
-	lastIssues = s.Issues
 	failures := newFailureNotices(s.Maintenance, lastFailures)
 	activeLang := lang
 	mu.Unlock()
